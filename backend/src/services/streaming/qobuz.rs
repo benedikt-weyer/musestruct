@@ -90,6 +90,7 @@ impl StreamingService for QobuzService {
             stream_url: None, // Will be fetched when needed
             cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
             quality: Some("lossless".to_string()),
+            source: "qobuz".to_string(),
         }).collect();
 
         let albums = response.albums.items.into_iter().map(|album| StreamingAlbum {
@@ -139,6 +140,7 @@ impl StreamingService for QobuzService {
             stream_url: None,
             cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
             quality: Some("lossless".to_string()),
+            source: "qobuz".to_string(),
         })
     }
 

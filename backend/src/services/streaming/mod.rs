@@ -18,6 +18,7 @@ pub struct StreamingTrack {
     pub stream_url: Option<String>,
     pub cover_url: Option<String>,
     pub quality: Option<String>,
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

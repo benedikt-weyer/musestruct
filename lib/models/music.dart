@@ -23,14 +23,14 @@ class Track {
 
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      artist: json['artist'] as String,
-      album: json['album'] as String,
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Unknown Title',
+      artist: json['artist']?.toString() ?? 'Unknown Artist',
+      album: json['album']?.toString() ?? 'Unknown Album',
       duration: json['duration'] as int?,
-      streamUrl: json['streamUrl'] as String?,
-      coverUrl: json['coverUrl'] as String?,
-      source: json['source'] as String,
+      streamUrl: json['stream_url'] as String?,
+      coverUrl: json['cover_url'] as String?,
+      source: json['source']?.toString() ?? 'streaming',
       quality: json['quality'] as String?,
     );
   }
@@ -76,14 +76,14 @@ class Album {
 
   factory Album.fromJson(Map<String, dynamic> json) {
     return Album(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      artist: json['artist'] as String,
-      releaseDate: json['releaseDate'] as String?,
-      coverUrl: json['coverUrl'] as String?,
-      tracks: (json['tracks'] as List<dynamic>)
-          .map((e) => Track.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Unknown Album',
+      artist: json['artist']?.toString() ?? 'Unknown Artist',
+      releaseDate: json['release_date'] as String?,
+      coverUrl: json['cover_url'] as String?,
+      tracks: (json['tracks'] as List<dynamic>?)
+          ?.map((e) => Track.fromJson(e as Map<String, dynamic>))
+          .toList() ?? [],
     );
   }
 
@@ -116,15 +116,15 @@ class SearchResults {
 
   factory SearchResults.fromJson(Map<String, dynamic> json) {
     return SearchResults(
-      tracks: (json['tracks'] as List<dynamic>)
-          .map((e) => Track.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      albums: (json['albums'] as List<dynamic>)
-          .map((e) => Album.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      total: json['total'] as int,
-      offset: json['offset'] as int,
-      limit: json['limit'] as int,
+      tracks: (json['tracks'] as List<dynamic>?)
+          ?.map((e) => Track.fromJson(e as Map<String, dynamic>))
+          .toList() ?? [],
+      albums: (json['albums'] as List<dynamic>?)
+          ?.map((e) => Album.fromJson(e as Map<String, dynamic>))
+          .toList() ?? [],
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      limit: (json['limit'] as num?)?.toInt() ?? 0,
     );
   }
 

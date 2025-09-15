@@ -113,6 +113,7 @@ impl StreamingService for SpotifyService {
                 stream_url: track.preview_url, // Spotify only provides 30-second previews
                 cover_url,
                 quality: Some("preview".to_string()), // Spotify Web API only provides previews
+                source: "spotify".to_string(),
             }
         }).collect();
 
@@ -169,6 +170,7 @@ impl StreamingService for SpotifyService {
             stream_url: track.preview_url,
             cover_url,
             quality: Some("preview".to_string()),
+            source: "spotify".to_string(),
         })
     }
 
