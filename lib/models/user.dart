@@ -15,11 +15,11 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String,
+      id: json['id'].toString(), // Handle UUID conversion
       email: json['email'] as String,
       username: json['username'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      isActive: json['isActive'] as bool,
+      createdAt: DateTime.parse(json['created_at'] as String), // Snake case from backend
+      isActive: json['is_active'] as bool, // Snake case from backend
     );
   }
 
@@ -28,8 +28,8 @@ class User {
       'id': id,
       'email': email,
       'username': username,
-      'createdAt': createdAt.toIso8601String(),
-      'isActive': isActive,
+      'created_at': createdAt.toIso8601String(),
+      'is_active': isActive,
     };
   }
 }
@@ -98,14 +98,14 @@ class LoginResponse {
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
       user: User.fromJson(json['user'] as Map<String, dynamic>),
-      sessionToken: json['sessionToken'] as String,
+      sessionToken: json['session_token'] as String, // Snake case from backend
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'user': user.toJson(),
-      'sessionToken': sessionToken,
+      'session_token': sessionToken,
     };
   }
 }
