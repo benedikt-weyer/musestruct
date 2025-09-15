@@ -67,6 +67,7 @@
             dbus
             at-spi2-core
             clang
+            sysprof
             
             # Additional development tools
             git
@@ -102,7 +103,7 @@
             export PATH="$FLUTTER_ROOT/bin:$PATH"
             
             # Desktop development
-            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:$PKG_CONFIG_PATH"
             
             # Chrome for web development
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
