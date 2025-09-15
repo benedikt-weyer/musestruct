@@ -5,6 +5,8 @@ import '../../providers/music_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../../widgets/music_player_bar.dart';
+import '../../services/api_service.dart';
+import '../../widgets/copyable_error.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -125,6 +127,16 @@ class SettingsScreen extends StatelessWidget {
             ),
             const Divider(),
             ListTile(
+              leading: const Icon(Icons.music_note),
+              title: const Text('Connect Spotify'),
+              subtitle: const Text('Connect your Spotify account for music streaming'),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: () {
+                _showSpotifyConnectionDialog(context);
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Logout', style: TextStyle(color: Colors.red)),
               onTap: () {
@@ -173,11 +185,116 @@ class SettingsScreen extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              // TODO: Implement Qobuz connection
+              final username = usernameController.text.trim();
+              final password = passwordController.text.trim();
+              
+              if (username.isEmpty || password.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter both username and password'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+              
+              Navigator.of(context).pop();
+              
+              // Show loading indicator
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Connecting to Qobuz...'),
+                  duration: Duration(seconds: 30),
+                ),
+              );
+              
+              try {
+                final response = await ApiService.connectQobuz(username, password);
+                
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                
+                if (response.success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Successfully connected to Qobuz!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  // Show copyable error
+                  if (context.mounted) {
+                    CopyableErrorDialog.show(
+                      context, 
+                      response.message ?? 'Failed to connect to Qobuz',
+                      title: 'Qobuz Connection Failed'
+                    );
+                  }
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                if (context.mounted) {
+                  CopyableErrorDialog.show(
+                    context, 
+                    'Network error: $e',
+                    title: 'Connection Error'
+                  );
+                }
+              }
+            },
+            child: const Text('Connect'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSpotifyConnectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Connect Spotify'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Spotify integration requires OAuth2 authentication.',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'To connect your Spotify account:',
+            ),
+            const SizedBox(height: 8),
+            const Text('1. Visit the Spotify Developer Console'),
+            const Text('2. Authorize the application'),
+            const Text('3. Copy the access token'),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'Access Token',
+                border: OutlineInputBorder(),
+                hintText: 'Paste your Spotify access token here',
+              ),
+              maxLines: 3,
+              onChanged: (value) {
+                // Store the token temporarily
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Qobuz connection feature coming soon!'),
+                  content: Text('Spotify OAuth2 implementation coming soon!'),
+                  backgroundColor: Colors.orange,
                 ),
               );
             },
