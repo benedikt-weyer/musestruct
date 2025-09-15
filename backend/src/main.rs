@@ -65,13 +65,8 @@ async fn main() -> Result<()> {
         .allow_headers(Any)
         .allow_origin(Any);
 
-    // Build the application with routes
-    let app = Router::new()
-        // Public routes
-        .route("/api/auth/register", post(register))
-        .route("/api/auth/login", post(login))
-        
-        // Protected routes
+    // Build protected routes with authentication middleware
+    let protected_routes = Router::new()
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/me", get(me))
         .route("/api/streaming/search", get(search_music))
@@ -88,10 +83,16 @@ async fn main() -> Result<()> {
                     app_state.clone(),
                     auth_middleware,
                 ))
-        )
-        
-        // Health check route (public)
+        );
+
+    // Build the application with routes
+    let app = Router::new()
+        // Public routes
+        .route("/api/auth/register", post(register))
+        .route("/api/auth/login", post(login))
         .route("/health", get(health_check))
+        // Merge protected routes
+        .merge(protected_routes)
         
         // Apply CORS and state
         .layer(cors)
