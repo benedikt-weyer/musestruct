@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
+import '../../widgets/copyable_error.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -40,14 +41,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (success && mounted) {
         Navigator.of(context).pop(); // Go back to login or main screen
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.error ?? 'Registration failed'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
+      // Error handling is now done through the Consumer widget in the UI
     }
   }
 
@@ -193,7 +188,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                
+                // Error message
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    if (authProvider.error != null) {
+                      return Column(
+                        children: [
+                          CopyableErrorWidget(
+                            errorMessage: authProvider.error!,
+                            title: 'Registration Failed',
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
                 
                 // Register button
                 Consumer<AuthProvider>(

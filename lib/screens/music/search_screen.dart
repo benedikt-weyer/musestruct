@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/backend_status_indicator.dart';
+import '../../widgets/copyable_error.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -160,35 +161,32 @@ class _SearchScreenState extends State<SearchScreen> {
 
                 if (musicProvider.searchError != null) {
                   return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Search Error',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          musicProvider.searchError!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (_searchController.text.isNotEmpty) {
-                              _performSearch(_searchController.text);
-                            }
-                          },
-                          child: const Text('Retry'),
-                        ),
-                      ],
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 24),
+                          CopyableErrorWidget(
+                            errorMessage: musicProvider.searchError!,
+                            title: 'Search Error',
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (_searchController.text.isNotEmpty) {
+                                _performSearch(_searchController.text);
+                              }
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }

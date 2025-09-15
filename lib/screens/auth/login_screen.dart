@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
+import '../../widgets/copyable_error.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -28,19 +29,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
-      final success = await authProvider.login(
+      await authProvider.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
 
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.error ?? 'Login failed'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Error handling is now done through the Consumer widget in the UI
     }
   }
 
@@ -134,7 +128,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                
+                // Error message
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    if (authProvider.error != null) {
+                      return Column(
+                        children: [
+                          CopyableErrorWidget(
+                            errorMessage: authProvider.error!,
+                            title: 'Login Failed',
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
                 
                 // Login button
                 Consumer<AuthProvider>(
