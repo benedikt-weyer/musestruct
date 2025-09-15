@@ -23,7 +23,7 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(PlaylistSongs::Position).integer().not_null())
                     .col(
                         ColumnDef::new(PlaylistSongs::AddedAt)
-                            .timestamp_with_time_zone()
+                            .timestamp()
                             .not_null()
                             .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
                     )

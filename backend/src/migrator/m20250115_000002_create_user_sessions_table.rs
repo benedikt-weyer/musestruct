@@ -20,10 +20,10 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(UserSessions::UserId).uuid().not_null())
                     .col(ColumnDef::new(UserSessions::SessionToken).string().not_null().unique_key())
-                    .col(ColumnDef::new(UserSessions::ExpiresAt).timestamp_with_time_zone().not_null())
+                    .col(ColumnDef::new(UserSessions::ExpiresAt).timestamp().not_null())
                     .col(
                         ColumnDef::new(UserSessions::CreatedAt)
-                            .timestamp_with_time_zone()
+                            .timestamp()
                             .not_null()
                             .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
                     )

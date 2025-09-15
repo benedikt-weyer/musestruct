@@ -28,15 +28,15 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Songs::LocalPath).text())
                     .col(ColumnDef::new(Songs::Source).string().not_null().default("local"))
                     .col(ColumnDef::new(Songs::Quality).string())
-                    .col(
-                        ColumnDef::new(Songs::CreatedAt)
-                            .timestamp_with_time_zone()
-                            .not_null()
-                            .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
-                    )
-                    .col(
-                        ColumnDef::new(Songs::UpdatedAt)
-                            .timestamp_with_time_zone()
+                        .col(
+                            ColumnDef::new(Songs::CreatedAt)
+                                .timestamp()
+                                .not_null()
+                                .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
+                        )
+                        .col(
+                            ColumnDef::new(Songs::UpdatedAt)
+                                .timestamp()
                             .not_null()
                             .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
                     )

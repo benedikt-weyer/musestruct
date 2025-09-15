@@ -24,15 +24,15 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Albums::CoverUrl).text())
                     .col(ColumnDef::new(Albums::ExternalId).string())
                     .col(ColumnDef::new(Albums::Source).string().not_null().default("local"))
-                    .col(
-                        ColumnDef::new(Albums::CreatedAt)
-                            .timestamp_with_time_zone()
-                            .not_null()
-                            .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
-                    )
-                    .col(
-                        ColumnDef::new(Albums::UpdatedAt)
-                            .timestamp_with_time_zone()
+                        .col(
+                            ColumnDef::new(Albums::CreatedAt)
+                                .timestamp()
+                                .not_null()
+                                .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
+                        )
+                        .col(
+                            ColumnDef::new(Albums::UpdatedAt)
+                                .timestamp()
                             .not_null()
                             .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
                     )

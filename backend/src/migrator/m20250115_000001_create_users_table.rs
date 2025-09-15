@@ -27,18 +27,18 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Users::Email).string().not_null().unique_key())
                     .col(ColumnDef::new(Users::Username).string().not_null())
                     .col(ColumnDef::new(Users::PasswordHash).string().not_null())
-                    .col(
-                        ColumnDef::new(Users::CreatedAt)
-                            .timestamp_with_time_zone()
-                            .not_null()
-                            .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
-                    )
-                    .col(
-                        ColumnDef::new(Users::UpdatedAt)
-                            .timestamp_with_time_zone()
-                            .not_null()
-                            .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
-                    )
+                        .col(
+                            ColumnDef::new(Users::CreatedAt)
+                                .timestamp()
+                                .not_null()
+                                .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
+                        )
+                        .col(
+                            ColumnDef::new(Users::UpdatedAt)
+                                .timestamp()
+                                .not_null()
+                                .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
+                        )
                     .col(ColumnDef::new(Users::IsActive).boolean().not_null().default(true))
                     .to_owned(),
             )

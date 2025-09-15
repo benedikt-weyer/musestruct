@@ -22,15 +22,15 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Playlists::Description).text())
                     .col(ColumnDef::new(Playlists::UserId).uuid().not_null())
                     .col(ColumnDef::new(Playlists::IsPublic).boolean().not_null().default(false))
-                    .col(
-                        ColumnDef::new(Playlists::CreatedAt)
-                            .timestamp_with_time_zone()
-                            .not_null()
-                            .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
-                    )
-                    .col(
-                        ColumnDef::new(Playlists::UpdatedAt)
-                            .timestamp_with_time_zone()
+                        .col(
+                            ColumnDef::new(Playlists::CreatedAt)
+                                .timestamp()
+                                .not_null()
+                                .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
+                        )
+                        .col(
+                            ColumnDef::new(Playlists::UpdatedAt)
+                                .timestamp()
                             .not_null()
                             .default(SimpleExpr::FunctionCall(Func::cust(Alias::new("NOW"))))
                     )
