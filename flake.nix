@@ -69,6 +69,10 @@
             clang
             sysprof
             
+            # Additional libraries for Flutter plugins
+            libsecret
+            libsoup_3
+            
             # Additional development tools
             git
             curl
@@ -95,6 +99,9 @@
             watchexec
             ripgrep
             fd
+            
+            # Docker and containerization
+            docker-compose
           ];
 
           shellHook = ''
@@ -111,13 +118,14 @@
             export PATH="$FLUTTER_ROOT/bin:$PATH"
             
             # Desktop development
-            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:${pkgs.libsecret}/lib/pkgconfig:${pkgs.libsoup_3}/lib/pkgconfig:$PKG_CONFIG_PATH"
             
             # Chrome for web development
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
             
             # Rust development aliases
-            alias start-backend="cd backend && cargo watch -x run"
+            alias start-backend="docker-compose up -d postgres && cd backend && cargo watch -x run"
+            alias stop-backend="docker-compose down && echo 'Backend and database stopped'"
             
             echo "🚀 Flutter development environment activated!"
             echo ""
