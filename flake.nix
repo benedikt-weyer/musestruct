@@ -80,6 +80,7 @@
             # Rust development
             rustc
             cargo
+            cargo-watch
             rustfmt
             clippy
             rust-analyzer
@@ -115,6 +116,9 @@
             # Chrome for web development
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
             
+            # Rust development aliases
+            alias start="cargo watch -x run"
+            
             echo "🚀 Flutter development environment activated!"
             echo ""
             echo "Available tools:"
@@ -126,9 +130,15 @@
             echo "  - Java: $(java -version 2>&1 | head -n1)"
             echo ""
             echo "Getting started:"
-            echo "  1. Run 'flutter doctor' to check your setup"
-            echo "  2. Run 'flutter create .' to initialize a Flutter project"
-            echo "  3. Run 'flutter run' to start development"
+            echo "  Flutter:"
+            echo "    1. Run 'flutter doctor' to check your setup"
+            echo "    2. Run 'flutter create .' to initialize a Flutter project"
+            echo "    3. Run 'flutter run' to start development"
+            echo ""
+            echo "  Rust:"
+            echo "    1. Run 'cargo new project_name' to create a new Rust project"
+            echo "    2. Run 'start' for hot-reload development (cargo watch -x run)"
+            echo "    3. Run 'cargo build' to build your project"
             echo ""
             echo "Platform support:"
             echo "  - Mobile: Android (SDK included)"
