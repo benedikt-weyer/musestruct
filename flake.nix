@@ -77,6 +77,13 @@
             gnused
             file
             
+            # Rust development
+            rustc
+            cargo
+            rustfmt
+            clippy
+            rust-analyzer
+            
             # Chrome for web development and testing
             google-chrome
             
@@ -113,6 +120,8 @@
             echo "Available tools:"
             echo "  - Flutter SDK: $(flutter --version | head -n1)"
             echo "  - Dart SDK: $(dart --version)"
+            echo "  - Rust: $(rustc --version)"
+            echo "  - Cargo: $(cargo --version)"
             echo "  - Android SDK: $ANDROID_HOME"
             echo "  - Java: $(java -version 2>&1 | head -n1)"
             echo ""
@@ -125,6 +134,7 @@
             echo "  - Mobile: Android (SDK included)"
             echo "  - Desktop: Linux (GTK)"
             echo "  - Web: Chrome support included"
+            echo "  - Rust: Full toolchain with cargo, rustfmt, clippy, and rust-analyzer"
             echo ""
             
             # Run flutter doctor to show setup status
