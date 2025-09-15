@@ -117,7 +117,7 @@
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
             
             # Rust development aliases
-            alias start="cargo watch -x run"
+            alias start-backend="cd backend && cargo watch -x run"
             
             echo "🚀 Flutter development environment activated!"
             echo ""
@@ -137,7 +137,7 @@
             echo ""
             echo "  Rust:"
             echo "    1. Run 'cargo new project_name' to create a new Rust project"
-            echo "    2. Run 'start' for hot-reload development (cargo watch -x run)"
+            echo "    2. Run 'start-backend' for hot-reload development in backend/ dir"
             echo "    3. Run 'cargo build' to build your project"
             echo ""
             echo "Platform support:"
