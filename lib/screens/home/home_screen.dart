@@ -152,10 +152,11 @@ class SettingsScreen extends StatelessWidget {
   void _showQobuzConnectionDialog(BuildContext context) {
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Connect Qobuz'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -180,7 +181,7 @@ class SettingsScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -189,7 +190,7 @@ class SettingsScreen extends StatelessWidget {
               final password = passwordController.text.trim();
               
               if (username.isEmpty || password.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                scaffoldMessenger.showSnackBar(
                   const SnackBar(
                     content: Text('Please enter both username and password'),
                     backgroundColor: Colors.orange,
@@ -198,10 +199,10 @@ class SettingsScreen extends StatelessWidget {
                 return;
               }
               
-              Navigator.of(context).pop();
+              Navigator.of(dialogContext).pop();
               
               // Show loading indicator
-              ScaffoldMessenger.of(context).showSnackBar(
+              scaffoldMessenger.showSnackBar(
                 const SnackBar(
                   content: Text('Connecting to Qobuz...'),
                   duration: Duration(seconds: 30),
@@ -211,17 +212,17 @@ class SettingsScreen extends StatelessWidget {
               try {
                 final response = await ApiService.connectQobuz(username, password);
                 
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                scaffoldMessenger.hideCurrentSnackBar();
                 
                 if (response.success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  scaffoldMessenger.showSnackBar(
                     const SnackBar(
                       content: Text('Successfully connected to Qobuz!'),
                       backgroundColor: Colors.green,
                     ),
                   );
                 } else {
-                  // Show copyable error
+                  // Show copyable error - use the original context
                   if (context.mounted) {
                     CopyableErrorDialog.show(
                       context, 
@@ -231,7 +232,7 @@ class SettingsScreen extends StatelessWidget {
                   }
                 }
               } catch (e) {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                scaffoldMessenger.hideCurrentSnackBar();
                 if (context.mounted) {
                   CopyableErrorDialog.show(
                     context, 
@@ -249,9 +250,11 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showSpotifyConnectionDialog(BuildContext context) {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Connect Spotify'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -285,13 +288,13 @@ class SettingsScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
+              Navigator.of(dialogContext).pop();
+              scaffoldMessenger.showSnackBar(
                 const SnackBar(
                   content: Text('Spotify OAuth2 implementation coming soon!'),
                   backgroundColor: Colors.orange,
@@ -308,12 +311,12 @@ class SettingsScreen extends StatelessWidget {
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
@@ -322,7 +325,7 @@ class SettingsScreen extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
-              Navigator.of(context).pop();
+              Navigator.of(dialogContext).pop();
               Provider.of<AuthProvider>(context, listen: false).logout();
             },
             child: const Text('Logout'),
