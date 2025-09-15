@@ -18,6 +18,12 @@ pub struct AppState {
     pub auth_service: AuthService,
 }
 
+impl AppState {
+    pub fn db(&self) -> &sea_orm::DatabaseConnection {
+        &self.auth_service.db
+    }
+}
+
 #[derive(Serialize)]
 pub struct ApiResponse<T> {
     pub success: bool,

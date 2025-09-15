@@ -11,7 +11,7 @@ use crate::models::{UserEntity, UserSessionEntity, UserResponseDto, CreateUserDt
 
 #[derive(Clone)]
 pub struct AuthService {
-    db: DatabaseConnection,
+    pub db: DatabaseConnection,
     session_duration: Duration,
 }
 

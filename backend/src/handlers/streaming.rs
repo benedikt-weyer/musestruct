@@ -5,9 +5,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 
 use crate::services::streaming::{QobuzService, SpotifyService, StreamingService, SearchResults};
-use crate::models::{UserResponseDto, SearchQuery};
+use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
 use crate::handlers::auth::{AppState, ApiResponse};
 
 #[derive(Deserialize)]
@@ -45,6 +46,70 @@ fn get_streaming_service(service_name: &str) -> Result<Box<dyn StreamingService>
     }
 }
 
+async fn get_authenticated_streaming_service(
+    service_name: &str, 
+    user_id: uuid::Uuid, 
+    db: &sea_orm::DatabaseConnection
+) -> Result<Box<dyn StreamingService>, String> {
+    match service_name {
+        "qobuz" => {
+            let app_id = std::env::var("QOBUZ_APP_ID").unwrap_or_default();
+            let secret = std::env::var("QOBUZ_SECRET").unwrap_or_default();
+            
+            if app_id.is_empty() || secret.is_empty() {
+                return Err("Qobuz credentials not configured".to_string());
+            }
+            
+            // Look up stored user credentials
+            let user_service = StreamingServiceEntity::find()
+                .filter(StreamingServiceColumn::UserId.eq(user_id))
+                .filter(StreamingServiceColumn::ServiceName.eq("qobuz"))
+                .filter(StreamingServiceColumn::IsActive.eq(true))
+                .one(db)
+                .await
+                .map_err(|e| format!("Database error: {}", e))?;
+                
+            if let Some(service) = user_service {
+                if let Some(token) = service.access_token {
+                    Ok(Box::new(QobuzService::new(app_id, secret).with_auth_token(token)))
+                } else {
+                    Err("No access token found for Qobuz service".to_string())
+                }
+            } else {
+                Err("Qobuz service not connected for this user. Please connect to Qobuz first.".to_string())
+            }
+        },
+        "spotify" => {
+            let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
+            let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
+            
+            if client_id.is_empty() || client_secret.is_empty() {
+                return Err("Spotify credentials not configured".to_string());
+            }
+            
+            // Look up stored user credentials
+            let user_service = StreamingServiceEntity::find()
+                .filter(StreamingServiceColumn::UserId.eq(user_id))
+                .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
+                .filter(StreamingServiceColumn::IsActive.eq(true))
+                .one(db)
+                .await
+                .map_err(|e| format!("Database error: {}", e))?;
+                
+            if let Some(service) = user_service {
+                if let Some(token) = service.access_token {
+                    Ok(Box::new(SpotifyService::new(client_id, client_secret).with_tokens(token, service.refresh_token)))
+                } else {
+                    Err("No access token found for Spotify service".to_string())
+                }
+            } else {
+                Err("Spotify service not connected for this user. Please connect to Spotify first.".to_string())
+            }
+        },
+        _ => Err(format!("Unknown streaming service: {}", service_name)),
+    }
+}
+
 pub async fn search_music(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
@@ -52,7 +117,7 @@ pub async fn search_music(
 ) -> Result<Json<ApiResponse<SearchResults>>, (StatusCode, Json<ApiResponse<()>>)> {
     let service_name = params.service.as_deref().unwrap_or("qobuz");
     
-    let service = match get_streaming_service(service_name) {
+    let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
         Ok(service) => service,
         Err(err) => {
             return Err((
@@ -78,7 +143,7 @@ pub async fn get_stream_url(
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let service_name = params.service.as_deref().unwrap_or("qobuz");
     
-    let service = match get_streaming_service(service_name) {
+    let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
         Ok(service) => service,
         Err(err) => {
             return Err((
@@ -143,10 +208,57 @@ pub async fn connect_qobuz(
 
     match qobuz_service.authenticate(&credentials).await {
         Ok(auth_result) => {
-            // In a real implementation, you'd store this in the database
-            // For MVP, we'll just return the auth token
             if let Some(token) = auth_result.access_token {
-                Ok(Json(ApiResponse::success(token)))
+                // Save the authentication to the database
+                // First, check if user already has a Qobuz service entry
+                let existing_service = StreamingServiceEntity::find()
+                    .filter(StreamingServiceColumn::UserId.eq(user.id))
+                    .filter(StreamingServiceColumn::ServiceName.eq("qobuz"))
+                    .one(state.db())
+                    .await;
+
+                match existing_service {
+                    Ok(Some(existing)) => {
+                        // Update existing service
+                        let mut service: StreamingServiceActiveModel = existing.into();
+                        service.access_token = Set(Some(token.clone()));
+                        service.is_active = Set(true);
+                        
+                        if let Err(e) = service.update(state.db()).await {
+                            return Err((
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ApiResponse::<()>::error(format!("Failed to update Qobuz connection: {}", e))),
+                            ));
+                        }
+                    },
+                    Ok(None) => {
+                        // Create new service entry
+                        let new_service = StreamingServiceActiveModel {
+                            user_id: Set(user.id),
+                            service_name: Set("qobuz".to_string()),
+                            access_token: Set(Some(token.clone())),
+                            refresh_token: Set(None),
+                            expires_at: Set(None), // Qobuz tokens don't expire
+                            is_active: Set(true),
+                            ..Default::default()
+                        };
+                        
+                        if let Err(e) = new_service.insert(state.db()).await {
+                            return Err((
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ApiResponse::<()>::error(format!("Failed to save Qobuz connection: {}", e))),
+                            ));
+                        }
+                    },
+                    Err(e) => {
+                        return Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
+                        ));
+                    }
+                }
+
+                Ok(Json(ApiResponse::success("Successfully connected to Qobuz".to_string())))
             } else {
                 Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
