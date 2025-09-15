@@ -1,0 +1,180 @@
+class Track {
+  final String id;
+  final String title;
+  final String artist;
+  final String album;
+  final int? duration;
+  final String? streamUrl;
+  final String? coverUrl;
+  final String source;
+  final String? quality;
+
+  Track({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.album,
+    this.duration,
+    this.streamUrl,
+    this.coverUrl,
+    required this.source,
+    this.quality,
+  });
+
+  factory Track.fromJson(Map<String, dynamic> json) {
+    return Track(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      album: json['album'] as String,
+      duration: json['duration'] as int?,
+      streamUrl: json['streamUrl'] as String?,
+      coverUrl: json['coverUrl'] as String?,
+      source: json['source'] as String,
+      quality: json['quality'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration,
+      'streamUrl': streamUrl,
+      'coverUrl': coverUrl,
+      'source': source,
+      'quality': quality,
+    };
+  }
+
+  String get formattedDuration {
+    if (duration == null) return '';
+    final minutes = duration! ~/ 60;
+    final seconds = duration! % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+class Album {
+  final String id;
+  final String title;
+  final String artist;
+  final String? releaseDate;
+  final String? coverUrl;
+  final List<Track> tracks;
+
+  Album({
+    required this.id,
+    required this.title,
+    required this.artist,
+    this.releaseDate,
+    this.coverUrl,
+    required this.tracks,
+  });
+
+  factory Album.fromJson(Map<String, dynamic> json) {
+    return Album(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      releaseDate: json['releaseDate'] as String?,
+      coverUrl: json['coverUrl'] as String?,
+      tracks: (json['tracks'] as List<dynamic>)
+          .map((e) => Track.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'releaseDate': releaseDate,
+      'coverUrl': coverUrl,
+      'tracks': tracks.map((e) => e.toJson()).toList(),
+    };
+  }
+}
+
+class SearchResults {
+  final List<Track> tracks;
+  final List<Album> albums;
+  final int total;
+  final int offset;
+  final int limit;
+
+  SearchResults({
+    required this.tracks,
+    required this.albums,
+    required this.total,
+    required this.offset,
+    required this.limit,
+  });
+
+  factory SearchResults.fromJson(Map<String, dynamic> json) {
+    return SearchResults(
+      tracks: (json['tracks'] as List<dynamic>)
+          .map((e) => Track.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      albums: (json['albums'] as List<dynamic>)
+          .map((e) => Album.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: json['total'] as int,
+      offset: json['offset'] as int,
+      limit: json['limit'] as int,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'tracks': tracks.map((e) => e.toJson()).toList(),
+      'albums': albums.map((e) => e.toJson()).toList(),
+      'total': total,
+      'offset': offset,
+      'limit': limit,
+    };
+  }
+}
+
+class Playlist {
+  final String id;
+  final String name;
+  final String? description;
+  final bool isPublic;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Playlist({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.isPublic,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Playlist.fromJson(Map<String, dynamic> json) {
+    return Playlist(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      isPublic: json['isPublic'] as bool,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'isPublic': isPublic,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+}
