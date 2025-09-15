@@ -3,6 +3,7 @@ use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing;
 use super::{StreamingService, SearchResults, StreamingTrack, StreamingAlbum, ServiceCredentials, AuthResult};
 
 pub struct QobuzService {
@@ -27,6 +28,14 @@ impl QobuzService {
         self
     }
 
+    fn json_value_to_string(value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Number(n) => n.to_string(),
+            _ => value.to_string(),
+        }
+    }
+
     async fn make_request<T: for<'de> Deserialize<'de>>(&self, endpoint: &str, params: &HashMap<String, String>) -> Result<T> {
         let mut url_params = params.clone();
         url_params.insert("app_id".to_string(), self.app_id.clone());
@@ -46,8 +55,19 @@ impl QobuzService {
             return Err(anyhow!("Qobuz API error: {}", error_text));
         }
 
-        let result = response.json::<T>().await?;
-        Ok(result)
+        // Get the response text first for debugging
+        let response_text = response.text().await?;
+        
+        // Try to parse the JSON
+        match serde_json::from_str::<T>(&response_text) {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Log the actual response for debugging
+                tracing::error!("Failed to parse Qobuz response: {}", e);
+                tracing::error!("Raw response: {}", response_text);
+                Err(anyhow!("Failed to parse Qobuz response: {}. Raw response: {}", e, response_text))
+            }
+        }
     }
 }
 
@@ -62,22 +82,22 @@ impl StreamingService for QobuzService {
         let response: QobuzSearchResponse = self.make_request("catalog/search", &params).await?;
 
         let tracks = response.tracks.items.into_iter().map(|track| StreamingTrack {
-            id: track.id.to_string(),
+            id: Self::json_value_to_string(&track.id),
             title: track.title,
-            artist: track.performer.name,
-            album: track.album.title,
-            duration: Some(track.duration),
+            artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+            album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+            duration: track.duration,
             stream_url: None, // Will be fetched when needed
-            cover_url: track.album.image.large,
+            cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
             quality: Some("lossless".to_string()),
         }).collect();
 
         let albums = response.albums.items.into_iter().map(|album| StreamingAlbum {
-            id: album.id.to_string(),
+            id: Self::json_value_to_string(&album.id),
             title: album.title,
-            artist: album.artist.name,
-            release_date: Some(album.released_at.to_string()),
-            cover_url: album.image.large,
+            artist: album.artist.as_ref().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+            release_date: album.released_at.map(|d| d.to_string()),
+            cover_url: album.image.as_ref().and_then(|i| i.large.clone()),
             tracks: vec![], // Tracks would be fetched separately
         }).collect();
 
@@ -111,13 +131,13 @@ impl StreamingService for QobuzService {
         let track: QobuzTrack = self.make_request("track/get", &params).await?;
 
         Ok(StreamingTrack {
-            id: track.id.to_string(),
+            id: Self::json_value_to_string(&track.id),
             title: track.title,
-            artist: track.performer.name,
-            album: track.album.title,
-            duration: Some(track.duration),
+            artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+            album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+            duration: track.duration,
             stream_url: None,
-            cover_url: track.album.image.large,
+            cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
             quality: Some("lossless".to_string()),
         })
     }
@@ -137,7 +157,7 @@ impl StreamingService for QobuzService {
             access_token: Some(response.user_auth_token),
             refresh_token: None,
             expires_at: None, // Qobuz tokens don't expire
-            user_id: Some(response.user.id.to_string()),
+            user_id: Some(Self::json_value_to_string(&response.user.id)),
         })
     }
 
@@ -175,25 +195,25 @@ struct QobuzAlbumList {
 
 #[derive(Debug, Deserialize)]
 struct QobuzTrack {
-    id: u64,
+    id: serde_json::Value, // Can be string or number
     title: String,
-    duration: i32,
-    performer: QobuzArtist,
-    album: QobuzAlbum,
+    duration: Option<i32>,
+    performer: Option<QobuzArtist>,
+    album: Option<QobuzAlbum>,
 }
 
 #[derive(Debug, Deserialize)]
 struct QobuzAlbum {
-    id: u64,
+    id: serde_json::Value, // Can be string or number
     title: String,
-    artist: QobuzArtist,
-    released_at: u64,
-    image: QobuzImage,
+    artist: Option<QobuzArtist>,
+    released_at: Option<i64>, // Can be negative (dates before 1970)
+    image: Option<QobuzImage>,
 }
 
 #[derive(Debug, Deserialize)]
 struct QobuzArtist {
-    id: u64,
+    id: serde_json::Value, // Can be string or number
     name: String,
 }
 
@@ -216,6 +236,6 @@ struct QobuzAuthResponse {
 
 #[derive(Debug, Deserialize)]
 struct QobuzUser {
-    id: u64,
+    id: serde_json::Value, // Can be string or number
     login: String,
 }
