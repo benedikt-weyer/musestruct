@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
 import '../models/music.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
@@ -45,22 +44,20 @@ class MusicProvider with ChangeNotifier {
     await _audioService.initialize();
     
     // Listen to player state changes
-    _audioService.playerStateStream.listen((state) {
-      _isPlaying = state.playing;
-      _isLoading = state.processingState == ProcessingState.loading ||
-                   state.processingState == ProcessingState.buffering;
+    _audioService.playingStream.listen((isPlaying) {
+      _isPlaying = isPlaying;
       notifyListeners();
     });
 
     // Listen to position changes
     _audioService.positionStream.listen((position) {
-      _position = position ?? Duration.zero;
+      _position = position;
       notifyListeners();
     });
 
     // Listen to duration changes
     _audioService.durationStream.listen((duration) {
-      _duration = duration ?? Duration.zero;
+      _duration = duration;
       notifyListeners();
     });
   }

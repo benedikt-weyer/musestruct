@@ -46,7 +46,7 @@ dependencies:
   
   
   # Audio player for music streaming
-  just_audio: ^0.9.35
+  audioplayers: ^6.1.0
   
   # URL launcher for external links
   url_launcher: ^6.2.2

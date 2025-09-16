@@ -73,6 +73,16 @@
             libsecret
             libsoup_3
             
+            # Audio/video libraries for audioplayers plugin
+            gst_all_1.gstreamer
+            gst_all_1.gst-plugins-base
+            gst_all_1.gst-plugins-good
+            gst_all_1.gst-plugins-bad
+            gst_all_1.gst-plugins-ugly
+            gst_all_1.gst-libav
+            pulseaudio
+            alsa-lib
+            
             # Additional development tools
             git
             curl
@@ -118,7 +128,7 @@
             export PATH="$FLUTTER_ROOT/bin:$PATH"
             
             # Desktop development
-            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:${pkgs.libsecret}/lib/pkgconfig:${pkgs.libsoup_3}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:${pkgs.libsecret}/lib/pkgconfig:${pkgs.libsoup_3}/lib/pkgconfig:${pkgs.gst_all_1.gstreamer}/lib/pkgconfig:${pkgs.gst_all_1.gst-plugins-base}/lib/pkgconfig:${pkgs.pulseaudio}/lib/pkgconfig:${pkgs.alsa-lib}/lib/pkgconfig:$PKG_CONFIG_PATH"
             
             # Chrome for web development
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
