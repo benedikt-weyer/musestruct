@@ -3,7 +3,9 @@ use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing;
+use md5;
 use super::{StreamingService, SearchResults, StreamingTrack, StreamingAlbum, ServiceCredentials, AuthResult};
 
 pub struct QobuzService {
@@ -36,9 +38,48 @@ impl QobuzService {
         }
     }
 
+    fn generate_request_signature(&self, endpoint: &str, params: &HashMap<String, String>, timestamp: &str) -> String {
+        // Different endpoints require different signature formats
+        let sig_string = match endpoint {
+            "track/getFileUrl" => {
+                let default_empty = String::new();
+                let default_stream = "stream".to_string();
+                let track_id = params.get("track_id").unwrap_or(&default_empty);
+                let format_id = params.get("format_id").unwrap_or(&default_empty);
+                let intent = params.get("intent").unwrap_or(&default_stream);
+                format!("trackgetFileUrlformat_id{}intent{}track_id{}{}{}", format_id, intent, track_id, timestamp, self.secret)
+            },
+            _ => {
+                // For other endpoints, use a generic signature format
+                let mut sorted_params: Vec<_> = params.iter().collect();
+                sorted_params.sort_by_key(|&(k, _)| k);
+                let params_string: String = sorted_params.iter()
+                    .map(|(k, v)| format!("{}{}", k, v))
+                    .collect();
+                format!("{}{}{}", endpoint.replace("/", ""), params_string, self.secret)
+            }
+        };
+        
+        format!("{:x}", md5::compute(sig_string.as_bytes()))
+    }
+
     async fn make_request<T: for<'de> Deserialize<'de>>(&self, endpoint: &str, params: &HashMap<String, String>) -> Result<T> {
         let mut url_params = params.clone();
         url_params.insert("app_id".to_string(), self.app_id.clone());
+
+        // Add request timestamp - required for some endpoints like getFileUrl
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| anyhow!("Failed to get current time: {}", e))?
+            .as_secs();
+        let timestamp_str = timestamp.to_string();
+        url_params.insert("request_ts".to_string(), timestamp_str.clone());
+
+        // Generate and add request signature for secure endpoints
+        if endpoint == "track/getFileUrl" {
+            let signature = self.generate_request_signature(endpoint, &url_params, &timestamp_str);
+            url_params.insert("request_sig".to_string(), signature);
+        }
 
         if let Some(token) = &self.user_auth_token {
             url_params.insert("user_auth_token".to_string(), token.clone());
@@ -115,6 +156,7 @@ impl StreamingService for QobuzService {
         let mut params = HashMap::new();
         params.insert("track_id".to_string(), track_id.to_string());
         params.insert("format_id".to_string(), "27".to_string()); // Hi-Res quality
+        params.insert("intent".to_string(), "stream".to_string()); // Required for signature
         
         // Use lower quality if not authenticated or requested
         if self.user_auth_token.is_none() || quality == Some("lossy") {
