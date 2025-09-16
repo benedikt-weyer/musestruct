@@ -122,16 +122,30 @@ impl StreamingService for QobuzService {
 
         let response: QobuzSearchResponse = self.make_request("catalog/search", &params).await?;
 
-        let tracks = response.tracks.items.into_iter().map(|track| StreamingTrack {
-            id: Self::json_value_to_string(&track.id),
-            title: track.title,
-            artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
-            album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
-            duration: track.duration,
-            stream_url: None, // Will be fetched when needed
-            cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
-            quality: Some("lossless".to_string()),
-            source: "qobuz".to_string(),
+        let tracks = response.tracks.items.into_iter().map(|track| {
+            // Qobuz typically provides high-quality audio
+            let (bitrate, sample_rate, bit_depth) = if self.user_auth_token.is_some() {
+                // Authenticated users get access to Hi-Res quality
+                (Some(1411), Some(44100), Some(16)) // CD quality as baseline, Hi-Res can be up to 24bit/192kHz
+            } else {
+                // Non-authenticated users get MP3 quality
+                (Some(320), None, None)
+            };
+
+            StreamingTrack {
+                id: Self::json_value_to_string(&track.id),
+                title: track.title,
+                artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+                album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+                duration: track.duration,
+                stream_url: None, // Will be fetched when needed
+                cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
+                quality: Some("lossless".to_string()),
+                source: "qobuz".to_string(),
+                bitrate,
+                sample_rate,
+                bit_depth,
+            }
         }).collect();
 
         let albums = response.albums.items.into_iter().map(|album| StreamingAlbum {
@@ -173,6 +187,15 @@ impl StreamingService for QobuzService {
 
         let track: QobuzTrack = self.make_request("track/get", &params).await?;
 
+        // Determine audio quality based on authentication status
+        let (bitrate, sample_rate, bit_depth) = if self.user_auth_token.is_some() {
+            // Authenticated users get access to Hi-Res quality
+            (Some(1411), Some(44100), Some(16)) // CD quality as baseline, Hi-Res can be up to 24bit/192kHz
+        } else {
+            // Non-authenticated users get MP3 quality
+            (Some(320), None, None)
+        };
+
         Ok(StreamingTrack {
             id: Self::json_value_to_string(&track.id),
             title: track.title,
@@ -183,6 +206,9 @@ impl StreamingService for QobuzService {
             cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
             quality: Some("lossless".to_string()),
             source: "qobuz".to_string(),
+            bitrate,
+            sample_rate,
+            bit_depth,
         })
     }
 

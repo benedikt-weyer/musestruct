@@ -8,6 +8,9 @@ class Track {
   final String? coverUrl;
   final String source;
   final String? quality;
+  final int? bitrate;      // in kbps
+  final int? sampleRate;   // in Hz
+  final int? bitDepth;     // in bits
 
   Track({
     required this.id,
@@ -19,6 +22,9 @@ class Track {
     this.coverUrl,
     required this.source,
     this.quality,
+    this.bitrate,
+    this.sampleRate,
+    this.bitDepth,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -32,6 +38,9 @@ class Track {
       coverUrl: json['cover_url'] as String?,
       source: json['source']?.toString() ?? 'streaming',
       quality: json['quality'] as String?,
+      bitrate: json['bitrate'] as int?,
+      sampleRate: json['sample_rate'] as int?,
+      bitDepth: json['bit_depth'] as int?,
     );
   }
 
@@ -46,6 +55,9 @@ class Track {
       'coverUrl': coverUrl,
       'source': source,
       'quality': quality,
+      'bitrate': bitrate,
+      'sample_rate': sampleRate,
+      'bit_depth': bitDepth,
     };
   }
 
@@ -54,6 +66,26 @@ class Track {
     final minutes = duration! ~/ 60;
     final seconds = duration! % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String get formattedQuality {
+    List<String> parts = [];
+    
+    if (bitrate != null) {
+      parts.add('${bitrate} kbps');
+    }
+    
+    if (sampleRate != null && bitDepth != null) {
+      parts.add('${(sampleRate! / 1000).toStringAsFixed(1)}kHz/${bitDepth}bit');
+    } else if (sampleRate != null) {
+      parts.add('${(sampleRate! / 1000).toStringAsFixed(1)}kHz');
+    }
+    
+    if (quality != null && parts.isEmpty) {
+      parts.add(quality!);
+    }
+    
+    return parts.join(' • ');
   }
 }
 

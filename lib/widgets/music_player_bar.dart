@@ -97,6 +97,18 @@ class MusicPlayerBar extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            // Audio quality info
+                            if (track.formattedQuality.isNotEmpty)
+                              Text(
+                                track.formattedQuality,
+                                style: TextStyle(
+                                  color: Theme.of(context).primaryColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                           ],
                         ),
                       ),

@@ -114,6 +114,9 @@ impl StreamingService for SpotifyService {
                 cover_url,
                 quality: Some("preview".to_string()), // Spotify Web API only provides previews
                 source: "spotify".to_string(),
+                bitrate: Some(160), // Spotify previews are typically 160kbps
+                sample_rate: Some(44100), // Standard CD sample rate
+                bit_depth: None, // Not specified for MP3 previews
             }
         }).collect();
 
@@ -171,6 +174,9 @@ impl StreamingService for SpotifyService {
             cover_url,
             quality: Some("preview".to_string()),
             source: "spotify".to_string(),
+            bitrate: Some(160), // Spotify previews are typically 160kbps
+            sample_rate: Some(44100), // Standard CD sample rate
+            bit_depth: None, // Not specified for MP3 previews
         })
     }
 

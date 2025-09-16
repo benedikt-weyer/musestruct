@@ -19,6 +19,9 @@ pub struct StreamingTrack {
     pub cover_url: Option<String>,
     pub quality: Option<String>,
     pub source: String,
+    pub bitrate: Option<i32>,      // in kbps
+    pub sample_rate: Option<i32>,  // in Hz
+    pub bit_depth: Option<i32>,    // in bits
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

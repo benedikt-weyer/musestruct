@@ -111,6 +111,18 @@ class TrackTile extends StatelessWidget {
               color: Colors.grey[500],
             ),
           ),
+          // Audio quality info
+          if (track.formattedQuality.isNotEmpty)
+            Text(
+              track.formattedQuality,
+              style: TextStyle(
+                color: Theme.of(context).primaryColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
       trailing: Column(
