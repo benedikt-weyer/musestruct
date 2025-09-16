@@ -97,18 +97,39 @@ class MusicPlayerBar extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            // Audio quality info
-                            if (track.formattedQuality.isNotEmpty)
-                              Text(
-                                track.formattedQuality,
-                                style: TextStyle(
-                                  color: Theme.of(context).primaryColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            // Audio quality info - show real-time output if available, otherwise track metadata
+                            Row(
+                              children: [
+                                if (musicProvider.audioOutputInfo.hasInfo)
+                                  Expanded(
+                                    child: Text(
+                                      'Output: ${musicProvider.audioOutputInfo.formattedOutputQuality}',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.secondary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                if (musicProvider.audioOutputInfo.hasInfo && track.formattedQuality.isNotEmpty)
+                                  const SizedBox(width: 8),
+                                if (track.formattedQuality.isNotEmpty)
+                                  Expanded(
+                                    child: Text(
+                                      'Source: ${track.formattedQuality}',
+                                      style: TextStyle(
+                                        color: Theme.of(context).primaryColor,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/music.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
@@ -18,6 +19,8 @@ class MusicProvider with ChangeNotifier {
   bool _isLoading = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  AudioOutputInfo _audioOutputInfo = AudioOutputInfo();
+  Timer? _audioInfoTimer;
 
   // Getters
   SearchResults? get searchResults => _searchResults;
@@ -32,6 +35,7 @@ class MusicProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   Duration get position => _position;
   Duration get duration => _duration;
+  AudioOutputInfo get audioOutputInfo => _audioOutputInfo;
   
   AudioService get audioService => _audioService;
 
@@ -121,6 +125,7 @@ class MusicProvider with ChangeNotifier {
       
       if (response.success && response.data != null) {
         await _audioService.playTrack(track, response.data!);
+        _startAudioInfoUpdates();
       } else {
         throw Exception(response.message ?? 'Failed to get stream URL');
       }
@@ -133,6 +138,26 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  void _startAudioInfoUpdates() {
+    _audioInfoTimer?.cancel();
+    _audioInfoTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      final newAudioInfo = _audioService.audioOutputInfo;
+      if (newAudioInfo.hasInfo && 
+          (newAudioInfo.outputBitrate != _audioOutputInfo.outputBitrate ||
+           newAudioInfo.outputSampleRate != _audioOutputInfo.outputSampleRate ||
+           newAudioInfo.format != _audioOutputInfo.format)) {
+        _audioOutputInfo = newAudioInfo;
+        notifyListeners();
+      }
+    });
+  }
+
+  void _stopAudioInfoUpdates() {
+    _audioInfoTimer?.cancel();
+    _audioInfoTimer = null;
+    _audioOutputInfo = AudioOutputInfo();
+  }
+
   Future<void> togglePlayPause() async {
     if (_isPlaying) {
       await _audioService.pause();
@@ -143,6 +168,7 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> stopPlayback() async {
     await _audioService.stop();
+    _stopAudioInfoUpdates();
     _currentTrack = null;
     _position = Duration.zero;
     _duration = Duration.zero;
@@ -165,6 +191,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _audioInfoTimer?.cancel();
     _audioService.dispose();
     super.dispose();
   }

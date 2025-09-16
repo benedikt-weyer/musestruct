@@ -89,6 +89,45 @@ class Track {
   }
 }
 
+// Real-time audio information from the audio player
+class AudioOutputInfo {
+  final int? outputBitrate;     // Actual output bitrate in kbps
+  final int? outputSampleRate;  // Actual output sample rate in Hz
+  final int? outputBitDepth;    // Actual output bit depth
+  final String? format;         // Audio format (MP3, FLAC, etc.)
+  final String? codec;          // Audio codec
+  
+  AudioOutputInfo({
+    this.outputBitrate,
+    this.outputSampleRate,
+    this.outputBitDepth,
+    this.format,
+    this.codec,
+  });
+  
+  String get formattedOutputQuality {
+    List<String> parts = [];
+    
+    if (outputBitrate != null) {
+      parts.add('${outputBitrate} kbps');
+    }
+    
+    if (outputSampleRate != null && outputBitDepth != null) {
+      parts.add('${(outputSampleRate! / 1000).toStringAsFixed(1)}kHz/${outputBitDepth}bit');
+    } else if (outputSampleRate != null) {
+      parts.add('${(outputSampleRate! / 1000).toStringAsFixed(1)}kHz');
+    }
+    
+    if (format != null) {
+      parts.add(format!.toUpperCase());
+    }
+    
+    return parts.join(' • ');
+  }
+  
+  bool get hasInfo => outputBitrate != null || outputSampleRate != null || format != null;
+}
+
 class Album {
   final String id;
   final String title;
