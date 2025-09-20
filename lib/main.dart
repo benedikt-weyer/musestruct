@@ -4,6 +4,7 @@ import 'providers/auth_provider.dart';
 import 'providers/music_provider.dart';
 import 'providers/connectivity_provider.dart';
 import 'providers/streaming_provider.dart';
+import 'providers/saved_tracks_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 // import 'widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
@@ -23,6 +24,7 @@ class MusestructApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MusicProvider()),
         ChangeNotifierProvider(create: (_) => StreamingProvider()),
+        ChangeNotifierProvider(create: (_) => SavedTracksProvider()),
       ],
       child: MaterialApp(
         title: 'Musestruct',

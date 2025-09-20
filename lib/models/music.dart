@@ -268,3 +268,128 @@ class Playlist {
     };
   }
 }
+
+class SavedTrack {
+  final String id;
+  final String trackId;
+  final String title;
+  final String artist;
+  final String album;
+  final int duration;
+  final String source;
+  final String? coverUrl;
+  final DateTime createdAt;
+
+  SavedTrack({
+    required this.id,
+    required this.trackId,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.duration,
+    required this.source,
+    this.coverUrl,
+    required this.createdAt,
+  });
+
+  factory SavedTrack.fromJson(Map<String, dynamic> json) {
+    return SavedTrack(
+      id: json['id'] as String,
+      trackId: json['track_id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      album: json['album'] as String,
+      duration: json['duration'] as int,
+      source: json['source'] as String,
+      coverUrl: json['cover_url'] as String?,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'track_id': trackId,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration,
+      'source': source,
+      'cover_url': coverUrl,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  // Convert SavedTrack to Track for playback
+  Track toTrack() {
+    return Track(
+      id: trackId,
+      title: title,
+      artist: artist,
+      album: album,
+      duration: duration,
+      streamUrl: null, // Will be fetched when playing
+      coverUrl: coverUrl,
+      source: source,
+      quality: null,
+      bitrate: null,
+      sampleRate: null,
+      bitDepth: null,
+    );
+  }
+
+  String get formattedSource {
+    switch (source.toLowerCase()) {
+      case 'spotify':
+        return 'Spotify';
+      case 'qobuz':
+        return 'Qobuz';
+      default:
+        return source;
+    }
+  }
+}
+
+class SaveTrackRequest {
+  final String trackId;
+  final String title;
+  final String artist;
+  final String album;
+  final int duration;
+  final String source;
+  final String? coverUrl;
+
+  SaveTrackRequest({
+    required this.trackId,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.duration,
+    required this.source,
+    this.coverUrl,
+  });
+
+  factory SaveTrackRequest.fromTrack(Track track) {
+    return SaveTrackRequest(
+      trackId: track.id,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      duration: track.duration ?? 0,
+      source: track.source,
+      coverUrl: track.coverUrl,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'track_id': trackId,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration,
+      'source': source,
+      'cover_url': coverUrl,
+    };
+  }
+}

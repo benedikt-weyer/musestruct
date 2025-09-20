@@ -5,6 +5,7 @@ pub mod playlist;
 pub mod playlist_song;
 pub mod streaming_service;
 pub mod user_session;
+pub mod saved_track;
 
 // Re-export specific entities to avoid namespace conflicts
 pub use user::{Entity as UserEntity, Model as UserModel, ActiveModel as UserActiveModel, Column as UserColumn};
@@ -14,6 +15,7 @@ pub use playlist::{Entity as PlaylistEntity, Model as PlaylistModel, ActiveModel
 pub use playlist_song::{Entity as PlaylistSongEntity, Model as PlaylistSongModel, ActiveModel as PlaylistSongActiveModel, Column as PlaylistSongColumn};
 pub use streaming_service::{Entity as StreamingServiceEntity, Model as StreamingServiceModel, ActiveModel as StreamingServiceActiveModel, Column as StreamingServiceColumn};
 pub use user_session::{Entity as UserSessionEntity, Model as UserSessionModel, ActiveModel as UserSessionActiveModel, Column as UserSessionColumn};
+pub use saved_track::{Entity as SavedTrackEntity, Model as SavedTrackModel, ActiveModel as SavedTrackActiveModel, Column as SavedTrackColumn};
 
 // Re-export DTOs without prefix
 pub use user::{CreateUserDto, LoginDto, UserResponseDto};

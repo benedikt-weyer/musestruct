@@ -7,7 +7,7 @@ use anyhow::Result;
 use axum::{
     http::Method,
     middleware,
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use dotenvy::dotenv;
@@ -22,6 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
 use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
+use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
 use services::AuthService;
 use migrator::Migrator;
 
@@ -83,6 +84,10 @@ async fn main() -> Result<()> {
         .route("/api/playlists", get(get_user_playlists))
         .route("/api/playlists", post(create_playlist))
         .route("/api/playlists/{id}", get(get_playlist))
+        .route("/api/saved-tracks", get(get_saved_tracks))
+        .route("/api/saved-tracks", post(save_track))
+        .route("/api/saved-tracks/{id}", delete(remove_saved_track))
+        .route("/api/saved-tracks/check", get(is_track_saved))
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn_with_state(

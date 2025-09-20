@@ -8,6 +8,8 @@ mod m20250115_000005_create_playlists_table;
 mod m20250115_000006_create_playlist_songs_table;
 mod m20250115_000007_create_user_streaming_services_table;
 mod m20250920_124747_add_account_username_to_streaming_services;
+mod m20250920_155644_create_saved_tracks_table;
+mod m20250920_161656_fix_saved_tracks_id_column;
 
 pub struct Migrator;
 
@@ -23,6 +25,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250115_000006_create_playlist_songs_table::Migration),
             Box::new(m20250115_000007_create_user_streaming_services_table::Migration),
             Box::new(m20250920_124747_add_account_username_to_streaming_services::Migration),
+            Box::new(m20250920_155644_create_saved_tracks_table::Migration),
+            Box::new(m20250920_161656_fix_saved_tracks_id_column::Migration),
         ]
     }
 }

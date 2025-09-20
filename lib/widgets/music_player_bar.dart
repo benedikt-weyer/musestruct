@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_provider.dart';
+import '../providers/saved_tracks_provider.dart';
 
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
@@ -195,6 +196,61 @@ class MusicPlayerBar extends StatelessWidget {
                           IconButton(
                             onPressed: musicProvider.stopPlayback,
                             icon: const Icon(Icons.stop),
+                          ),
+                          
+                          // Save/Remove button
+                          Consumer<SavedTracksProvider>(
+                            builder: (context, savedTracksProvider, child) {
+                              final isSaved = savedTracksProvider.isTrackSaved(
+                                musicProvider.currentTrack!.id, 
+                                musicProvider.currentTrack!.source
+                              );
+                              return IconButton(
+                                onPressed: () async {
+                                  if (isSaved) {
+                                    // Find the saved track to remove
+                                    final savedTrack = savedTracksProvider.savedTracks
+                                        .where((st) => 
+                                            st.trackId == musicProvider.currentTrack!.id && 
+                                            st.source == musicProvider.currentTrack!.source)
+                                        .firstOrNull;
+                                    if (savedTrack != null) {
+                                      await savedTracksProvider.removeSavedTrack(
+                                        savedTrack.id,
+                                        musicProvider.currentTrack!.id,
+                                        musicProvider.currentTrack!.source,
+                                      );
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Removed "${musicProvider.currentTrack!.title}" from saved tracks'),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  } else {
+                                    final success = await savedTracksProvider.saveTrack(musicProvider.currentTrack!);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            success 
+                                              ? 'Added "${musicProvider.currentTrack!.title}" to saved tracks'
+                                              : 'Failed to save track',
+                                          ),
+                                          backgroundColor: success ? Colors.green : Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                icon: Icon(
+                                  isSaved ? Icons.favorite : Icons.favorite_border,
+                                  color: isSaved ? Colors.red : Colors.grey[600],
+                                ),
+                                tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
+                              );
+                            },
                           ),
                         ],
                       ),
