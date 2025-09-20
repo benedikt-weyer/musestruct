@@ -112,6 +112,8 @@
             
             # Docker and containerization
             docker-compose
+
+            webkitgtk_4_1
           ];
 
           shellHook = ''

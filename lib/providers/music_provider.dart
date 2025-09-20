@@ -4,9 +4,12 @@ import '../models/music.dart';
 import '../models/api_response.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
+// import '../services/spotify_webview_player.dart'; // Disabled
+// import '../widgets/spotify_webview_widget.dart'; // Disabled
 
 class MusicProvider with ChangeNotifier {
   final AudioService _audioService = AudioService();
+  // final SpotifyWebViewPlayer _spotifyPlayer = SpotifyWebViewPlayer(); // Disabled
   
   SearchResults? _searchResults;
   bool _isSearching = false;
@@ -166,13 +169,13 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
 
       // Get stream URL
-      final response = await ApiService.getStreamUrl(track.id);
       
-      if (response.success && response.data != null) {
-        await _audioService.playTrack(track, response.data!);
-        _startAudioInfoUpdates();
+      if (track.source == 'spotify') {
+        // For now, show a message that Spotify playback is not available
+        throw Exception('Spotify playback is currently disabled. Please use Qobuz tracks for playback.');
       } else {
-        throw Exception(response.message ?? 'Failed to get stream URL');
+        // Use regular audio service for other sources (Qobuz, etc.)
+        await _playRegularTrack(track);
       }
     } catch (e) {
       _searchError = 'Failed to play track: $e';
@@ -180,6 +183,23 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
     } finally {
       _isLoading = false;
+    }
+  }
+
+  // _playSpotifyTrack method removed - Spotify WebView playback disabled
+
+  Future<void> _playRegularTrack(Track track) async {
+    // Get stream URL for non-Spotify tracks
+    final response = await ApiService.getStreamUrl(
+      track.id,
+      service: track.source,
+    );
+    
+    if (response.success && response.data != null) {
+      await _audioService.playTrack(track, response.data!);
+      _startAudioInfoUpdates();
+    } else {
+      throw Exception(response.message ?? 'Failed to get stream URL');
     }
   }
 

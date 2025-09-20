@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Web Playback SDK</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #status {
+            padding: 20px;
+            text-align: center;
+            font-size: 18px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        #debug {
+            background: #111;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Loading Spotify Web Playback SDK...</div>
+    <div id="debug"></div>
+
+    <script>
+        let player = null;
+        let deviceId = null;
+        let accessToken = 'PLACEHOLDER_TOKEN';
+
+        function debugLog(message) {
+            console.log(message);
+            const debugDiv = document.getElementById('debug');
+            debugDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+            debugLog('Status: ' + message);
+        }
+
+        // Initialize when SDK is ready
+        window.onSpotifyWebPlaybackSDKReady = () => {
+            debugLog('Spotify Web Playback SDK Ready');
+            updateStatus('Spotify SDK Ready - Initializing player...');
+            initializePlayer();
+        };
+
+        // Add a timeout to check if SDK loads
+        setTimeout(() => {
+            if (typeof window.Spotify === 'undefined') {
+                debugLog('Spotify Web Playback SDK failed to load');
+                updateStatus('Failed to load Spotify SDK');
+            } else {
+                debugLog('Spotify SDK loaded successfully');
+                updateStatus('Spotify SDK loaded - waiting for ready event...');
+            }
+        }, 5000);
+
+        // Add more debugging
+        debugLog('Script starting - access token: ' + (accessToken ? 'present' : 'missing'));
+        updateStatus('Loading Spotify Web Playback SDK...');
+
+        function initializePlayer() {
+            debugLog('initializePlayer called');
+            if (!accessToken || accessToken === 'PLACEHOLDER_TOKEN') {
+                debugLog('No access token provided');
+                updateStatus('No access token provided');
+                return;
+            }
+
+            debugLog('Creating Spotify Player with token: ' + accessToken.substring(0, 10) + '...');
+            updateStatus('Creating Spotify Player...');
+            
+            player = new Spotify.Player({
+                name: 'Musestruct Player',
+                getOAuthToken: cb => {
+                    debugLog('getOAuthToken called, providing token');
+                    cb(accessToken);
+                },
+                volume: 0.5
+            });
+            
+            debugLog('Spotify Player created: ' + player);
+
+            // Error handling
+            player.addListener('initialization_error', ({ message }) => {
+                debugLog('Initialization Error: ' + message);
+                updateStatus('Initialization Error: ' + message);
+            });
+
+            player.addListener('authentication_error', ({ message }) => {
+                debugLog('Authentication Error: ' + message);
+                updateStatus('Authentication Error: ' + message);
+            });
+
+            player.addListener('account_error', ({ message }) => {
+                debugLog('Account Error: ' + message);
+                updateStatus('Account Error: ' + message);
+            });
+
+            player.addListener('playback_error', ({ message }) => {
+                debugLog('Playback Error: ' + message);
+                updateStatus('Playback Error: ' + message);
+            });
+
+            // Playback status updates
+            player.addListener('player_state_changed', state => {
+                debugLog('Player state changed: ' + JSON.stringify(state));
+                handlePlayerStateChanged(state);
+            });
+
+            // Ready
+            player.addListener('ready', ({ device_id }) => {
+                debugLog('Ready with Device ID: ' + device_id);
+                deviceId = device_id;
+                updateStatus('Ready! Device ID: ' + device_id);
+                debugLog('Player is ready and connected');
+            });
+
+            // Not Ready
+            player.addListener('not_ready', ({ device_id }) => {
+                debugLog('Device ID has gone offline: ' + device_id);
+                updateStatus('Device offline: ' + device_id);
+            });
+
+            // Connect to the player
+            debugLog('Connecting to Spotify Player...');
+            updateStatus('Connecting to Spotify...');
+            player.connect();
+        }
+
+        function handlePlayerStateChanged(state) {
+            if (!state) return;
+
+            const isPlaying = !state.paused;
+            const track = state.track_window?.current_track;
+            
+            if (track) {
+                const currentTrack = {
+                    id: track.id,
+                    title: track.name,
+                    artist: track.artists?.[0]?.name || 'Unknown Artist',
+                    album: track.album?.name || 'Unknown Album',
+                    duration: Math.floor(track.duration_ms / 1000),
+                    coverUrl: track.album?.images?.[0]?.url,
+                    source: 'spotify'
+                };
+                
+                debugLog('Now playing: ' + JSON.stringify(currentTrack));
+            }
+        }
+
+        // Function to play a specific track (called from Flutter)
+        function playTrack(trackUri) {
+            debugLog('=== playTrack function called ===');
+            debugLog('Track URI: ' + trackUri);
+            debugLog('Player state: ' + (player ? 'initialized' : 'null'));
+            debugLog('Device ID: ' + deviceId);
+            debugLog('Access token present: ' + (accessToken ? 'yes' : 'no'));
+            
+            updateStatus('playTrack called: ' + trackUri);
+            
+            if (player && deviceId) {
+                debugLog('Player and device ready, attempting to play track...');
+                updateStatus('Playing: ' + trackUri);
+                
+                // Use the Web Playback SDK to play the track
+                const playUrl = 'https://api.spotify.com/v1/me/player/play?device_id=' + deviceId;
+                debugLog('Making request to: ' + playUrl);
+                
+                fetch(playUrl, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        uris: [trackUri]
+                    }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + accessToken
+                    }
+                }).then(response => {
+                    debugLog('Response status: ' + response.status);
+                    
+                    if (response.ok) {
+                        debugLog('Track playback started via Web Playback SDK');
+                        updateStatus('Playing: ' + trackUri);
+                    } else {
+                        debugLog('Failed to start playback: ' + response.status);
+                        return response.text().then(text => {
+                            debugLog('Response body: ' + text);
+                            updateStatus('Failed to start playback: ' + response.status + ' - ' + text);
+                        });
+                    }
+                }).catch(error => {
+                    debugLog('Error starting playback: ' + error.message);
+                    updateStatus('Error: ' + error.message);
+                });
+            } else {
+                debugLog('Player not ready or no device ID');
+                updateStatus('Player not ready - Player: ' + (player ? 'ready' : 'null') + ', Device: ' + (deviceId || 'null'));
+            }
+        }
+
+        // Control functions
+        function pauseTrack() {
+            if (player) {
+                player.pause();
+            }
+        }
+
+        function resumeTrack() {
+            if (player) {
+                player.resume();
+            }
+        }
+
+        function setVolume(volume) {
+            if (player) {
+                player.setVolume(volume);
+            }
+        }
+
+        // Function to set access token
+        function setAccessToken(token) {
+            debugLog('Setting access token: ' + token.substring(0, 10) + '...');
+            accessToken = token;
+            if (player) {
+                debugLog('Player already exists, reinitializing...');
+                initializePlayer();
+            }
+        }
+
+        // Make functions globally available
+        window.playTrack = playTrack;
+        window.pauseTrack = pauseTrack;
+        window.resumeTrack = resumeTrack;
+        window.setVolume = setVolume;
+        window.setAccessToken = setAccessToken;
+        
+        debugLog('Script loaded, waiting for Spotify SDK...');
+    </script>
+    
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+</body>
+</html>

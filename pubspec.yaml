@@ -50,6 +50,9 @@ dependencies:
   
   # URL launcher for external links
   url_launcher: ^6.2.2
+  
+  # WebView for Spotify Web Playback SDK on desktop platforms
+  desktop_webview_window: ^0.2.3
 
 dev_dependencies:
   flutter_test:

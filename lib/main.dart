@@ -6,6 +6,7 @@ import 'providers/connectivity_provider.dart';
 import 'providers/streaming_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
+// import 'widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
 
 void main() {
   runApp(const MusestructApp());
@@ -91,7 +92,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
 
         if (authProvider.isAuthenticated) {
-          return const HomeScreen();
+          return const Stack(
+            children: [
+              HomeScreen(),
+              // Hidden WebView for Spotify playback - DISABLED
+              // HiddenSpotifyWebView(),
+            ],
+          );
         } else {
           return const LoginScreen();
         }

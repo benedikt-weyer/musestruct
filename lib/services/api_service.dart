@@ -452,6 +452,45 @@ class ApiService {
       return ApiResponse<String>.error('Network error: $e');
     }
   }
+
+  static Future<ApiResponse<String>> transferSpotifyPlayback(String deviceId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/streaming/spotify/transfer'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({'device_id': deviceId}),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      }
+    } catch (e) {
+      return ApiResponse<String>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<String>> getSpotifyAccessToken() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/streaming/spotify/token'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      }
+    } catch (e) {
+      return ApiResponse<String>.error('Network error: $e');
+    }
+  }
 }
 
 class ServiceInfo {

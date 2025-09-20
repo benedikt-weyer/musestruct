@@ -192,6 +192,7 @@ pub async fn get_stream_url(
 ) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
     let service_name = params.service.as_deref().unwrap_or("qobuz");
     
+    
     let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
         Ok(service) => service,
         Err(err) => {
@@ -369,13 +370,18 @@ pub async fn get_spotify_auth_url(
     // For now, we'll include it in the response and validate it in the callback
     
     let scopes = vec![
+        "user-read-private",
+        "user-read-email",
         "user-read-playback-state",
         "user-modify-playback-state",
         "user-read-currently-playing",
         "streaming",
+        "user-read-recently-played",
+        "user-top-read",
         "playlist-read-private",
         "playlist-read-collaborative",
-        "user-library-read"
+        "user-library-read",
+        "user-library-modify"
     ].join(" ");
 
     let auth_url = format!(
@@ -1084,6 +1090,169 @@ async fn exchange_spotify_code(
     }
 
     Ok("Successfully connected to Spotify".to_string())
+}
+
+#[derive(Deserialize)]
+pub struct TransferPlaybackRequest {
+    pub device_id: String,
+}
+
+pub async fn transfer_spotify_playback(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Json(request): Json<TransferPlaybackRequest>,
+) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Get user's Spotify access token
+    let spotify_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
+    let access_token = match spotify_service {
+        Some(service) => service.access_token.ok_or_else(|| (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::<()>::error("No Spotify access token found".to_string()))
+        ))?,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<()>::error("Spotify service not connected".to_string())),
+            ));
+        }
+    };
+
+    // Transfer playback to the specified device
+    let client = reqwest::Client::new();
+    let response = client
+        .put("https://api.spotify.com/v1/me/player")
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "device_ids": [request.device_id],
+            "play": true
+        }))
+        .send()
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to transfer playback: {}", e)))
+        ))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Spotify API error: {}", error_text))),
+        ));
+    }
+
+    Ok(Json(ApiResponse::success("Playback transferred successfully".to_string())))
+}
+
+pub async fn get_spotify_access_token(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Get user's Spotify access token
+    let spotify_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
+    let access_token = match spotify_service {
+        Some(service) => service.access_token.ok_or_else(|| (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::<()>::error("No Spotify access token found".to_string()))
+        ))?,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<()>::error("Spotify service not connected".to_string())),
+            ));
+        }
+    };
+
+    Ok(Json(ApiResponse::success(access_token)))
+}
+
+#[derive(Deserialize)]
+pub struct RefreshSpotifyTokenRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Serialize)]
+pub struct RefreshSpotifyTokenResponse {
+    pub access_token: String,
+    pub expires_in: i64,
+}
+
+pub async fn refresh_spotify_token(
+    State(state): State<AppState>,
+    Json(request): Json<RefreshSpotifyTokenRequest>,
+) -> Result<Json<ApiResponse<RefreshSpotifyTokenResponse>>, StatusCode> {
+    let client_id = std::env::var("SPOTIFY_CLIENT_ID")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET")
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let token_url = "https://accounts.spotify.com/api/token";
+    let params = [
+        ("grant_type", "refresh_token"),
+        ("refresh_token", &request.refresh_token),
+        ("client_id", &client_id),
+        ("client_secret", &client_secret),
+    ];
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .post(token_url)
+        .form(&params)
+        .send()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if response.status().is_success() {
+        let token_response: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        
+        let access_token = token_response["access_token"]
+            .as_str()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+            .to_string();
+        
+        let expires_in = token_response["expires_in"]
+            .as_i64()
+            .unwrap_or(3600);
+        
+        Ok(Json(ApiResponse {
+            success: true,
+            data: Some(RefreshSpotifyTokenResponse {
+                access_token,
+                expires_in,
+            }),
+            message: Some("Spotify token refreshed successfully".to_string()),
+        }))
+    } else {
+        Ok(Json(ApiResponse {
+            success: false,
+            data: None,
+            message: Some("Failed to refresh Spotify token".to_string()),
+        }))
+    }
 }
 
 async fn get_spotify_user_info(access_token: &str) -> Result<serde_json::Value, String> {
