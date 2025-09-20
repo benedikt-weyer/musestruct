@@ -26,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const SearchScreen(),
     const MyTracksScreen(),
-    const Center(child: Text('Library\n(Coming Soon)', textAlign: TextAlign.center)),
     const PlaylistsScreen(),
     const SettingsScreen(),
   ];
@@ -74,10 +73,6 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.favorite),
             label: 'My Tracks',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_music),
-            label: 'Library',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.playlist_play),

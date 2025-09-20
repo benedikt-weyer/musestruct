@@ -276,7 +276,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        currentIndex: 3, // Playlists tab is selected
+        currentIndex: 2, // Playlists tab is selected
         onTap: (index) {
           switch (index) {
             case 0:
@@ -288,14 +288,10 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               Navigator.of(context).popUntil((route) => route.isFirst);
               break;
             case 2:
-              // Go back to home screen and switch to library tab
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              break;
-            case 3:
               // Stay in playlists - just go back to playlists list
               Navigator.of(context).pop();
               break;
-            case 4:
+            case 3:
               // Go back to home screen and switch to settings tab
               Navigator.of(context).popUntil((route) => route.isFirst);
               break;
@@ -309,10 +305,6 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.favorite),
             label: 'My Tracks',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_music),
-            label: 'Library',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.playlist_play),
