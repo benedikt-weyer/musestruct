@@ -13,6 +13,8 @@ class TrackTile extends StatelessWidget {
   final bool showSaveButton;
   final bool showQueueButton;
   final bool showPlaylistButton;
+  final bool showRemoveButton;
+  final VoidCallback? onRemove;
 
   const TrackTile({
     super.key,
@@ -23,6 +25,8 @@ class TrackTile extends StatelessWidget {
     this.showSaveButton = true,
     this.showQueueButton = true,
     this.showPlaylistButton = false,
+    this.showRemoveButton = false,
+    this.onRemove,
   });
 
   Color _getSourceColor(String source) {
@@ -319,6 +323,15 @@ class TrackTile extends StatelessWidget {
                 );
               },
               tooltip: 'Add to playlist',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+            ),
+          if (showRemoveButton)
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline, size: 20, color: Colors.red),
+              onPressed: onRemove,
+              tooltip: 'Remove from playlist',
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               padding: EdgeInsets.zero,
               iconSize: 20,

@@ -12,6 +12,7 @@ mod m20250920_155644_create_saved_tracks_table;
 mod m20250920_161656_fix_saved_tracks_id_column;
 mod m20250920_200000_create_queue_items_table;
 mod m20250920_210000_create_playlist_items;
+mod m20250920_222456_add_track_details_to_playlist_items;
 
 pub struct Migrator;
 
@@ -31,6 +32,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250920_161656_fix_saved_tracks_id_column::Migration),
             Box::new(m20250920_200000_create_queue_items_table::Migration),
             Box::new(m20250920_210000_create_playlist_items::Migration),
+            Box::new(m20250920_222456_add_track_details_to_playlist_items::Migration),
         ]
     }
 }

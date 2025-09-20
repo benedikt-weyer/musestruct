@@ -26,10 +26,15 @@ class _SelectPlaylistDialogState extends State<SelectPlaylistDialog> {
   Future<void> _addToPlaylist(Playlist playlist) async {
     final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
     
-    final success = await playlistProvider.addItemToPlaylist(
+    final success = await playlistProvider.addTrackToPlaylist(
       playlistId: playlist.id,
-      itemType: "track",
-      itemId: widget.track.id,
+      trackId: widget.track.id,
+      title: widget.track.title,
+      artist: widget.track.artist,
+      album: widget.track.album,
+      duration: widget.track.duration,
+      source: widget.track.source,
+      coverUrl: widget.track.coverUrl,
     );
 
     if (context.mounted) {

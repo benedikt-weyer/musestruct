@@ -163,11 +163,27 @@ class AddPlaylistItemRequest {
   final String itemType; // "track" or "playlist"
   final String itemId;
   final int? position;
+  // Track details (only used when itemType is "track")
+  final String? title;
+  final String? artist;
+  final String? album;
+  final int? duration;
+  final String? source;
+  final String? coverUrl;
+  // Playlist details (only used when itemType is "playlist")
+  final String? playlistName;
 
   AddPlaylistItemRequest({
     required this.itemType,
     required this.itemId,
     this.position,
+    this.title,
+    this.artist,
+    this.album,
+    this.duration,
+    this.source,
+    this.coverUrl,
+    this.playlistName,
   });
 
   Map<String, dynamic> toJson() {
@@ -175,6 +191,13 @@ class AddPlaylistItemRequest {
       'item_type': itemType,
       'item_id': itemId,
       'position': position,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'duration': duration,
+      'source': source,
+      'cover_url': coverUrl,
+      'playlist_name': playlistName,
     };
   }
 }

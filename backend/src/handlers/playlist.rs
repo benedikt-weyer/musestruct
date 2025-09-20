@@ -240,10 +240,7 @@ pub async fn get_playlist_items(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let mut response_items: Vec<PlaylistItemResponseDto> = items.into_iter().map(|item| item.into()).collect();
-
-    // TODO: Enrich with track/playlist details
-    // For now, we'll just return the basic item info
+    let response_items: Vec<PlaylistItemResponseDto> = items.into_iter().map(|item| item.into()).collect();
 
     Ok(Json(ApiResponse::success(response_items)))
 }
@@ -297,6 +294,14 @@ pub async fn add_playlist_item(
         item_id: Set(add_dto.item_id),
         position: Set(position),
         added_at: Set(chrono::Utc::now().naive_utc()),
+        // Store track/playlist details
+        title: Set(add_dto.title),
+        artist: Set(add_dto.artist),
+        album: Set(add_dto.album),
+        duration: Set(add_dto.duration),
+        source: Set(add_dto.source),
+        cover_url: Set(add_dto.cover_url),
+        playlist_name: Set(add_dto.playlist_name),
     };
 
     let item = item.insert(&state.auth_service.db).await.map_err(|e| {

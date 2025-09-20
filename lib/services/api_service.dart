@@ -1070,39 +1070,6 @@ class PlaylistApiService {
     }
   }
 
-  // Add item to playlist
-  static Future<ApiResponse<PlaylistItem>> addPlaylistItem(
-    String playlistId,
-    AddPlaylistItemRequest request,
-  ) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
-        headers: await _getAuthHeaders(),
-        body: jsonEncode(request.toJson()),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final json = jsonDecode(response.body);
-        return ApiResponse<PlaylistItem>.fromJson(
-          json,
-          (data) => PlaylistItem.fromJson(data as Map<String, dynamic>),
-        );
-      } else {
-        final json = jsonDecode(response.body);
-        return ApiResponse<PlaylistItem>(
-          success: false,
-          message: json['message'] ?? 'Failed to add item to playlist',
-        );
-      }
-    } catch (e) {
-      return ApiResponse<PlaylistItem>(
-        success: false,
-        message: 'Network error: $e',
-      );
-    }
-  }
-
   // Remove item from playlist
   static Future<ApiResponse<bool>> removePlaylistItem(
     String playlistId,
@@ -1163,6 +1130,39 @@ class PlaylistApiService {
       }
     } catch (e) {
       return ApiResponse<bool>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Add item to playlist
+  static Future<ApiResponse<PlaylistItem>> addPlaylistItem(
+    String playlistId,
+    AddPlaylistItemRequest request,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistItem>.fromJson(
+          json,
+          (data) => PlaylistItem.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistItem>(
+          success: false,
+          message: json['message'] ?? 'Failed to add item to playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<PlaylistItem>(
         success: false,
         message: 'Network error: $e',
       );

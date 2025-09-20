@@ -13,6 +13,15 @@ pub struct Model {
     pub item_id: String, // track_id or playlist_id
     pub position: i32,
     pub added_at: NaiveDateTime,
+    // Track details (only used when item_type is "track")
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration: Option<i32>,
+    pub source: Option<String>,
+    pub cover_url: Option<String>,
+    // Playlist details (only used when item_type is "playlist")
+    pub playlist_name: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -38,6 +47,15 @@ pub struct AddPlaylistItemDto {
     pub item_type: String, // "track" or "playlist"
     pub item_id: String,
     pub position: Option<i32>,
+    // Track details (only used when item_type is "track")
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration: Option<i32>,
+    pub source: Option<String>,
+    pub cover_url: Option<String>,
+    // Playlist details (only used when item_type is "playlist")
+    pub playlist_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,14 +89,14 @@ impl From<Model> for PlaylistItemResponseDto {
             item_id: model.item_id.clone(),
             position: model.position,
             added_at: model.added_at,
-            title: None,
-            artist: None,
-            album: None,
-            duration: None,
-            source: None,
-            cover_url: None,
+            title: model.title,
+            artist: model.artist,
+            album: model.album,
+            duration: model.duration,
+            source: model.source,
+            cover_url: model.cover_url,
             is_playlist: model.item_type == "playlist",
-            playlist_name: None,
+            playlist_name: model.playlist_name,
         }
     }
 }

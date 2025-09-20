@@ -207,6 +207,15 @@ class PlaylistProvider with ChangeNotifier {
     required String itemType, // "track" or "playlist"
     required String itemId,
     int? position,
+    // Track details (only used when itemType is "track")
+    String? title,
+    String? artist,
+    String? album,
+    int? duration,
+    String? source,
+    String? coverUrl,
+    // Playlist details (only used when itemType is "playlist")
+    String? playlistName,
   }) async {
     try {
       _isLoading = true;
@@ -217,6 +226,13 @@ class PlaylistProvider with ChangeNotifier {
         itemType: itemType,
         itemId: itemId,
         position: position,
+        title: title,
+        artist: artist,
+        album: album,
+        duration: duration,
+        source: source,
+        coverUrl: coverUrl,
+        playlistName: playlistName,
       );
 
       final response = await PlaylistApiService.addPlaylistItem(playlistId, request);
@@ -236,6 +252,32 @@ class PlaylistProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // Convenience method for adding tracks
+  Future<bool> addTrackToPlaylist({
+    required String playlistId,
+    required String trackId,
+    required String title,
+    required String artist,
+    required String album,
+    int? duration,
+    String? source,
+    String? coverUrl,
+    int? position,
+  }) async {
+    return addItemToPlaylist(
+      playlistId: playlistId,
+      itemType: 'track',
+      itemId: trackId,
+      position: position,
+      title: title,
+      artist: artist,
+      album: album,
+      duration: duration,
+      source: source,
+      coverUrl: coverUrl,
+    );
   }
 
   // Remove item from playlist

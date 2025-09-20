@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/playlist_provider.dart';
+import '../../providers/music_provider.dart';
 import '../../models/playlist.dart';
 import '../../models/music.dart';
 import '../../widgets/track_tile.dart';
@@ -342,50 +343,68 @@ class PlaylistItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: item.isPlaylist
-              ? Colors.blue.withOpacity(0.1)
-              : Colors.green.withOpacity(0.1),
-          child: Icon(
-            item.isPlaylist ? Icons.queue_music : Icons.music_note,
-            color: item.isPlaylist ? Colors.blue : Colors.green,
+    if (item.isPlaylist) {
+      // Show playlist item
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Colors.blue.withOpacity(0.1),
+            child: const Icon(Icons.queue_music, color: Colors.blue),
           ),
+          title: Text(
+            item.displayTitle,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: const Text('Playlist'),
+          trailing: IconButton(
+            icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+            onPressed: onRemove,
+          ),
+          onTap: () => _navigateToPlaylist(context),
         ),
-        title: Text(
-          item.displayTitle,
-          style: const TextStyle(fontWeight: FontWeight.w500),
+      );
+    } else {
+      // Show track item using TrackTile
+      final track = _createTrackFromItem();
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: TrackTile(
+          track: track,
+          onTap: () => _playTrack(context),
+          showSaveButton: true,
+          showQueueButton: true,
+          showPlaylistButton: false,
+          showRemoveButton: true,
+          onRemove: onRemove,
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item.displaySubtitle,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
-            if (item.duration != null && !item.isPlaylist)
-              Text(
-                item.formattedDuration,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              ),
-          ],
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-          onPressed: onRemove,
-        ),
-        onTap: () {
-          // TODO: Handle tap - play track or navigate to playlist
-        },
-      ),
+      );
+    }
+  }
+
+  Track _createTrackFromItem() {
+    return Track(
+      id: item.itemId,
+      title: item.title ?? 'Unknown Title',
+      artist: item.artist ?? 'Unknown Artist',
+      album: item.album ?? 'Unknown Album',
+      duration: item.duration,
+      source: item.source ?? 'unknown',
+      coverUrl: item.coverUrl,
     );
+  }
+
+  void _navigateToPlaylist(BuildContext context) {
+    // TODO: Navigate to the nested playlist
+    // For now, just show a message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Nested playlists not yet implemented')),
+    );
+  }
+
+  void _playTrack(BuildContext context) {
+    final track = _createTrackFromItem();
+    final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+    musicProvider.playTrack(track);
   }
 }
