@@ -178,119 +178,133 @@ class TrackTile extends StatelessWidget {
           ),
         ],
       ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showQueueButton)
-                Consumer<QueueProvider>(
-                  builder: (context, queueProvider, child) {
-                    return IconButton(
-                      icon: queueProvider.isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.queue_music),
-                      onPressed: queueProvider.isLoading
-                          ? null
-                          : () async {
-                              final success = await queueProvider.addToQueue(track);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      success 
-                                        ? 'Added "${track.title}" to queue'
-                                        : 'Failed to add track to queue',
-                                    ),
-                                    backgroundColor: success ? Colors.green : Colors.red,
-                                  ),
-                                );
-                              }
-                            },
-                      tooltip: 'Add to queue',
-                    );
-                  },
-                ),
-              if (showSaveButton)
-                Consumer<SavedTracksProvider>(
-                  builder: (context, savedTracksProvider, child) {
-                    final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
-                    return IconButton(
-                      icon: Icon(
-                        isSaved ? Icons.favorite : Icons.favorite_border,
-                        color: isSaved ? Colors.red : Colors.grey[600],
-                      ),
-                      onPressed: () async {
-                        if (isSaved) {
-                          // Find the saved track to remove
-                          final savedTrack = savedTracksProvider.savedTracks
-                              .where((st) => st.trackId == track.id && st.source == track.source)
-                              .firstOrNull;
-                          if (savedTrack != null) {
-                            await savedTracksProvider.removeSavedTrack(
-                              savedTrack.id,
-                              track.id,
-                              track.source,
-                            );
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Removed "${track.title}" from saved tracks'),
-                                ),
-                              );
-                            }
-                          }
-                        } else {
-                          final success = await savedTracksProvider.saveTrack(track);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  success 
-                                    ? 'Added "${track.title}" to saved tracks'
-                                    : 'Failed to save track',
-                                ),
-                                backgroundColor: success ? Colors.green : Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
-                    );
-                  },
-                ),
-            ],
-          ),
+          // Duration text (if available)
           if (track.duration != null)
-            Text(
-              track.formattedDuration,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Text(
+                track.formattedDuration,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 11,
+                ),
               ),
             ),
+          // Quality badge (if available)
           if (track.quality != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                track.quality!.toUpperCase(),
-                style: TextStyle(
-                  color: Theme.of(context).primaryColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  track.quality!.toUpperCase(),
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
+            ),
+          // Buttons
+          if (showQueueButton)
+            IconButton(
+              icon: Consumer<QueueProvider>(
+                builder: (context, queueProvider, child) {
+                  return queueProvider.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.queue_music, size: 20);
+                },
+              ),
+              onPressed: () async {
+                final queueProvider = Provider.of<QueueProvider>(context, listen: false);
+                if (queueProvider.isLoading) return;
+                
+                final success = await queueProvider.addToQueue(track);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success 
+                          ? 'Added "${track.title}" to queue'
+                          : 'Failed to add track to queue',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+              tooltip: 'Add to queue',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+            ),
+          if (showSaveButton)
+            IconButton(
+              icon: Consumer<SavedTracksProvider>(
+                builder: (context, savedTracksProvider, child) {
+                  final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
+                  return Icon(
+                    isSaved ? Icons.favorite : Icons.favorite_border,
+                    color: isSaved ? Colors.red : Colors.grey[600],
+                    size: 20,
+                  );
+                },
+              ),
+              onPressed: () async {
+                final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
+                final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
+                
+                if (isSaved) {
+                  // Find the saved track to remove
+                  final savedTrack = savedTracksProvider.savedTracks
+                      .where((st) => st.trackId == track.id && st.source == track.source)
+                      .firstOrNull;
+                  if (savedTrack != null) {
+                    await savedTracksProvider.removeSavedTrack(
+                      savedTrack.id,
+                      track.id,
+                      track.source,
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Removed "${track.title}" from saved tracks'),
+                        ),
+                      );
+                    }
+                  }
+                } else {
+                  final success = await savedTracksProvider.saveTrack(track);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success 
+                            ? 'Added "${track.title}" to saved tracks'
+                            : 'Failed to save track',
+                        ),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              tooltip: 'Toggle saved track',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
             ),
         ],
       ),
