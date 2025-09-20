@@ -56,6 +56,17 @@ class MusicProvider with ChangeNotifier {
     _queueProvider = queueProvider;
   }
 
+  Future<void> playNextTrack() async {
+    if (_queueProvider == null) return;
+
+    final nextTrack = _queueProvider!.getNextTrack();
+    if (nextTrack != null) {
+      // Remove current track from queue and play next
+      await _queueProvider!.moveToNext();
+      await playTrack(nextTrack.toTrack());
+    }
+  }
+
   MusicProvider() {
     _initializeAudioService();
     _loadAvailableServices();

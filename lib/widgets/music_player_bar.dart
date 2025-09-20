@@ -200,6 +200,20 @@ class MusicPlayerBar extends StatelessWidget {
                             icon: const Icon(Icons.stop),
                           ),
                           
+                          // Play next track button
+                          Consumer<QueueProvider>(
+                            builder: (context, queueProvider, child) {
+                              final hasNextTrack = queueProvider.getNextTrack() != null;
+                              return IconButton(
+                                onPressed: hasNextTrack && !musicProvider.isLoading
+                                    ? musicProvider.playNextTrack
+                                    : null,
+                                icon: const Icon(Icons.skip_next),
+                                tooltip: hasNextTrack ? 'Play next track' : 'No next track',
+                              );
+                            },
+                          ),
+                          
                           // Queue button
                           Consumer<QueueProvider>(
                             builder: (context, queueProvider, child) {
