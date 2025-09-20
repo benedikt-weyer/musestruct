@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/playlist_provider.dart';
+import '../../models/playlist.dart';
+import 'create_playlist_dialog.dart';
+import 'playlist_detail_screen.dart';
+
+class PlaylistsScreen extends StatefulWidget {
+  const PlaylistsScreen({super.key});
+
+  @override
+  State<PlaylistsScreen> createState() => _PlaylistsScreenState();
+}
+
+class _PlaylistsScreenState extends State<PlaylistsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PlaylistProvider>().initialize();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Playlists'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _showSearchDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showCreatePlaylistDialog,
+          ),
+        ],
+      ),
+      body: Consumer<PlaylistProvider>(
+        builder: (context, playlistProvider, child) {
+          if (playlistProvider.isLoading && playlistProvider.playlists.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (playlistProvider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[300],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading playlists',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    playlistProvider.error!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => playlistProvider.loadPlaylists(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (playlistProvider.playlists.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.queue_music_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No playlists yet',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create your first playlist to get started',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _showCreatePlaylistDialog,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Playlist'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () => playlistProvider.loadPlaylists(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: playlistProvider.playlists.length,
+              itemBuilder: (context, index) {
+                final playlist = playlistProvider.playlists[index];
+                return PlaylistTile(
+                  playlist: playlist,
+                  onTap: () => _navigateToPlaylistDetail(playlist),
+                  onEdit: () => _showEditPlaylistDialog(playlist),
+                  onDelete: () => _showDeletePlaylistDialog(playlist),
+                );
+              },
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreatePlaylistDialog,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _showSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Search Playlists'),
+        content: TextField(
+          controller: _searchController,
+          decoration: const InputDecoration(
+            hintText: 'Enter playlist name...',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _searchController.clear();
+              context.read<PlaylistProvider>().clearSearch();
+            },
+            child: const Text('Clear'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              final query = _searchController.text.trim();
+              if (query.isNotEmpty) {
+                context.read<PlaylistProvider>().searchPlaylists(query);
+              }
+            },
+            child: const Text('Search'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreatePlaylistDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const CreatePlaylistDialog(),
+    );
+  }
+
+  void _showEditPlaylistDialog(Playlist playlist) {
+    showDialog(
+      context: context,
+      builder: (context) => CreatePlaylistDialog(
+        playlist: playlist,
+        isEdit: true,
+      ),
+    );
+  }
+
+  void _showDeletePlaylistDialog(Playlist playlist) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Playlist'),
+        content: Text('Are you sure you want to delete "${playlist.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.read<PlaylistProvider>().deletePlaylist(playlist.id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToPlaylistDetail(Playlist playlist) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaylistDetailScreen(playlist: playlist),
+      ),
+    );
+  }
+}
+
+class PlaylistTile extends StatelessWidget {
+  final Playlist playlist;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const PlaylistTile({
+    super.key,
+    required this.playlist,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+          child: Icon(
+            Icons.queue_music,
+            color: Theme.of(context).primaryColor,
+          ),
+        ),
+        title: Text(
+          playlist.name,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (playlist.description != null && playlist.description!.isNotEmpty)
+              Text(
+                playlist.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(
+                  playlist.isPublic ? Icons.public : Icons.lock,
+                  size: 12,
+                  color: Colors.grey[600],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${playlist.itemCount} items',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            switch (value) {
+              case 'edit':
+                onEdit();
+                break;
+              case 'delete':
+                onDelete();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit, size: 20),
+                  SizedBox(width: 8),
+                  Text('Edit'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete, size: 20, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('Delete', style: TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}

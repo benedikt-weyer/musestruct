@@ -1,18 +1,16 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{Set, ActiveModelBehavior};
 use serde::{Deserialize, Serialize};
-use uuid::{Uuid, Timestamp};
-use chrono::{DateTime, Utc, NaiveDateTime};
-use async_trait::async_trait;
+use chrono::NaiveDateTime;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "playlists")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
+    pub user_id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub user_id: Uuid,
     pub is_public: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -20,42 +18,33 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::user::Entity",
-        from = "Column::UserId",
-        to = "super::user::Column::Id"
-    )]
-    User,
+    #[sea_orm(has_many = "super::playlist_item::Entity")]
+    PlaylistItems,
 }
 
-impl Related<super::user::Entity> for Entity {
+impl Related<super::playlist_item::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::User.def()
+        Relation::PlaylistItems.def()
     }
 }
 
-#[async_trait]
-impl ActiveModelBehavior for ActiveModel {
-    fn new() -> Self {
-        Self {
-            id: Set(Uuid::new_v7(Timestamp::now(uuid::NoContext))),
-            created_at: Set(chrono::Utc::now().naive_utc()),
-            updated_at: Set(chrono::Utc::now().naive_utc()),
-            is_public: Set(false),
-            ..ActiveModelTrait::default()
-        }
-    }
+impl ActiveModelBehavior for ActiveModel {}
 
-    async fn before_save<C>(mut self, _db: &C, _insert: bool) -> Result<Self, DbErr>
-    where
-        C: ConnectionTrait,
-    {
-        self.updated_at = Set(chrono::Utc::now().naive_utc());
-        Ok(self)
-    }
+#[derive(Deserialize)]
+pub struct CreatePlaylistDto {
+    pub name: String,
+    pub description: Option<String>,
+    pub is_public: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Deserialize)]
+pub struct UpdatePlaylistDto {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub is_public: Option<bool>,
+}
+
+#[derive(Serialize)]
 pub struct PlaylistResponseDto {
     pub id: Uuid,
     pub name: String,
@@ -63,24 +52,19 @@ pub struct PlaylistResponseDto {
     pub is_public: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub item_count: i32,
 }
 
 impl From<Model> for PlaylistResponseDto {
-    fn from(playlist: Model) -> Self {
+    fn from(model: Model) -> Self {
         Self {
-            id: playlist.id,
-            name: playlist.name,
-            description: playlist.description,
-            is_public: playlist.is_public,
-            created_at: playlist.created_at,
-            updated_at: playlist.updated_at,
+            id: model.id,
+            name: model.name,
+            description: model.description,
+            is_public: model.is_public,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+            item_count: 0, // Will be set separately
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreatePlaylistDto {
-    pub name: String,
-    pub description: Option<String>,
-    pub is_public: Option<bool>,
 }

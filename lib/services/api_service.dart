@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user.dart';
 import '../models/music.dart';
+import '../models/playlist.dart';
 import '../models/api_response.dart';
 import '../providers/queue_provider.dart';
 
@@ -854,5 +855,317 @@ class SpotifyAuthUrlResponse {
       authUrl: json['auth_url'] as String,
       state: json['state'] as String,
     );
+  }
+}
+
+// Playlist API methods
+class PlaylistApiService {
+  static const String baseUrl = 'http://127.0.0.1:8080/api';
+
+  static Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await ApiService.getSessionToken();
+    print('PlaylistApiService: Retrieved token: ${token != null ? "present" : "null"}');
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  // Get all playlists
+  static Future<ApiResponse<PlaylistListResponse>> getPlaylists({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+  }) async {
+    try {
+      final params = <String, String>{
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      };
+      if (search != null && search.isNotEmpty) {
+        params['search'] = search;
+      }
+
+      final uri = Uri.parse('$baseUrl/v2/playlists').replace(queryParameters: params);
+      print('PlaylistApiService: baseUrl = $baseUrl');
+      print('PlaylistApiService: constructed uri = $uri');
+      final headers = await _getAuthHeaders();
+      print('PlaylistApiService: Making request to $uri');
+      print('PlaylistApiService: Headers: $headers');
+      
+      final response = await http.get(uri, headers: headers);
+      print('PlaylistApiService: Response status: ${response.statusCode}');
+      print('PlaylistApiService: Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistListResponse>.fromJson(
+          json,
+          (data) => PlaylistListResponse.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistListResponse>(
+          success: false,
+          message: json['message'] ?? 'Failed to get playlists',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<PlaylistListResponse>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Create playlist
+  static Future<ApiResponse<Playlist>> createPlaylist(CreatePlaylistRequest request) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/v2/playlists'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>.fromJson(
+          json,
+          (data) => Playlist.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>(
+          success: false,
+          message: json['message'] ?? 'Failed to create playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<Playlist>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Get playlist by ID
+  static Future<ApiResponse<Playlist>> getPlaylist(String playlistId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>.fromJson(
+          json,
+          (data) => Playlist.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>(
+          success: false,
+          message: json['message'] ?? 'Failed to get playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<Playlist>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Update playlist
+  static Future<ApiResponse<Playlist>> updatePlaylist(
+    String playlistId,
+    UpdatePlaylistRequest request,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>.fromJson(
+          json,
+          (data) => Playlist.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<Playlist>(
+          success: false,
+          message: json['message'] ?? 'Failed to update playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<Playlist>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Delete playlist
+  static Future<ApiResponse<bool>> deletePlaylist(String playlistId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.fromJson(
+          json,
+          (data) => data as bool,
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>(
+          success: false,
+          message: json['message'] ?? 'Failed to delete playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<bool>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Get playlist items
+  static Future<ApiResponse<List<PlaylistItem>>> getPlaylistItems(String playlistId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<List<PlaylistItem>>.fromJson(
+          json,
+          (data) => (data as List)
+              .map((item) => PlaylistItem.fromJson(item as Map<String, dynamic>))
+              .toList(),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<List<PlaylistItem>>(
+          success: false,
+          message: json['message'] ?? 'Failed to get playlist items',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<List<PlaylistItem>>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Add item to playlist
+  static Future<ApiResponse<PlaylistItem>> addPlaylistItem(
+    String playlistId,
+    AddPlaylistItemRequest request,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistItem>.fromJson(
+          json,
+          (data) => PlaylistItem.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<PlaylistItem>(
+          success: false,
+          message: json['message'] ?? 'Failed to add item to playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<PlaylistItem>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Remove item from playlist
+  static Future<ApiResponse<bool>> removePlaylistItem(
+    String playlistId,
+    String itemId,
+  ) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId/items/$itemId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.fromJson(
+          json,
+          (data) => data as bool,
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>(
+          success: false,
+          message: json['message'] ?? 'Failed to remove item from playlist',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<bool>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  // Reorder playlist item
+  static Future<ApiResponse<bool>> reorderPlaylistItem(
+    String playlistId,
+    String itemId,
+    ReorderPlaylistItemRequest request,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/v2/playlists/$playlistId/items/$itemId/reorder'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.fromJson(
+          json,
+          (data) => data as bool,
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>(
+          success: false,
+          message: json['message'] ?? 'Failed to reorder playlist item',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<bool>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
   }
 }

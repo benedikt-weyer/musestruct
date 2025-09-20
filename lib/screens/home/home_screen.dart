@@ -8,6 +8,7 @@ import '../../providers/saved_tracks_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';
+import '../playlists/playlists_screen.dart';
 import '../../widgets/music_player_bar.dart';
 import '../../services/api_service.dart';
 import '../../widgets/copyable_error.dart';
@@ -26,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const SearchScreen(),
     const MyTracksScreen(),
     const Center(child: Text('Library\n(Coming Soon)', textAlign: TextAlign.center)),
-    const Center(child: Text('Playlists\n(Coming Soon)', textAlign: TextAlign.center)),
+    const PlaylistsScreen(),
     const SettingsScreen(),
   ];
 

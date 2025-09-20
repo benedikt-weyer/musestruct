@@ -229,45 +229,6 @@ class SearchResults {
   }
 }
 
-class Playlist {
-  final String id;
-  final String name;
-  final String? description;
-  final bool isPublic;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  Playlist({
-    required this.id,
-    required this.name,
-    this.description,
-    required this.isPublic,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  factory Playlist.fromJson(Map<String, dynamic> json) {
-    return Playlist(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      isPublic: json['isPublic'] as bool,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'isPublic': isPublic,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-    };
-  }
-}
 
 class SavedTrack {
   final String id;

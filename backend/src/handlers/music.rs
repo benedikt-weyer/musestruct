@@ -37,9 +37,10 @@ pub async fn create_playlist(
         id: Uuid::new_v7(Timestamp::now(uuid::NoContext)),
         name: playlist_data.name,
         description: playlist_data.description,
-        is_public: playlist_data.is_public.unwrap_or(false),
+        is_public: playlist_data.is_public,
         created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
+        item_count: 0,
     };
     
     Ok(Json(ApiResponse::success(mock_playlist)))

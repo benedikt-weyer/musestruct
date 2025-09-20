@@ -11,6 +11,7 @@ mod m20250920_124747_add_account_username_to_streaming_services;
 mod m20250920_155644_create_saved_tracks_table;
 mod m20250920_161656_fix_saved_tracks_id_column;
 mod m20250920_200000_create_queue_items_table;
+mod m20250920_210000_create_playlist_items;
 
 pub struct Migrator;
 
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250920_155644_create_saved_tracks_table::Migration),
             Box::new(m20250920_161656_fix_saved_tracks_id_column::Migration),
             Box::new(m20250920_200000_create_queue_items_table::Migration),
+            Box::new(m20250920_210000_create_playlist_items::Migration),
         ]
     }
 }
