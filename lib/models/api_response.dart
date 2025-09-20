@@ -20,6 +20,14 @@ class ApiResponse<T> {
     );
   }
 
+  factory ApiResponse.success(T data) {
+    return ApiResponse<T>(
+      success: true,
+      data: data,
+      message: null,
+    );
+  }
+
   factory ApiResponse.error(String message) {
     return ApiResponse<T>(
       success: false,

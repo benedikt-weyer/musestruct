@@ -4,12 +4,14 @@ import '../models/music.dart';
 import '../models/api_response.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
+import 'queue_provider.dart';
 // import '../services/spotify_webview_player.dart'; // Disabled
 // import '../widgets/spotify_webview_widget.dart'; // Disabled
 
 class MusicProvider with ChangeNotifier {
   final AudioService _audioService = AudioService();
   // final SpotifyWebViewPlayer _spotifyPlayer = SpotifyWebViewPlayer(); // Disabled
+  QueueProvider? _queueProvider;
   
   SearchResults? _searchResults;
   bool _isSearching = false;
@@ -50,6 +52,10 @@ class MusicProvider with ChangeNotifier {
   AudioService get audioService => _audioService;
   bool get isUIUpdatesPaused => _isUIUpdatesPaused;
 
+  void setQueueProvider(QueueProvider queueProvider) {
+    _queueProvider = queueProvider;
+  }
+
   MusicProvider() {
     _initializeAudioService();
     _loadAvailableServices();
@@ -63,6 +69,11 @@ class MusicProvider with ChangeNotifier {
       _isPlaying = isPlaying;
       if (!_isUIUpdatesPaused) {
         notifyListeners();
+      }
+      
+      // Check if track finished and we should play next from queue
+      if (!isPlaying && _currentTrack != null && _queueProvider != null) {
+        _checkAndPlayNextTrack();
       }
     });
 
@@ -298,6 +309,20 @@ class MusicProvider with ChangeNotifier {
   void _stopBackgroundUpdates() {
     _backgroundUpdateTimer?.cancel();
     _backgroundUpdateTimer = null;
+  }
+
+  Future<void> _checkAndPlayNextTrack() async {
+    if (_queueProvider == null) return;
+    
+    // Check if current track is at the end (within 1 second of duration)
+    if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 1) {
+      final nextTrack = _queueProvider!.getNextTrack();
+      if (nextTrack != null) {
+        // Remove current track from queue and play next
+        await _queueProvider!.moveToNext();
+        await playTrack(nextTrack.toTrack());
+      }
+    }
   }
 
   @override

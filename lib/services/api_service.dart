@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user.dart';
 import '../models/music.dart';
 import '../models/api_response.dart';
+import '../providers/queue_provider.dart';
 
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8080/api';
@@ -599,6 +600,132 @@ class ApiService {
       } else {
         final json = jsonDecode(response.body);
         return ApiResponse<bool>.fromJson(json, (data) => data as bool);
+      }
+    } catch (e) {
+      return ApiResponse<bool>.error('Network error: $e');
+    }
+  }
+
+  // Queue management methods
+  static Future<ApiResponse<List<QueueItem>>> getQueue() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/queue'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final List<dynamic> queueData = json['data'] ?? [];
+        final queueItems = queueData.map((item) => QueueItem.fromJson(item)).toList();
+        return ApiResponse<List<QueueItem>>.success(queueItems);
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<List<QueueItem>>.error(json['message'] ?? 'Failed to get queue');
+      }
+    } catch (e) {
+      return ApiResponse<List<QueueItem>>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<bool>> addToQueue(Track track) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/queue'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({
+          'track_id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'duration': track.duration ?? 0,
+          'source': track.source,
+          'cover_url': track.coverUrl,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+        if (json['success'] == true) {
+          return ApiResponse<bool>.success(true);
+        } else {
+          return ApiResponse<bool>.error(json['message'] ?? 'Failed to add track to queue');
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.error(json['message'] ?? 'Failed to add track to queue');
+      }
+    } catch (e) {
+      return ApiResponse<bool>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<bool>> removeFromQueue(String queueItemId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/queue/$queueItemId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        final json = jsonDecode(response.body);
+        if (json['success'] == true) {
+          return ApiResponse<bool>.success(true);
+        } else {
+          return ApiResponse<bool>.error(json['message'] ?? 'Failed to remove track from queue');
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.error(json['message'] ?? 'Failed to remove track from queue');
+      }
+    } catch (e) {
+      return ApiResponse<bool>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<bool>> reorderQueue(String queueItemId, int newPosition) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/queue/$queueItemId/reorder'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({
+          'new_position': newPosition,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        if (json['success'] == true) {
+          return ApiResponse<bool>.success(true);
+        } else {
+          return ApiResponse<bool>.error(json['message'] ?? 'Failed to reorder queue');
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.error(json['message'] ?? 'Failed to reorder queue');
+      }
+    } catch (e) {
+      return ApiResponse<bool>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<bool>> clearQueue() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/queue'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        if (json['success'] == true) {
+          return ApiResponse<bool>.success(true);
+        } else {
+          return ApiResponse<bool>.error(json['message'] ?? 'Failed to clear queue');
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<bool>.error(json['message'] ?? 'Failed to clear queue');
       }
     } catch (e) {
       return ApiResponse<bool>.error('Network error: $e');

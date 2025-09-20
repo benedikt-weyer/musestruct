@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/music.dart';
 import '../providers/saved_tracks_provider.dart';
+import '../providers/queue_provider.dart';
 
 class TrackTile extends StatelessWidget {
   final Track track;
@@ -9,6 +10,7 @@ class TrackTile extends StatelessWidget {
   final bool isPlaying;
   final bool isLoading;
   final bool showSaveButton;
+  final bool showQueueButton;
 
   const TrackTile({
     super.key,
@@ -17,6 +19,7 @@ class TrackTile extends StatelessWidget {
     this.isPlaying = false,
     this.isLoading = false,
     this.showSaveButton = true,
+    this.showQueueButton = true,
   });
 
   Color _getSourceColor(String source) {
@@ -179,55 +182,92 @@ class TrackTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (showSaveButton)
-            Consumer<SavedTracksProvider>(
-              builder: (context, savedTracksProvider, child) {
-                final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
-                return IconButton(
-                  icon: Icon(
-                    isSaved ? Icons.favorite : Icons.favorite_border,
-                    color: isSaved ? Colors.red : Colors.grey[600],
-                  ),
-                  onPressed: () async {
-                    if (isSaved) {
-                      // Find the saved track to remove
-                      final savedTrack = savedTracksProvider.savedTracks
-                          .where((st) => st.trackId == track.id && st.source == track.source)
-                          .firstOrNull;
-                      if (savedTrack != null) {
-                        await savedTracksProvider.removeSavedTrack(
-                          savedTrack.id,
-                          track.id,
-                          track.source,
-                        );
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Removed "${track.title}" from saved tracks'),
-                            ),
-                          );
-                        }
-                      }
-                    } else {
-                      final success = await savedTracksProvider.saveTrack(track);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              success 
-                                ? 'Added "${track.title}" to saved tracks'
-                                : 'Failed to save track',
-                            ),
-                            backgroundColor: success ? Colors.green : Colors.red,
-                          ),
-                        );
-                      }
-                    }
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showQueueButton)
+                Consumer<QueueProvider>(
+                  builder: (context, queueProvider, child) {
+                    return IconButton(
+                      icon: queueProvider.isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.queue_music),
+                      onPressed: queueProvider.isLoading
+                          ? null
+                          : () async {
+                              final success = await queueProvider.addToQueue(track);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      success 
+                                        ? 'Added "${track.title}" to queue'
+                                        : 'Failed to add track to queue',
+                                    ),
+                                    backgroundColor: success ? Colors.green : Colors.red,
+                                  ),
+                                );
+                              }
+                            },
+                      tooltip: 'Add to queue',
+                    );
                   },
-                  tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
-                );
-              },
-            ),
+                ),
+              if (showSaveButton)
+                Consumer<SavedTracksProvider>(
+                  builder: (context, savedTracksProvider, child) {
+                    final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
+                    return IconButton(
+                      icon: Icon(
+                        isSaved ? Icons.favorite : Icons.favorite_border,
+                        color: isSaved ? Colors.red : Colors.grey[600],
+                      ),
+                      onPressed: () async {
+                        if (isSaved) {
+                          // Find the saved track to remove
+                          final savedTrack = savedTracksProvider.savedTracks
+                              .where((st) => st.trackId == track.id && st.source == track.source)
+                              .firstOrNull;
+                          if (savedTrack != null) {
+                            await savedTracksProvider.removeSavedTrack(
+                              savedTrack.id,
+                              track.id,
+                              track.source,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Removed "${track.title}" from saved tracks'),
+                                ),
+                              );
+                            }
+                          }
+                        } else {
+                          final success = await savedTracksProvider.saveTrack(track);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  success 
+                                    ? 'Added "${track.title}" to saved tracks'
+                                    : 'Failed to save track',
+                                ),
+                                backgroundColor: success ? Colors.green : Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
+                    );
+                  },
+                ),
+            ],
+          ),
           if (track.duration != null)
             Text(
               track.formattedDuration,

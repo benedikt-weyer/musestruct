@@ -7,7 +7,7 @@ use anyhow::Result;
 use axum::{
     http::Method,
     middleware,
-    routing::{get, post, delete},
+    routing::{get, post, delete, put},
     Router,
 };
 use dotenvy::dotenv;
@@ -23,6 +23,7 @@ use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
 use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
+use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
 use services::AuthService;
 use migrator::Migrator;
 
@@ -88,6 +89,11 @@ async fn main() -> Result<()> {
         .route("/api/saved-tracks", post(save_track))
         .route("/api/saved-tracks/{id}", delete(remove_saved_track))
         .route("/api/saved-tracks/check", get(is_track_saved))
+        .route("/api/queue", get(get_queue))
+        .route("/api/queue", post(add_to_queue))
+        .route("/api/queue", delete(clear_queue))
+        .route("/api/queue/{id}", delete(remove_from_queue))
+        .route("/api/queue/{id}/reorder", put(reorder_queue))
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn_with_state(

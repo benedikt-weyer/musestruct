@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/music_provider.dart';
 import '../providers/saved_tracks_provider.dart';
+import '../providers/queue_provider.dart';
+import '../screens/queue/queue_screen.dart';
 
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
@@ -196,6 +198,52 @@ class MusicPlayerBar extends StatelessWidget {
                           IconButton(
                             onPressed: musicProvider.stopPlayback,
                             icon: const Icon(Icons.stop),
+                          ),
+                          
+                          // Queue button
+                          Consumer<QueueProvider>(
+                            builder: (context, queueProvider, child) {
+                              return Stack(
+                                children: [
+                                  IconButton(
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) => const QueueScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.queue_music),
+                                    tooltip: 'Queue (${queueProvider.queueLength})',
+                                  ),
+                                  if (queueProvider.queueLength > 0)
+                                    Positioned(
+                                      right: 8,
+                                      top: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          '${queueProvider.queueLength}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
                           ),
                           
                           // Save/Remove button
