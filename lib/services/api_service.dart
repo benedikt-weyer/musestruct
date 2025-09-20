@@ -24,7 +24,7 @@ class ApiService {
     await _storage.delete(key: _sessionTokenKey);
   }
 
-  static Map<String, String> _getHeaders({bool requireAuth = false}) {
+  static Map<String, String> _getHeaders() {
     final headers = {
       'Content-Type': 'application/json',
     };
@@ -340,6 +340,65 @@ class ApiService {
       );
     }
   }
+
+  static Future<ApiResponse<ServiceStatusResponse>> getServiceStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/streaming/status'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<ServiceStatusResponse>.fromJson(
+          json,
+          (data) => ServiceStatusResponse.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<ServiceStatusResponse>(
+          success: false,
+          message: json['message'] ?? 'Failed to get service status',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<ServiceStatusResponse>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  static Future<ApiResponse<String>> disconnectService(String serviceName) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/streaming/disconnect'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode({
+          'service_name': serviceName,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(
+          json,
+          (data) => data as String,
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>(
+          success: false,
+          message: json['message'] ?? 'Failed to disconnect service',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<String>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
 }
 
 class ServiceInfo {
@@ -361,6 +420,48 @@ class ServiceInfo {
       displayName: json['display_name'] as String,
       supportsFullTracks: json['supports_full_tracks'] as bool,
       requiresPremium: json['requires_premium'] as bool,
+    );
+  }
+}
+
+class ServiceStatusResponse {
+  final List<ConnectedServiceInfo> services;
+
+  ServiceStatusResponse({
+    required this.services,
+  });
+
+  factory ServiceStatusResponse.fromJson(Map<String, dynamic> json) {
+    return ServiceStatusResponse(
+      services: (json['services'] as List<dynamic>)
+          .map((item) => ConnectedServiceInfo.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class ConnectedServiceInfo {
+  final String name;
+  final String displayName;
+  final bool isConnected;
+  final String? connectedAt;
+  final String? accountUsername;
+
+  ConnectedServiceInfo({
+    required this.name,
+    required this.displayName,
+    required this.isConnected,
+    this.connectedAt,
+    this.accountUsername,
+  });
+
+  factory ConnectedServiceInfo.fromJson(Map<String, dynamic> json) {
+    return ConnectedServiceInfo(
+      name: json['name'] as String,
+      displayName: json['display_name'] as String,
+      isConnected: json['is_connected'] as bool,
+      connectedAt: json['connected_at'] as String?,
+      accountUsername: json['account_username'] as String?,
     );
   }
 }

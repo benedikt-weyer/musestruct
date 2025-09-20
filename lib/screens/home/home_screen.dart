@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/music_provider.dart';
+import '../../providers/streaming_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../../widgets/music_player_bar.dart';
@@ -83,8 +84,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load service status when the screen is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<StreamingProvider>().loadServiceStatus();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +108,14 @@ class SettingsScreen extends StatelessWidget {
         title: const Text('Settings'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              context.read<StreamingProvider>().loadServiceStatus();
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -116,26 +139,51 @@ class SettingsScreen extends StatelessWidget {
             // Backend status card
             const BackendStatusCard(),
             const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.music_note),
-              title: const Text('Connect Qobuz'),
-              subtitle: const Text('Connect your Qobuz account for hi-fi streaming'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                _showQobuzConnectionDialog(context);
+            // Streaming services section
+            const Text(
+              'Streaming Services',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Consumer<StreamingProvider>(
+              builder: (context, streamingProvider, child) {
+                if (streamingProvider.isLoading) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (streamingProvider.error != null) {
+                  return Card(
+                    color: Colors.red.shade50,
+                    child: ListTile(
+                      leading: const Icon(Icons.error, color: Colors.red),
+                      title: const Text('Error loading services'),
+                      subtitle: Text(streamingProvider.error!),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () {
+                          streamingProvider.loadServiceStatus();
+                        },
+                      ),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: streamingProvider.services.map((service) {
+                    return _buildServiceCard(context, service);
+                  }).toList(),
+                );
               },
             ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.music_note),
-              title: const Text('Connect Spotify'),
-              subtitle: const Text('Connect your Spotify account for music streaming'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () {
-                _showSpotifyConnectionDialog(context);
-              },
-            ),
-            const Divider(),
+            const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('Logout', style: TextStyle(color: Colors.red)),
@@ -145,6 +193,145 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildServiceCard(BuildContext context, ConnectedServiceInfo service) {
+    final isConnected = service.isConnected;
+    final icon = isConnected ? Icons.check_circle : Icons.cancel;
+    final iconColor = isConnected ? Colors.green : Colors.grey;
+    final statusText = isConnected ? 'Connected' : 'Not Connected';
+    final statusColor = isConnected ? Colors.green : Colors.grey;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon, color: iconColor),
+        title: Text(service.displayName),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              statusText,
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (isConnected) ...[
+              const SizedBox(height: 2),
+              if (service.accountUsername != null) ...[
+                Text(
+                  'Account: ${service.accountUsername}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+              ],
+              if (service.connectedAt != null) ...[
+                Text(
+                  'Connected: ${_formatDate(service.connectedAt!)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
+        trailing: isConnected
+            ? TextButton(
+                onPressed: () => _showDisconnectDialog(context, service),
+                child: const Text(
+                  'Disconnect',
+                  style: TextStyle(color: Colors.red),
+                ),
+              )
+            : TextButton(
+                onPressed: () => _showConnectDialog(context, service.name),
+                child: const Text('Connect'),
+              ),
+      ),
+    );
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  void _showConnectDialog(BuildContext context, String serviceName) {
+    if (serviceName == 'qobuz') {
+      _showQobuzConnectionDialog(context);
+    } else if (serviceName == 'spotify') {
+      _showSpotifyConnectionDialog(context);
+    }
+  }
+
+  void _showDisconnectDialog(BuildContext context, ConnectedServiceInfo service) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Disconnect ${service.displayName}'),
+        content: Text(
+          'Are you sure you want to disconnect from ${service.displayName}? '
+          'You will need to reconnect to use this service again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text('Disconnecting from ${service.displayName}...'),
+                  duration: const Duration(seconds: 30),
+                ),
+              );
+
+              final success = await context.read<StreamingProvider>()
+                  .disconnectService(service.name);
+
+              scaffoldMessenger.hideCurrentSnackBar();
+
+              if (success) {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Successfully disconnected from ${service.displayName}'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                final error = context.read<StreamingProvider>().error;
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text(error ?? 'Failed to disconnect'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Disconnect'),
+          ),
+        ],
       ),
     );
   }
@@ -215,6 +402,9 @@ class SettingsScreen extends StatelessWidget {
                 scaffoldMessenger.hideCurrentSnackBar();
                 
                 if (response.success) {
+                  // Refresh service status
+                  context.read<StreamingProvider>().loadServiceStatus();
+                  
                   scaffoldMessenger.showSnackBar(
                     const SnackBar(
                       content: Text('Successfully connected to Qobuz!'),
@@ -294,6 +484,8 @@ class SettingsScreen extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
+              // Refresh service status even for placeholder
+              context.read<StreamingProvider>().loadServiceStatus();
               scaffoldMessenger.showSnackBar(
                 const SnackBar(
                   content: Text('Spotify OAuth2 implementation coming soon!'),

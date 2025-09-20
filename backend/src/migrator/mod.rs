@@ -7,6 +7,7 @@ mod m20250115_000004_create_songs_table;
 mod m20250115_000005_create_playlists_table;
 mod m20250115_000006_create_playlist_songs_table;
 mod m20250115_000007_create_user_streaming_services_table;
+mod m20250920_124747_add_account_username_to_streaming_services;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250115_000005_create_playlists_table::Migration),
             Box::new(m20250115_000006_create_playlist_songs_table::Migration),
             Box::new(m20250115_000007_create_user_streaming_services_table::Migration),
+            Box::new(m20250920_124747_add_account_username_to_streaming_services::Migration),
         ]
     }
 }

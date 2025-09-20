@@ -16,6 +16,7 @@ pub struct Model {
     pub refresh_token: Option<String>,
     pub expires_at: Option<NaiveDateTime>,
     pub is_active: bool,
+    pub account_username: Option<String>, // Username of the connected account
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

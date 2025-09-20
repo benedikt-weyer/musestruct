@@ -20,7 +20,7 @@ use tracing::{info, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services};
+use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use services::AuthService;
 use migrator::Migrator;
@@ -72,8 +72,10 @@ async fn main() -> Result<()> {
         .route("/api/streaming/search", get(search_music))
         .route("/api/streaming/stream-url", get(get_stream_url))
         .route("/api/streaming/services", get(get_available_services))
+        .route("/api/streaming/status", get(get_service_status))
         .route("/api/streaming/connect/qobuz", post(connect_qobuz))
         .route("/api/streaming/connect/spotify", post(connect_spotify))
+        .route("/api/streaming/disconnect", post(disconnect_service))
         .route("/api/playlists", get(get_user_playlists))
         .route("/api/playlists", post(create_playlist))
         .route("/api/playlists/{id}", get(get_playlist))

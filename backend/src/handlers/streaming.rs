@@ -197,6 +197,7 @@ pub async fn connect_qobuz(
         std::env::var("QOBUZ_SECRET").unwrap_or_default(),
     );
 
+    let username = request.username.clone();
     let credentials = crate::services::streaming::ServiceCredentials {
         username: Some(request.username),
         password: Some(request.password),
@@ -209,6 +210,9 @@ pub async fn connect_qobuz(
     match qobuz_service.authenticate(&credentials).await {
         Ok(auth_result) => {
             if let Some(token) = auth_result.access_token {
+                // Get the username from the authentication result
+                let account_username = auth_result.user_id.map(|_| username);
+                
                 // Save the authentication to the database
                 // First, check if user already has a Qobuz service entry
                 let existing_service = StreamingServiceEntity::find()
@@ -222,6 +226,7 @@ pub async fn connect_qobuz(
                         // Update existing service
                         let mut service: StreamingServiceActiveModel = existing.into();
                         service.access_token = Set(Some(token.clone()));
+                        service.account_username = Set(account_username);
                         service.is_active = Set(true);
                         
                         if let Err(e) = service.update(state.db()).await {
@@ -239,6 +244,7 @@ pub async fn connect_qobuz(
                             access_token: Set(Some(token.clone())),
                             refresh_token: Set(None),
                             expires_at: Set(None), // Qobuz tokens don't expire
+                            account_username: Set(account_username),
                             is_active: Set(true),
                             ..Default::default()
                         };
@@ -325,4 +331,131 @@ pub async fn get_available_services(
     ];
 
     Json(ApiResponse::success(AvailableServicesResponse { services }))
+}
+
+#[derive(Serialize)]
+pub struct ServiceStatusResponse {
+    pub services: Vec<ConnectedServiceInfo>,
+}
+
+#[derive(Serialize)]
+pub struct ConnectedServiceInfo {
+    pub name: String,
+    pub display_name: String,
+    pub is_connected: bool,
+    pub connected_at: Option<String>,
+    pub account_username: Option<String>,
+}
+
+pub async fn get_service_status(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<ServiceStatusResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Check Qobuz connection
+    let qobuz_connected = match get_authenticated_streaming_service("qobuz", user.id, state.db()).await {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
+    // Check Spotify connection
+    let spotify_connected = match get_authenticated_streaming_service("spotify", user.id, state.db()).await {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
+    // Get connection timestamps from database
+    let qobuz_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("qobuz"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
+    let spotify_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
+    let services = vec![
+        ConnectedServiceInfo {
+            name: "qobuz".to_string(),
+            display_name: "Qobuz".to_string(),
+            is_connected: qobuz_connected,
+            connected_at: qobuz_service.as_ref().map(|s| s.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
+            account_username: qobuz_service.as_ref().and_then(|s| s.account_username.clone()),
+        },
+        ConnectedServiceInfo {
+            name: "spotify".to_string(),
+            display_name: "Spotify".to_string(),
+            is_connected: spotify_connected,
+            connected_at: spotify_service.as_ref().map(|s| s.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
+            account_username: spotify_service.as_ref().and_then(|s| s.account_username.clone()),
+        },
+    ];
+
+    Ok(Json(ApiResponse::success(ServiceStatusResponse { services })))
+}
+
+#[derive(Deserialize)]
+pub struct DisconnectServiceRequest {
+    pub service_name: String,
+}
+
+pub async fn disconnect_service(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Json(request): Json<DisconnectServiceRequest>,
+) -> Result<Json<ApiResponse<String>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let service_name = &request.service_name;
+    
+    // Validate service name
+    if service_name != "qobuz" && service_name != "spotify" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()>::error("Invalid service name".to_string())),
+        ));
+    }
+
+    // Find and deactivate the service
+    let service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq(service_name))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
+    match service {
+        Some(service) => {
+            let mut service: StreamingServiceActiveModel = service.into();
+            service.is_active = Set(false);
+            service.access_token = Set(None);
+            service.refresh_token = Set(None);
+            
+            service.update(state.db()).await
+                .map_err(|e| (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Failed to disconnect service: {}", e)))
+                ))?;
+
+            Ok(Json(ApiResponse::success(format!("Successfully disconnected from {}", service_name))))
+        },
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::error(format!("{} service not connected", service_name))),
+        )),
+    }
 }
