@@ -87,6 +87,25 @@ class Track {
     
     return parts.join(' • ');
   }
+
+  String get formattedSource {
+    switch (source.toLowerCase()) {
+      case 'qobuz':
+        return 'Qobuz';
+      case 'spotify':
+        return 'Spotify';
+      case 'tidal':
+        return 'Tidal';
+      case 'apple_music':
+        return 'Apple Music';
+      case 'youtube_music':
+        return 'YouTube Music';
+      case 'deezer':
+        return 'Deezer';
+      default:
+        return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
+    }
+  }
 }
 
 // Real-time audio information from the audio player

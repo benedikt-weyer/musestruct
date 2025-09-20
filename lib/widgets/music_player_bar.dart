@@ -5,6 +5,25 @@ import '../providers/music_provider.dart';
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
 
+  Color _getSourceColor(String source) {
+    switch (source.toLowerCase()) {
+      case 'qobuz':
+        return const Color(0xFF00D4AA); // Qobuz green
+      case 'spotify':
+        return const Color(0xFF1DB954); // Spotify green
+      case 'tidal':
+        return const Color(0xFF000000); // Tidal black
+      case 'apple_music':
+        return const Color(0xFFFA243C); // Apple Music red
+      case 'youtube_music':
+        return const Color(0xFFFF0000); // YouTube red
+      case 'deezer':
+        return const Color(0xFF00C7B7); // Deezer cyan
+      default:
+        return Colors.grey[600]!;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<MusicProvider>(
@@ -97,36 +116,41 @@ class MusicPlayerBar extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            // Audio quality info - show real-time output if available, otherwise track metadata
+                            // Source and quality info
                             Row(
                               children: [
-                                if (musicProvider.audioOutputInfo.hasInfo)
-                                  Expanded(
-                                    child: Text(
-                                      'Output: ${musicProvider.audioOutputInfo.formattedOutputQuality}',
-                                      style: TextStyle(
-                                        color: Theme.of(context).colorScheme.secondary,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                // Source badge
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _getSourceColor(track.source).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: _getSourceColor(track.source).withOpacity(0.3),
+                                      width: 0.5,
                                     ),
                                   ),
-                                if (musicProvider.audioOutputInfo.hasInfo && track.formattedQuality.isNotEmpty)
-                                  const SizedBox(width: 8),
-                                if (track.formattedQuality.isNotEmpty)
-                                  Expanded(
-                                    child: Text(
-                                      'Source: ${track.formattedQuality}',
-                                      style: TextStyle(
-                                        color: Theme.of(context).primaryColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                  child: Text(
+                                    track.formattedSource,
+                                    style: TextStyle(
+                                      color: _getSourceColor(track.source),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
                                     ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // Audio quality info
+                                if (track.formattedQuality.isNotEmpty)
+                                  Text(
+                                    track.formattedQuality,
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                               ],
                             ),
