@@ -48,15 +48,53 @@ class MusicPlayerBar extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // Progress bar
-              LinearProgressIndicator(
-                value: musicProvider.duration.inMilliseconds > 0
-                    ? musicProvider.position.inMilliseconds / 
-                      musicProvider.duration.inMilliseconds
-                    : 0,
-                backgroundColor: Colors.grey[300],
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).primaryColor,
+              // Progress bar (clickable)
+              GestureDetector(
+                onTapDown: (details) async {
+                  if (musicProvider.duration.inMilliseconds > 0) {
+                    final RenderBox progressBarBox = context.findRenderObject() as RenderBox;
+                    final progressBarWidth = progressBarBox.size.width;
+                    final tapPosition = details.localPosition.dx;
+                    final progress = (tapPosition / progressBarWidth).clamp(0.0, 1.0);
+                    final newPosition = Duration(
+                      milliseconds: (musicProvider.duration.inMilliseconds * progress).round(),
+                    );
+                    
+                    try {
+                      await musicProvider.seekTo(newPosition);
+                    } catch (e) {
+                      // Show a brief snackbar if seek fails
+                      if (context.mounted) {
+                        String message = 'Seek not supported for this audio format';
+                        if (e.toString().contains('UnsupportedError')) {
+                          message = 'Seeking not available for ${musicProvider.currentTrack?.source} tracks on Linux';
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(message),
+                            duration: const Duration(seconds: 3),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                child: MouseRegion(
+                  cursor: musicProvider.audioService.isSeekSupported 
+                      ? SystemMouseCursors.click 
+                      : SystemMouseCursors.forbidden,
+                  child: LinearProgressIndicator(
+                    value: musicProvider.duration.inMilliseconds > 0
+                        ? musicProvider.position.inMilliseconds / 
+                          musicProvider.duration.inMilliseconds
+                        : 0,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).primaryColor,
+                    ),
+                    minHeight: 6,
+                  ),
                 ),
               ),
               

@@ -67,6 +67,42 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> seekTo(Duration position) async {
+    if (_currentTrack == null) return;
+    
+    // Check if seeking is supported for this track
+    if (!_audioService.isSeekSupported) {
+      print('Seeking not supported for ${_currentTrack!.source} tracks on this platform');
+      throw UnsupportedError('Seeking not supported for this audio format');
+    }
+    
+    try {
+      // Check if the position is valid
+      if (position < Duration.zero || position > _duration) {
+        print('Invalid seek position: $position (duration: $_duration)');
+        return;
+      }
+      
+      await _audioService.seek(position);
+      _position = position;
+      notifyListeners();
+      print('Successfully seeked to: ${position.inSeconds}s');
+    } catch (e) {
+      print('Error seeking to position: $e');
+      
+      // Show user-friendly error message
+      if (e.toString().contains('GStreamer') || e.toString().contains('LinuxAudioError')) {
+        print('Seek failed due to GStreamer/Linux audio limitations. This is a known issue with certain streaming formats on Linux.');
+        // Don't update position if seek failed
+        return;
+      }
+      
+      // For other errors, still try to update position locally as fallback
+      _position = position;
+      notifyListeners();
+    }
+  }
+
   MusicProvider() {
     _initializeAudioService();
     _loadAvailableServices();

@@ -31,23 +31,29 @@ class AudioService {
 
   Future<void> initialize() async {
     if (!_isInitialized) {
-      // Configure player for background processing
-      await _player.setReleaseMode(ReleaseMode.stop);
-      
-      // Set up listeners
-      _player.onPlayerStateChanged.listen((PlayerState state) {
-        _isPlaying = state == PlayerState.playing;
-      });
+      try {
+        // Configure player for background processing
+        await _player.setReleaseMode(ReleaseMode.stop);
+        
+        // Set up listeners
+        _player.onPlayerStateChanged.listen((PlayerState state) {
+          _isPlaying = state == PlayerState.playing;
+        });
 
-      _player.onPositionChanged.listen((Duration position) {
-        _position = position;
-      });
+        _player.onPositionChanged.listen((Duration position) {
+          _position = position;
+        });
 
-      _player.onDurationChanged.listen((Duration duration) {
-        _duration = duration;
-      });
+        _player.onDurationChanged.listen((Duration duration) {
+          _duration = duration;
+        });
 
-      _isInitialized = true;
+        _isInitialized = true;
+        print('AudioService initialized successfully');
+      } catch (e) {
+        print('Error initializing AudioService: $e');
+        rethrow;
+      }
     }
   }
 
@@ -137,11 +143,41 @@ class AudioService {
   }
 
   Future<void> seek(Duration position) async {
-    await _player.seek(position);
+    try {
+      // Validate position
+      if (position < Duration.zero) {
+        throw ArgumentError('Seek position cannot be negative');
+      }
+      
+      if (_duration > Duration.zero && position > _duration) {
+        throw ArgumentError('Seek position cannot exceed track duration');
+      }
+      
+      await _player.seek(position);
+      _position = position;
+      print('AudioService: Successfully seeked to ${position.inSeconds}s');
+    } catch (e) {
+      print('AudioService: Seek error: $e');
+      rethrow;
+    }
   }
 
   Future<void> setVolume(double volume) async {
     await _player.setVolume(volume);
+  }
+
+  // Check if seeking is supported for the current track
+  bool get isSeekSupported {
+    if (_currentTrack == null) return false;
+    
+    // Some streaming formats don't support seeking on Linux
+    final source = _currentTrack!.source.toLowerCase();
+    if (source == 'qobuz' || source == 'tidal') {
+      // These services often use streaming formats that don't support seeking on Linux
+      return false;
+    }
+    
+    return true;
   }
 
   // Get current state for background updates
@@ -152,6 +188,7 @@ class AudioService {
       'duration': _duration.inMilliseconds,
       'trackTitle': _currentTrack?.title ?? '',
       'trackArtist': _currentTrack?.artist ?? '',
+      'isSeekSupported': isSeekSupported,
     };
   }
 
