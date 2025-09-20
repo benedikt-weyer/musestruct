@@ -129,9 +129,69 @@ class QueueScreen extends StatelessWidget {
             );
           }
 
-          return ReorderableListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: queueProvider.queue.length,
+          return Column(
+            children: [
+              // Now Playing section
+              Consumer<MusicProvider>(
+                builder: (context, musicProvider, child) {
+                  if (musicProvider.currentTrack == null) {
+                    return const SizedBox.shrink();
+                  }
+                  
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.play_circle_filled,
+                              color: Theme.of(context).primaryColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Now Playing',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TrackTile(
+                          track: musicProvider.currentTrack!,
+                          isPlaying: musicProvider.isPlaying,
+                          isLoading: musicProvider.isLoading,
+                          showSaveButton: true,
+                          showQueueButton: false,
+                          showPlaylistButton: true,
+                          onTap: () async {
+                            await musicProvider.togglePlayPause();
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              // Queue items
+              Expanded(
+                child: ReorderableListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: queueProvider.queue.length,
             onReorder: (oldIndex, newIndex) async {
               if (oldIndex < newIndex) {
                 newIndex -= 1;
@@ -224,6 +284,9 @@ class QueueScreen extends StatelessWidget {
                 ),
               );
             },
+                ),
+              ),
+            ],
           );
         },
       ),
