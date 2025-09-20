@@ -61,21 +61,31 @@ pub async fn get_playlists(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let playlists = paginator
+    let playlist_models = paginator
         .fetch_page(page - 1)
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .into_iter()
-        .map(|playlist| {
-            let mut response: PlaylistResponseDto = playlist.into();
-            // TODO: Set item_count by counting playlist items
-            response.item_count = 0;
-            response
-        })
-        .collect();
+        })?;
+
+    let mut playlists = Vec::new();
+    for playlist in playlist_models {
+        let mut response: PlaylistResponseDto = playlist.into();
+        
+        // Count playlist items
+        let item_count = PlaylistItemEntity::find()
+            .filter(crate::models::playlist_item::Column::PlaylistId.eq(response.id))
+            .count(&state.auth_service.db)
+            .await
+            .map_err(|e| {
+                error!("Database error counting items: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        
+        response.item_count = item_count as i32;
+        playlists.push(response);
+    }
 
     let response = PlaylistListResponse {
         playlists,
@@ -137,7 +147,19 @@ pub async fn get_playlist(
         None => return Err(StatusCode::NOT_FOUND),
     };
 
-    let response: PlaylistResponseDto = playlist.into();
+    let mut response: PlaylistResponseDto = playlist.into();
+    
+    // Count playlist items
+    let item_count = PlaylistItemEntity::find()
+        .filter(crate::models::playlist_item::Column::PlaylistId.eq(response.id))
+        .count(&state.auth_service.db)
+        .await
+        .map_err(|e| {
+            error!("Database error counting items: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    
+    response.item_count = item_count as i32;
     Ok(Json(ApiResponse::success(response)))
 }
 
