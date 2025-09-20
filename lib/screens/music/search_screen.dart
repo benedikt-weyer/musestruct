@@ -4,6 +4,7 @@ import '../../providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
+import '../../widgets/service_filter.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -25,7 +26,15 @@ class _SearchScreenState extends State<SearchScreen> {
   void _performSearch(String query) {
     if (query.trim().isNotEmpty && query != _lastQuery) {
       _lastQuery = query;
-      Provider.of<MusicProvider>(context, listen: false).searchMusic(query);
+      final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+      
+      // Check if multi-service search is enabled but no services are selected
+      if (musicProvider.useMultiServiceSearch && musicProvider.selectedServices.isEmpty) {
+        // Don't perform search, let the UI show the warning
+        return;
+      }
+      
+      musicProvider.searchMusic(query);
     }
   }
 
@@ -45,77 +54,13 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
       body: Column(
         children: [
-          // Service selector and search bar
+          // Service filter and search bar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                // Service selector
-                Consumer<MusicProvider>(
-                  builder: (context, musicProvider, child) {
-                    if (musicProvider.availableServices.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        children: [
-                          const Text('Service: '),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButton<String>(
-                              value: musicProvider.selectedService,
-                              isExpanded: true,
-                              items: musicProvider.availableServices.map((service) {
-                                return DropdownMenuItem<String>(
-                                  value: service.name,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        service.name == 'spotify' 
-                                            ? Icons.music_note 
-                                            : Icons.high_quality,
-                                        size: 16,
-                                        color: service.name == 'spotify' 
-                                            ? Colors.green 
-                                            : Colors.blue,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(service.displayName),
-                                      if (!service.supportsFullTracks)
-                                        Container(
-                                          margin: const EdgeInsets.only(left: 8),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Text(
-                                            'Preview',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.orange,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (String? value) {
-                                if (value != null) {
-                                  musicProvider.selectService(value);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                // Service filter
+                const ServiceFilter(),
                 
                 // Search bar
                 TextField(
@@ -194,6 +139,33 @@ class _SearchScreenState extends State<SearchScreen> {
                 final searchResults = musicProvider.searchResults;
                 
                 if (searchResults == null) {
+                  // Check if multi-service search is enabled but no services are selected
+                  if (musicProvider.useMultiServiceSearch && musicProvider.selectedServices.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.filter_list_off,
+                            size: 64,
+                            color: Colors.orange[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Select Search Sources',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Choose at least one streaming service to search from',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -210,7 +182,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Discover and stream music from Qobuz',
+                          musicProvider.useMultiServiceSearch
+                              ? 'Discover and stream music from multiple sources'
+                              : 'Discover and stream music from ${musicProvider.selectedService}',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey[600]),
                         ),

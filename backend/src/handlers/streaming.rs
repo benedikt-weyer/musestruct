@@ -17,6 +17,7 @@ pub struct StreamingSearchQuery {
     pub limit: Option<u32>,
     pub offset: Option<u32>,
     pub service: Option<String>,
+    pub services: Option<Vec<String>>, // For multi-service search
 }
 
 #[derive(Deserialize)]
@@ -115,25 +116,73 @@ pub async fn search_music(
     Extension(user): Extension<UserResponseDto>,
     Query(params): Query<StreamingSearchQuery>,
 ) -> Result<Json<ApiResponse<SearchResults>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let service_name = params.service.as_deref().unwrap_or("qobuz");
-    
-    let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
-        Ok(service) => service,
-        Err(err) => {
+    // Determine which services to search
+    let services_to_search = if let Some(services) = &params.services {
+        if services.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error(err)),
+                Json(ApiResponse::<()>::error("No services specified for search".to_string())),
             ));
         }
+        services.clone()
+    } else if let Some(service) = &params.service {
+        vec![service.clone()]
+    } else {
+        vec!["qobuz".to_string()] // Default to qobuz
     };
 
-    match service.search(&params.q, params.limit, params.offset).await {
-        Ok(results) => Ok(Json(ApiResponse::success(results))),
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Search failed: {}", err))),
-        )),
+    let mut all_tracks = Vec::new();
+    let mut all_albums = Vec::new();
+    let mut total_results = 0;
+    let mut search_errors = Vec::new();
+
+    // Search each service
+    for service_name in &services_to_search {
+        match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
+            Ok(service) => {
+                match service.search(&params.q, params.limit, params.offset).await {
+                    Ok(results) => {
+                        all_tracks.extend(results.tracks);
+                        all_albums.extend(results.albums);
+                        total_results += results.total;
+                    },
+                    Err(err) => {
+                        search_errors.push(format!("{}: {}", service_name, err));
+                    }
+                }
+            },
+            Err(err) => {
+                search_errors.push(format!("{}: {}", service_name, err));
+            }
+        }
     }
+
+    // If all services failed, return an error
+    if all_tracks.is_empty() && all_albums.is_empty() && !search_errors.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Search failed on all services: {}", search_errors.join(", ")))),
+        ));
+    }
+
+    // Sort tracks by relevance (you could implement more sophisticated sorting)
+    all_tracks.sort_by(|a, b| a.title.cmp(&b.title));
+    
+    // Limit results if needed
+    let limit = params.limit.unwrap_or(20) as usize;
+    if all_tracks.len() > limit {
+        all_tracks.truncate(limit);
+    }
+
+    let combined_results = SearchResults {
+        tracks: all_tracks,
+        albums: all_albums,
+        total: total_results,
+        offset: params.offset.unwrap_or(0),
+        limit: params.limit.unwrap_or(20),
+    };
+
+    Ok(Json(ApiResponse::success(combined_results)))
 }
 
 pub async fn get_stream_url(

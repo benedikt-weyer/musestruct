@@ -160,14 +160,22 @@ class ApiService {
     int? limit,
     int? offset,
     String? service,
+    List<String>? services,
   }) async {
     try {
-      final params = {
+      final params = <String, String>{
         'q': query,
         if (limit != null) 'limit': limit.toString(),
         if (offset != null) 'offset': offset.toString(),
         if (service != null) 'service': service,
       };
+
+      // Add services parameter if provided
+      if (services != null && services.isNotEmpty) {
+        for (int i = 0; i < services.length; i++) {
+          params['services[$i]'] = services[i];
+        }
+      }
 
       final uri = Uri.parse('$baseUrl/streaming/search').replace(
         queryParameters: params,

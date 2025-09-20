@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../models/music.dart';
+import '../models/api_response.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
 
@@ -13,6 +14,8 @@ class MusicProvider with ChangeNotifier {
   
   List<ServiceInfo> _availableServices = [];
   String _selectedService = 'qobuz';
+  List<String> _selectedServices = ['qobuz']; // For multi-service search
+  bool _useMultiServiceSearch = false;
   
   Track? _currentTrack;
   bool _isPlaying = false;
@@ -29,6 +32,8 @@ class MusicProvider with ChangeNotifier {
   
   List<ServiceInfo> get availableServices => _availableServices;
   String get selectedService => _selectedService;
+  List<String> get selectedServices => _selectedServices;
+  bool get useMultiServiceSearch => _useMultiServiceSearch;
   
   Track? get currentTrack => _currentTrack;
   bool get isPlaying => _isPlaying;
@@ -87,6 +92,34 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  void toggleMultiServiceSearch() {
+    _useMultiServiceSearch = !_useMultiServiceSearch;
+    _searchResults = null; // Clear search results when switching modes
+    notifyListeners();
+  }
+
+  void toggleServiceSelection(String serviceName) {
+    if (_selectedServices.contains(serviceName)) {
+      _selectedServices.remove(serviceName);
+    } else {
+      _selectedServices.add(serviceName);
+    }
+    _searchResults = null; // Clear search results when changing selection
+    notifyListeners();
+  }
+
+  void selectAllServices() {
+    _selectedServices = _availableServices.map((s) => s.name).toList();
+    _searchResults = null;
+    notifyListeners();
+  }
+
+  void clearServiceSelection() {
+    _selectedServices.clear();
+    _searchResults = null;
+    notifyListeners();
+  }
+
   Future<void> searchMusic(String query) async {
     if (query.trim().isEmpty) return;
 
@@ -95,11 +128,23 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.searchMusic(
-        query, 
-        limit: 20,
-        service: _selectedService,
-      );
+      ApiResponse<SearchResults> response;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service search
+        response = await ApiService.searchMusic(
+          query, 
+          limit: 20,
+          services: _selectedServices,
+        );
+      } else {
+        // Single service search
+        response = await ApiService.searchMusic(
+          query, 
+          limit: 20,
+          service: _selectedService,
+        );
+      }
       
       if (response.success && response.data != null) {
         _searchResults = response.data;
