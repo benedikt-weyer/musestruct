@@ -5,6 +5,7 @@ import '../../providers/music_provider.dart';
 import '../../models/playlist.dart';
 import '../../models/music.dart';
 import '../../widgets/track_tile.dart';
+import '../../widgets/music_player_bar.dart';
 import 'add_to_playlist_dialog.dart';
 import 'create_playlist_dialog.dart';
 
@@ -75,11 +76,16 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           ),
         ],
       ),
-      body: Consumer<PlaylistProvider>(
-        builder: (context, playlistProvider, child) {
-          if (playlistProvider.isLoading && playlistProvider.currentPlaylistItems.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: Consumer<PlaylistProvider>(
+                  builder: (context, playlistProvider, child) {
+                    if (playlistProvider.isLoading && playlistProvider.currentPlaylistItems.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
           if (playlistProvider.error != null) {
             return Center(
@@ -247,7 +253,76 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               ),
             ],
           );
+                  },
+                ),
+              ),
+            ],
+          ),
+          // Music player bar at the bottom
+          Consumer<MusicProvider>(
+            builder: (context, musicProvider, child) {
+              if (musicProvider.currentTrack != null) {
+                return const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MusicPlayerBar(),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 3, // Playlists tab is selected
+        onTap: (index) {
+          switch (index) {
+            case 0:
+              // Go back to home screen and switch to search tab
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              break;
+            case 1:
+              // Go back to home screen and switch to my tracks tab
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              break;
+            case 2:
+              // Go back to home screen and switch to library tab
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              break;
+            case 3:
+              // Stay in playlists - just go back to playlists list
+              Navigator.of(context).pop();
+              break;
+            case 4:
+              // Go back to home screen and switch to settings tab
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              break;
+          }
         },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: 'My Tracks',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.library_music),
+            label: 'Library',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.playlist_play),
+            label: 'Playlists',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddItemDialog,
