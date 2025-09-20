@@ -250,6 +250,48 @@ class ApiService {
     }
   }
 
+  static Future<ApiResponse<BackendStreamUrlResponse>> getBackendStreamUrl(
+    String trackId,
+    String source,
+    String originalUrl,
+  ) async {
+    try {
+      final params = {
+        'track_id': trackId,
+        'source': source,
+        'url': originalUrl,
+      };
+
+      final uri = Uri.parse('$baseUrl/streaming/backend-stream-url').replace(
+        queryParameters: params,
+      );
+
+      final response = await http.get(
+        uri,
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<BackendStreamUrlResponse>.fromJson(
+          json,
+          (data) => BackendStreamUrlResponse.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<BackendStreamUrlResponse>(
+          success: false,
+          message: json['message'] ?? 'Failed to get backend stream URL',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<BackendStreamUrlResponse>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
   static Future<ApiResponse<List<ServiceInfo>>> getAvailableServices() async {
     try {
       final response = await http.get(

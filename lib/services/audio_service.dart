@@ -170,6 +170,13 @@ class AudioService {
   bool get isSeekSupported {
     if (_currentTrack == null) return false;
     
+    // Check if this is a backend stream URL (cached file)
+    if (_currentTrack!.streamUrl != null && 
+        _currentTrack!.streamUrl!.contains('/api/stream/')) {
+      // Backend streams are cached local files, so seeking is supported
+      return true;
+    }
+    
     // Some streaming formats don't support seeking on Linux
     final source = _currentTrack!.source.toLowerCase();
     if (source == 'qobuz' || source == 'tidal') {

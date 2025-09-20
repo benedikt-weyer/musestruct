@@ -1,0 +1,5 @@
+[watch]
+ignore = [
+  "backend/cache/**",
+  "**/cache/**",
+]

@@ -20,11 +20,12 @@ use tracing::{info, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token};
+use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
 use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
-use services::AuthService;
+use services::{AuthService, streaming_service::StreamingService};
+use std::sync::Arc;
 use migrator::Migrator;
 
 #[tokio::main]
@@ -56,9 +57,15 @@ async fn main() -> Result<()> {
     // Create services
     let auth_service = AuthService::new(db.clone());
     
+    // Create streaming service
+    let cache_dir = std::path::PathBuf::from("./cache");
+    let streaming_service = Arc::new(StreamingService::new(cache_dir));
+    streaming_service.initialize().await?;
+    
     // Application state
     let app_state = AppState {
         auth_service,
+        streaming_service: streaming_service.clone(),
     };
 
     // CORS configuration
@@ -73,6 +80,7 @@ async fn main() -> Result<()> {
         .route("/api/auth/me", get(me))
         .route("/api/streaming/search", get(search_music))
         .route("/api/streaming/stream-url", get(get_stream_url))
+        .route("/api/streaming/backend-stream-url", get(get_backend_stream_url))
         .route("/api/streaming/services", get(get_available_services))
         .route("/api/streaming/status", get(get_service_status))
         .route("/api/streaming/connect/qobuz", post(connect_qobuz))
@@ -109,6 +117,8 @@ async fn main() -> Result<()> {
         .route("/api/auth/login", post(login))
         .route("/api/streaming/spotify/callback", get(spotify_callback))
         .route("/health", get(health_check))
+        // Streaming service routes (public for audio streaming)
+        .merge(StreamingService::router(streaming_service))
         // Merge protected routes
         .merge(protected_routes)
         

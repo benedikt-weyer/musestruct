@@ -3,13 +3,16 @@ use axum::{
     http::StatusCode,
     response::{Json, Html},
 };
+use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 
 use crate::services::streaming::{QobuzService, SpotifyService, StreamingService, SearchResults};
+use crate::services::streaming_service::StreamingService as BackendStreamingService;
 use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
 use crate::handlers::auth::{AppState, ApiResponse};
+use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct StreamingSearchQuery {
@@ -1454,5 +1457,46 @@ pub async fn disconnect_service(
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<()>::error(format!("{} service not connected", service_name))),
         )),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GetBackendStreamUrlQuery {
+    pub track_id: String,
+    pub source: String,
+    pub url: String,
+}
+
+#[derive(Serialize)]
+pub struct BackendStreamUrlResponse {
+    pub stream_url: String,
+    pub is_cached: bool,
+}
+
+pub async fn get_backend_stream_url(
+    State(state): State<AppState>,
+    Extension(_user): Extension<UserResponseDto>,
+    Query(query): Query<GetBackendStreamUrlQuery>,
+) -> Result<Json<ApiResponse<BackendStreamUrlResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    debug!("Getting backend stream URL for track {} from {}", query.track_id, query.source);
+
+    match state.streaming_service
+        .get_stream_url(&query.track_id, &query.source, &query.url)
+        .await
+    {
+        Ok(stream_url) => {
+            let response = BackendStreamUrlResponse {
+                stream_url,
+                is_cached: true, // For now, assume it's always cached
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+        Err(e) => {
+            error!("Failed to get backend stream URL: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!("Failed to get stream URL: {}", e))),
+            ))
+        }
     }
 }

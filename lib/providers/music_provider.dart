@@ -256,17 +256,47 @@ class MusicProvider with ChangeNotifier {
   // _playSpotifyTrack method removed - Spotify WebView playback disabled
 
   Future<void> _playRegularTrack(Track track) async {
-    // Get stream URL for non-Spotify tracks
-    final response = await ApiService.getStreamUrl(
+    // First get the original stream URL
+    final originalResponse = await ApiService.getStreamUrl(
       track.id,
       service: track.source,
     );
     
-    if (response.success && response.data != null) {
-      await _audioService.playTrack(track, response.data!);
+    if (!originalResponse.success || originalResponse.data == null) {
+      throw Exception(originalResponse.message ?? 'Failed to get original stream URL');
+    }
+    
+    // Now get the backend stream URL
+    final backendResponse = await ApiService.getBackendStreamUrl(
+      track.id,
+      track.source,
+      originalResponse.data!,
+    );
+    
+    if (backendResponse.success && backendResponse.data != null) {
+      // Use the backend stream URL for playback
+      final backendUrl = 'http://127.0.0.1:8080${backendResponse.data!.streamUrl}';
+      
+      // Update the current track with the backend stream URL
+      _currentTrack = Track(
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        streamUrl: backendUrl, // This is the key change!
+        coverUrl: track.coverUrl,
+        source: track.source,
+        quality: track.quality,
+        bitrate: track.bitrate,
+        sampleRate: track.sampleRate,
+        bitDepth: track.bitDepth,
+      );
+      
+      await _audioService.playTrack(_currentTrack!, backendUrl);
       _startAudioInfoUpdates();
     } else {
-      throw Exception(response.message ?? 'Failed to get stream URL');
+      throw Exception(backendResponse.message ?? 'Failed to get backend stream URL');
     }
   }
 

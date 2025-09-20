@@ -393,3 +393,27 @@ class SaveTrackRequest {
     };
   }
 }
+
+class BackendStreamUrlResponse {
+  final String streamUrl;
+  final bool isCached;
+
+  BackendStreamUrlResponse({
+    required this.streamUrl,
+    required this.isCached,
+  });
+
+  factory BackendStreamUrlResponse.fromJson(Map<String, dynamic> json) {
+    return BackendStreamUrlResponse(
+      streamUrl: json['stream_url'] as String,
+      isCached: json['is_cached'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'stream_url': streamUrl,
+      'is_cached': isCached,
+    };
+  }
+}
