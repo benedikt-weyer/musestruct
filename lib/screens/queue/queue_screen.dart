@@ -272,6 +272,110 @@ class _QueueScreenState extends State<QueueScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Loop mode control
+            PopupMenuButton<LoopMode>(
+              icon: Icon(
+                _getLoopModeIcon(playlistItem.loopMode),
+                color: Theme.of(context).primaryColor,
+              ),
+              tooltip: 'Change repeat mode',
+              onSelected: (LoopMode newLoopMode) async {
+                final queueProvider = context.read<QueueProvider>();
+                final updatedItem = playlistItem.copyWith(loopMode: newLoopMode);
+                final success = await queueProvider.updatePlaylistQueueItem(updatedItem);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success 
+                          ? 'Repeat mode changed to ${_getLoopModeText(newLoopMode)}'
+                          : 'Failed to change repeat mode',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<LoopMode>(
+                  value: LoopMode.once,
+                  child: Row(
+                    children: [
+                      Icon(_getLoopModeIcon(LoopMode.once)),
+                      const SizedBox(width: 8),
+                      Text(_getLoopModeText(LoopMode.once)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<LoopMode>(
+                  value: LoopMode.twice,
+                  child: Row(
+                    children: [
+                      Icon(_getLoopModeIcon(LoopMode.twice)),
+                      const SizedBox(width: 8),
+                      Text(_getLoopModeText(LoopMode.twice)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<LoopMode>(
+                  value: LoopMode.infinite,
+                  child: Row(
+                    children: [
+                      Icon(_getLoopModeIcon(LoopMode.infinite)),
+                      const SizedBox(width: 8),
+                      Text(_getLoopModeText(LoopMode.infinite)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Play mode control
+            PopupMenuButton<PlayMode>(
+              icon: Icon(
+                _getPlayModeIcon(playlistItem.playMode),
+                color: Theme.of(context).primaryColor,
+              ),
+              tooltip: 'Change playback order',
+              onSelected: (PlayMode newPlayMode) async {
+                final queueProvider = context.read<QueueProvider>();
+                final updatedItem = playlistItem.copyWith(playMode: newPlayMode);
+                final success = await queueProvider.updatePlaylistQueueItem(updatedItem);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success 
+                          ? 'Playback order changed to ${_getPlayModeText(newPlayMode)}'
+                          : 'Failed to change playback order',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<PlayMode>(
+                  value: PlayMode.normal,
+                  child: Row(
+                    children: [
+                      Icon(_getPlayModeIcon(PlayMode.normal)),
+                      const SizedBox(width: 8),
+                      Text(_getPlayModeText(PlayMode.normal)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<PlayMode>(
+                  value: PlayMode.shuffle,
+                  child: Row(
+                    children: [
+                      Icon(_getPlayModeIcon(PlayMode.shuffle)),
+                      const SizedBox(width: 8),
+                      Text(_getPlayModeText(PlayMode.shuffle)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             Consumer<MusicProvider>(
               builder: (context, musicProvider, child) {
                 final isCurrentPlaylist = musicProvider.currentPlaylistQueueItem?.id == playlistItem.id;
@@ -406,5 +510,47 @@ class _QueueScreenState extends State<QueueScreen> {
         },
       ),
     );
+  }
+
+  // Helper methods for loop mode
+  IconData _getLoopModeIcon(LoopMode loopMode) {
+    switch (loopMode) {
+      case LoopMode.once:
+        return Icons.repeat;
+      case LoopMode.twice:
+        return Icons.repeat_one;
+      case LoopMode.infinite:
+        return Icons.repeat;
+    }
+  }
+
+  String _getLoopModeText(LoopMode loopMode) {
+    switch (loopMode) {
+      case LoopMode.once:
+        return 'Play Once';
+      case LoopMode.twice:
+        return 'Play Twice';
+      case LoopMode.infinite:
+        return 'Repeat Forever';
+    }
+  }
+
+  // Helper methods for play mode
+  IconData _getPlayModeIcon(PlayMode playMode) {
+    switch (playMode) {
+      case PlayMode.normal:
+        return Icons.queue_music;
+      case PlayMode.shuffle:
+        return Icons.shuffle;
+    }
+  }
+
+  String _getPlayModeText(PlayMode playMode) {
+    switch (playMode) {
+      case PlayMode.normal:
+        return 'Normal Order';
+      case PlayMode.shuffle:
+        return 'Shuffle';
+    }
   }
 }
