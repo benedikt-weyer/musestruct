@@ -31,6 +31,9 @@ class AudioService {
 
   Future<void> initialize() async {
     if (!_isInitialized) {
+      // Configure player for background processing
+      await _player.setReleaseMode(ReleaseMode.stop);
+      
       // Set up listeners
       _player.onPlayerStateChanged.listen((PlayerState state) {
         _isPlaying = state == PlayerState.playing;
@@ -139,6 +142,17 @@ class AudioService {
 
   Future<void> setVolume(double volume) async {
     await _player.setVolume(volume);
+  }
+
+  // Get current state for background updates
+  Map<String, dynamic> getCurrentState() {
+    return {
+      'isPlaying': _isPlaying,
+      'position': _position.inMilliseconds,
+      'duration': _duration.inMilliseconds,
+      'trackTitle': _currentTrack?.title ?? '',
+      'trackArtist': _currentTrack?.artist ?? '',
+    };
   }
 
   void dispose() {

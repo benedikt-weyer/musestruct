@@ -51,14 +51,44 @@ class AuthWrapper extends StatefulWidget {
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper> {
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Check authentication status on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AuthProvider>(context, listen: false).checkAuthStatus();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App is in foreground - resume normal UI updates
+        musicProvider.resumeUIUpdates();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // App is in background - continue audio but pause UI updates
+        musicProvider.pauseUIUpdates();
+        break;
+      case AppLifecycleState.hidden:
+        // App is hidden - continue audio but pause UI updates
+        musicProvider.pauseUIUpdates();
+        break;
+    }
   }
 
   @override

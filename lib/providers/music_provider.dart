@@ -27,6 +27,8 @@ class MusicProvider with ChangeNotifier {
   Duration _duration = Duration.zero;
   AudioOutputInfo _audioOutputInfo = AudioOutputInfo();
   Timer? _audioInfoTimer;
+  Timer? _backgroundUpdateTimer;
+  bool _isUIUpdatesPaused = false;
 
   // Getters
   SearchResults? get searchResults => _searchResults;
@@ -46,6 +48,7 @@ class MusicProvider with ChangeNotifier {
   AudioOutputInfo get audioOutputInfo => _audioOutputInfo;
   
   AudioService get audioService => _audioService;
+  bool get isUIUpdatesPaused => _isUIUpdatesPaused;
 
   MusicProvider() {
     _initializeAudioService();
@@ -58,19 +61,25 @@ class MusicProvider with ChangeNotifier {
     // Listen to player state changes
     _audioService.playingStream.listen((isPlaying) {
       _isPlaying = isPlaying;
-      notifyListeners();
+      if (!_isUIUpdatesPaused) {
+        notifyListeners();
+      }
     });
 
     // Listen to position changes
     _audioService.positionStream.listen((position) {
       _position = position;
-      notifyListeners();
+      if (!_isUIUpdatesPaused) {
+        notifyListeners();
+      }
     });
 
     // Listen to duration changes
     _audioService.durationStream.listen((duration) {
       _duration = duration;
-      notifyListeners();
+      if (!_isUIUpdatesPaused) {
+        notifyListeners();
+      }
     });
   }
 
@@ -254,9 +263,47 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void pauseUIUpdates() {
+    if (!_isUIUpdatesPaused) {
+      _isUIUpdatesPaused = true;
+      _startBackgroundUpdates();
+    }
+  }
+
+  void resumeUIUpdates() {
+    if (_isUIUpdatesPaused) {
+      _isUIUpdatesPaused = false;
+      _stopBackgroundUpdates();
+      // Force update UI with current state
+      notifyListeners();
+    }
+  }
+
+  void _startBackgroundUpdates() {
+    if (_backgroundUpdateTimer != null || _currentTrack == null) return;
+    
+    // Start background timer for periodic updates
+    _backgroundUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (_isPlaying && _isUIUpdatesPaused) {
+        // Update position from audio service
+        _position = _audioService.position;
+        _duration = _audioService.duration;
+        
+        // Force UI update even when paused
+        notifyListeners();
+      }
+    });
+  }
+
+  void _stopBackgroundUpdates() {
+    _backgroundUpdateTimer?.cancel();
+    _backgroundUpdateTimer = null;
+  }
+
   @override
   void dispose() {
     _audioInfoTimer?.cancel();
+    _stopBackgroundUpdates();
     _audioService.dispose();
     super.dispose();
   }
