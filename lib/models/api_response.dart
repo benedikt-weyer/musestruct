@@ -20,6 +20,14 @@ class ApiResponse<T> {
     );
   }
 
+  factory ApiResponse.error(String message) {
+    return ApiResponse<T>(
+      success: false,
+      data: null,
+      message: message,
+    );
+  }
+
   Map<String, dynamic> toJson(Object Function(T value) toJsonT) {
     return {
       'success': success,

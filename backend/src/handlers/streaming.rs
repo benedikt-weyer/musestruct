@@ -1,7 +1,7 @@
 use axum::{
     extract::{State, Query, Extension},
     http::StatusCode,
-    response::Json,
+    response::{Json, Html},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -224,6 +224,25 @@ pub struct ConnectSpotifyRequest {
 }
 
 #[derive(Serialize)]
+pub struct SpotifyAuthUrlResponse {
+    pub auth_url: String,
+    pub state: String,
+}
+
+#[derive(Deserialize)]
+pub struct SpotifyCallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct SpotifyTokenRequest {
+    pub code: String,
+    pub state: String,
+}
+
+#[derive(Serialize)]
 pub struct AvailableServicesResponse {
     pub services: Vec<ServiceInfo>,
 }
@@ -326,6 +345,766 @@ pub async fn connect_qobuz(
             Json(ApiResponse::<()>::error(format!("Qobuz authentication failed: {}", err))),
         )),
     }
+}
+
+pub async fn get_spotify_auth_url(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<SpotifyAuthUrlResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
+    let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap_or_else(|_| "http://127.0.0.1:8080/api/streaming/spotify/callback".to_string());
+    
+    if client_id.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error("Spotify client ID not configured".to_string())),
+        ));
+    }
+
+    // Generate a random state parameter for security and include user ID
+    let state_uuid = uuid::Uuid::new_v4();
+    let state = format!("{}:{}", state_uuid, user.id);
+    
+    // Store the state with user ID in the database for validation
+    // For now, we'll include it in the response and validate it in the callback
+    
+    let scopes = vec![
+        "user-read-playback-state",
+        "user-modify-playback-state",
+        "user-read-currently-playing",
+        "streaming",
+        "playlist-read-private",
+        "playlist-read-collaborative",
+        "user-library-read"
+    ].join(" ");
+
+    let auth_url = format!(
+        "https://accounts.spotify.com/authorize?response_type=code&client_id={}&scope={}&redirect_uri={}&state={}",
+        client_id,
+        urlencoding::encode(&scopes),
+        urlencoding::encode(&redirect_uri),
+        state
+    );
+
+    Ok(Json(ApiResponse::success(SpotifyAuthUrlResponse {
+        auth_url,
+        state,
+    })))
+}
+
+pub async fn spotify_callback(
+    State(state): State<AppState>,
+    Query(params): Query<SpotifyCallbackQuery>,
+) -> Result<Html<String>, (StatusCode, Html<String>)> {
+    if let Some(error) = params.error {
+        let error_html = format!(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Authorization Error - Musestruct</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .container {{
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }}
+        .error-icon {{
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }}
+        h1 {{
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }}
+        .close-btn {{
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Authorization Failed</h1>
+        <p>Spotify authorization was denied or failed: {}</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+        "#, error);
+        return Err((StatusCode::BAD_REQUEST, Html(error_html)));
+    }
+
+    let code = match params.code {
+        Some(code) => code,
+        None => {
+            let error_html = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connection Error - Musestruct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+        h1 {
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Connection Error</h1>
+        <p>No authorization code received from Spotify.</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+            "#;
+            return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
+        }
+    };
+
+    let state_param = match params.state {
+        Some(state) => state,
+        None => {
+            let error_html = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connection Error - Musestruct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+        h1 {
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Connection Error</h1>
+        <p>No state parameter received from Spotify.</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+            "#;
+            return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
+        }
+    };
+
+    // Extract user ID from state parameter (format: "uuid:user_id")
+    let user_id = match state_param.split(':').nth(1) {
+        Some(user_id_str) => {
+            match uuid::Uuid::parse_str(user_id_str) {
+                Ok(user_id) => user_id,
+                Err(_) => {
+                    let error_html = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connection Error - Musestruct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+        h1 {
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Connection Error</h1>
+        <p>Invalid state parameter received from Spotify.</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+                    "#;
+                    return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
+                }
+            }
+        },
+        None => {
+            let error_html = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connection Error - Musestruct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+        h1 {
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Connection Error</h1>
+        <p>Invalid state parameter format received from Spotify.</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+            "#;
+            return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
+        }
+    };
+
+    // Exchange authorization code for access token
+    match exchange_spotify_code(&code, state.db(), user_id).await {
+        Ok(_message) => {
+            // Return a pretty HTML page instead of JSON
+            let html = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connected - Musestruct</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: #1db954;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+        h1 {
+            color: #1db954;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .close-btn {
+            background: #1db954;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .close-btn:hover {
+            background: #1ed760;
+        }
+        .spotify-logo {
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h1>🎵 Spotify Connected!</h1>
+        <p>Your Spotify account has been successfully connected to Musestruct. You can now enjoy your music across all your devices.</p>
+        <button class="close-btn" onclick="window.close()">
+            <svg class="spotify-logo" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Close Window
+        </button>
+    </div>
+    <script>
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+            window.close();
+        }, 3000);
+    </script>
+</body>
+</html>
+            "#;
+            
+            Ok(axum::response::Html(html.to_string()))
+        },
+        Err(err) => {
+            // Return an error HTML page
+            let html = format!(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Connection Error - Musestruct</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .container {{
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }}
+        .error-icon {{
+            width: 80px;
+            height: 80px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }}
+        h1 {{
+            color: #ff6b6b;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #666;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }}
+        .error-details {{
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            font-family: monospace;
+            font-size: 14px;
+            color: #666;
+            word-break: break-all;
+        }}
+        .close-btn {{
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .close-btn:hover {{
+            background: #ee5a52;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">✗</div>
+        <h1>❌ Connection Failed</h1>
+        <p>There was an error connecting your Spotify account. Please try again.</p>
+        <div class="error-details">{}</div>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+</body>
+</html>
+            "#, err);
+            
+            Ok(axum::response::Html(html))
+        }
+    }
+}
+
+async fn exchange_spotify_code(
+    code: &str,
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+) -> Result<String, String> {
+    let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
+    let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
+    let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap_or_else(|_| "http://127.0.0.1:8080/api/streaming/spotify/callback".to_string());
+
+    if client_id.is_empty() || client_secret.is_empty() {
+        return Err("Spotify credentials not configured".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let auth_header = base64::encode(format!("{}:{}", client_id, client_secret));
+
+    let mut form = std::collections::HashMap::new();
+    form.insert("grant_type", "authorization_code");
+    form.insert("code", code);
+    form.insert("redirect_uri", &redirect_uri);
+
+    let response = client
+        .post("https://accounts.spotify.com/api/token")
+        .header("Authorization", format!("Basic {}", auth_header))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to exchange code: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Spotify token exchange error: {}", error_text));
+    }
+
+    let token_response: serde_json::Value = response.json().await
+        .map_err(|e| format!("Failed to parse token response: {}", e))?;
+
+    let access_token = token_response["access_token"]
+        .as_str()
+        .ok_or("No access token in response")?
+        .to_string();
+    
+    let refresh_token = token_response["refresh_token"]
+        .as_str()
+        .map(|s| s.to_string());
+
+    let expires_in = token_response["expires_in"]
+        .as_u64()
+        .unwrap_or(3600) as i64;
+
+    // Get user information from Spotify
+    let user_info = get_spotify_user_info(&access_token).await?;
+    let account_username = user_info.get("display_name")
+        .and_then(|v| v.as_str())
+        .or_else(|| user_info.get("id").and_then(|v| v.as_str()))
+        .map(|s| s.to_string());
+
+    // Save the authentication to the database
+    let existing_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user_id))
+        .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
+        .one(db)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    let expires_at = Some((chrono::Utc::now() + chrono::Duration::seconds(expires_in)).naive_utc());
+
+    match existing_service {
+        Some(existing) => {
+            // Update existing service
+            let mut service: StreamingServiceActiveModel = existing.into();
+            service.access_token = Set(Some(access_token));
+            service.refresh_token = Set(refresh_token);
+            service.expires_at = Set(expires_at);
+            service.account_username = Set(account_username);
+            service.is_active = Set(true);
+            
+            service.update(db).await
+                .map_err(|e| format!("Failed to update Spotify connection: {}", e))?;
+        },
+        None => {
+            // Create new service entry
+            let new_service = StreamingServiceActiveModel {
+                user_id: Set(user_id),
+                service_name: Set("spotify".to_string()),
+                access_token: Set(Some(access_token)),
+                refresh_token: Set(refresh_token),
+                expires_at: Set(expires_at),
+                account_username: Set(account_username),
+                is_active: Set(true),
+                ..Default::default()
+            };
+            
+            new_service.insert(db).await
+                .map_err(|e| format!("Failed to save Spotify connection: {}", e))?;
+        }
+    }
+
+    Ok("Successfully connected to Spotify".to_string())
+}
+
+async fn get_spotify_user_info(access_token: &str) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::new();
+    
+    let response = client
+        .get("https://api.spotify.com/v1/me")
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to get user info: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Spotify user info error: {}", error_text));
+    }
+
+    let user_info: serde_json::Value = response.json().await
+        .map_err(|e| format!("Failed to parse user info: {}", e))?;
+
+    Ok(user_info)
 }
 
 pub async fn connect_spotify(

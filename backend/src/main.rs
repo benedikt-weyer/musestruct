@@ -20,7 +20,7 @@ use tracing::{info, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service};
+use handlers::streaming::{search_music, get_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use services::AuthService;
 use migrator::Migrator;
@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
         .route("/api/streaming/status", get(get_service_status))
         .route("/api/streaming/connect/qobuz", post(connect_qobuz))
         .route("/api/streaming/connect/spotify", post(connect_spotify))
+        .route("/api/streaming/spotify/auth-url", get(get_spotify_auth_url))
         .route("/api/streaming/disconnect", post(disconnect_service))
         .route("/api/playlists", get(get_user_playlists))
         .route("/api/playlists", post(create_playlist))
@@ -92,6 +93,7 @@ async fn main() -> Result<()> {
         // Public routes
         .route("/api/auth/register", post(register))
         .route("/api/auth/login", post(login))
+        .route("/api/streaming/spotify/callback", get(spotify_callback))
         .route("/health", get(health_check))
         // Merge protected routes
         .merge(protected_routes)

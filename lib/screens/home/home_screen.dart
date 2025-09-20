@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/music_provider.dart';
 import '../../providers/streaming_provider.dart';
@@ -439,65 +440,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showSpotifyConnectionDialog(BuildContext context) {
+  void _showSpotifyConnectionDialog(BuildContext context) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final streamingProvider = context.read<StreamingProvider>();
     
+    // Show loading dialog
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Connect Spotify'),
-        content: Column(
+      barrierDismissible: false,
+      builder: (dialogContext) => const AlertDialog(
+        content: Row(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Spotify integration requires OAuth2 authentication.',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'To connect your Spotify account:',
-            ),
-            const SizedBox(height: 8),
-            const Text('1. Visit the Spotify Developer Console'),
-            const Text('2. Authorize the application'),
-            const Text('3. Copy the access token'),
-            const SizedBox(height: 16),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Access Token',
-                border: OutlineInputBorder(),
-                hintText: 'Paste your Spotify access token here',
-              ),
-              maxLines: 3,
-              onChanged: (value) {
-                // Store the token temporarily
-              },
-            ),
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Getting Spotify authorization URL...'),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              // Refresh service status even for placeholder
-              context.read<StreamingProvider>().loadServiceStatus();
-              scaffoldMessenger.showSnackBar(
-                const SnackBar(
-                  content: Text('Spotify OAuth2 implementation coming soon!'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            },
-            child: const Text('Connect'),
-          ),
-        ],
       ),
     );
+
+    try {
+      // Get Spotify authorization URL
+      final response = await ApiService.getSpotifyAuthUrl();
+      
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      if (response.success && response.data != null) {
+        // Open Spotify authorization URL in web browser
+        final Uri authUri = Uri.parse(response.data!.authUrl);
+        if (await canLaunchUrl(authUri)) {
+          await launchUrl(
+            authUri,
+            mode: LaunchMode.externalApplication,
+          );
+          
+          // Show success message
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('Please complete authorization in your browser and return to the app.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+          
+          // Refresh service status after a delay to allow for OAuth completion
+          Future.delayed(const Duration(seconds: 3), () {
+            streamingProvider.loadServiceStatus();
+          });
+        } else {
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('Could not open browser for Spotify authorization.'),
+            ),
+          );
+        }
+      } else {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to get Spotify authorization URL: ${response.message}'),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Error connecting to Spotify: $e'),
+        ),
+      );
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {

@@ -407,6 +407,51 @@ class ApiService {
       );
     }
   }
+
+  // Spotify OAuth2 methods
+  static Future<ApiResponse<SpotifyAuthUrlResponse>> getSpotifyAuthUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/streaming/spotify/auth-url'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SpotifyAuthUrlResponse>.fromJson(
+          json,
+          (data) => SpotifyAuthUrlResponse.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SpotifyAuthUrlResponse>.fromJson(
+          json,
+          (data) => SpotifyAuthUrlResponse.fromJson(data as Map<String, dynamic>),
+        );
+      }
+    } catch (e) {
+      return ApiResponse<SpotifyAuthUrlResponse>.error('Network error: $e');
+    }
+  }
+
+  static Future<ApiResponse<String>> spotifyCallback(String code, String state) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/streaming/spotify/callback?code=$code&state=$state'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<String>.fromJson(json, (data) => data as String);
+      }
+    } catch (e) {
+      return ApiResponse<String>.error('Network error: $e');
+    }
+  }
 }
 
 class ServiceInfo {
@@ -470,6 +515,23 @@ class ConnectedServiceInfo {
       isConnected: json['is_connected'] as bool,
       connectedAt: json['connected_at'] as String?,
       accountUsername: json['account_username'] as String?,
+    );
+  }
+}
+
+class SpotifyAuthUrlResponse {
+  final String authUrl;
+  final String state;
+
+  SpotifyAuthUrlResponse({
+    required this.authUrl,
+    required this.state,
+  });
+
+  factory SpotifyAuthUrlResponse.fromJson(Map<String, dynamic> json) {
+    return SpotifyAuthUrlResponse(
+      authUrl: json['auth_url'] as String,
+      state: json['state'] as String,
     );
   }
 }
