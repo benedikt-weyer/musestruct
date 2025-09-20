@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/music.dart';
 import '../providers/saved_tracks_provider.dart';
 import '../providers/queue_provider.dart';
+import '../screens/playlists/select_playlist_dialog.dart';
 
 class TrackTile extends StatelessWidget {
   final Track track;
@@ -11,6 +12,7 @@ class TrackTile extends StatelessWidget {
   final bool isLoading;
   final bool showSaveButton;
   final bool showQueueButton;
+  final bool showPlaylistButton;
 
   const TrackTile({
     super.key,
@@ -20,6 +22,7 @@ class TrackTile extends StatelessWidget {
     this.isLoading = false,
     this.showSaveButton = true,
     this.showQueueButton = true,
+    this.showPlaylistButton = false,
   });
 
   Color _getSourceColor(String source) {
@@ -302,6 +305,20 @@ class TrackTile extends StatelessWidget {
                 }
               },
               tooltip: 'Toggle saved track',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
+              iconSize: 20,
+            ),
+          if (showPlaylistButton)
+            IconButton(
+              icon: const Icon(Icons.playlist_add, size: 20),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => SelectPlaylistDialog(track: track),
+                );
+              },
+              tooltip: 'Add to playlist',
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               padding: EdgeInsets.zero,
               iconSize: 20,

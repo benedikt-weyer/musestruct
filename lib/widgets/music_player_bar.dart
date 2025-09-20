@@ -4,6 +4,7 @@ import '../providers/music_provider.dart';
 import '../providers/saved_tracks_provider.dart';
 import '../providers/queue_provider.dart';
 import '../screens/queue/queue_screen.dart';
+import '../screens/playlists/select_playlist_dialog.dart';
 
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
@@ -351,6 +352,18 @@ class MusicPlayerBar extends StatelessWidget {
                                 tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
                               );
                             },
+                          ),
+                          
+                          // Add to playlist button
+                          IconButton(
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
+                              );
+                            },
+                            icon: const Icon(Icons.playlist_add),
+                            tooltip: 'Add to playlist',
                           ),
                         ],
                       ),

@@ -242,6 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               onTap: () {
                                 musicProvider.playTrack(track);
                               },
+                              showPlaylistButton: true,
                             );
                           },
                         ),
