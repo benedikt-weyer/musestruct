@@ -31,6 +31,10 @@ class MusicProvider with ChangeNotifier {
   Timer? _audioInfoTimer;
   Timer? _backgroundUpdateTimer;
   bool _isUIUpdatesPaused = false;
+  
+  // Playlist queue support
+  PlaylistQueueItem? _currentPlaylistQueueItem;
+  bool _isPlayingFromPlaylist = false;
 
   // Getters
   SearchResults? get searchResults => _searchResults;
@@ -49,6 +53,10 @@ class MusicProvider with ChangeNotifier {
   Duration get duration => _duration;
   AudioOutputInfo get audioOutputInfo => _audioOutputInfo;
   
+  // Playlist queue getters
+  PlaylistQueueItem? get currentPlaylistQueueItem => _currentPlaylistQueueItem;
+  bool get isPlayingFromPlaylist => _isPlayingFromPlaylist;
+  
   AudioService get audioService => _audioService;
   bool get isUIUpdatesPaused => _isUIUpdatesPaused;
 
@@ -58,6 +66,19 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> playNextTrack() async {
     if (_queueProvider == null) return;
+
+    // Check if we're playing from a playlist queue
+    if (_isPlayingFromPlaylist) {
+      await playNextTrackFromPlaylist();
+      return;
+    }
+
+    // Check if there are playlist queue items available
+    final currentPlaylist = _queueProvider!.getCurrentPlaylistQueueItem();
+    if (currentPlaylist != null) {
+      await playPlaylistQueueItem(currentPlaylist);
+      return;
+    }
 
     final nextTrack = _queueProvider!.getNextTrack();
     if (nextTrack != null) {
@@ -391,6 +412,12 @@ class MusicProvider with ChangeNotifier {
   Future<void> _checkAndPlayNextTrack() async {
     if (_queueProvider == null) return;
     
+    // Check if we're playing from a playlist queue
+    if (_isPlayingFromPlaylist) {
+      await _checkAndPlayNextTrackFromPlaylist();
+      return;
+    }
+    
     // Check if current track is at the end (within 1 second of duration)
     if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 1) {
       final nextTrack = _queueProvider!.getNextTrack();
@@ -399,6 +426,68 @@ class MusicProvider with ChangeNotifier {
         await _queueProvider!.moveToNext();
         await playTrack(nextTrack.toTrack());
       }
+    }
+  }
+
+  // Playlist Queue Methods
+  Future<void> playPlaylistQueueItem(PlaylistQueueItem playlistQueueItem) async {
+    _currentPlaylistQueueItem = playlistQueueItem;
+    _isPlayingFromPlaylist = true;
+    
+    // Use the stored track details from the playlist queue item
+    final track = Track(
+      id: playlistQueueItem.currentTrackId ?? playlistQueueItem.trackOrder[playlistQueueItem.currentTrackIndex],
+      title: playlistQueueItem.currentTrackTitle ?? 'Track ${playlistQueueItem.currentTrackIndex + 1}',
+      artist: playlistQueueItem.currentTrackArtist ?? 'From ${playlistQueueItem.playlistName}',
+      album: playlistQueueItem.currentTrackAlbum ?? playlistQueueItem.playlistName,
+      duration: playlistQueueItem.currentTrackDuration,
+      coverUrl: playlistQueueItem.currentTrackCoverUrl,
+      source: playlistQueueItem.currentTrackSource ?? 'qobuz',
+    );
+    
+    await playTrack(track);
+  }
+
+  Future<void> playNextTrackFromPlaylist() async {
+    if (_currentPlaylistQueueItem == null || _queueProvider == null) return;
+    
+    // Move to next track in playlist
+    final success = await _queueProvider!.moveToNextTrack();
+    if (success) {
+      // Get updated playlist queue item
+      final updatedItem = _queueProvider!.getCurrentPlaylistQueueItem();
+      if (updatedItem != null) {
+        await playPlaylistQueueItem(updatedItem);
+      } else {
+        // Playlist finished, check regular queue
+        await _checkAndPlayNextTrack();
+      }
+    }
+  }
+
+  Future<void> playPreviousTrackFromPlaylist() async {
+    if (_currentPlaylistQueueItem == null || _queueProvider == null) return;
+    
+    // Move to previous track in playlist
+    final success = await _queueProvider!.moveToPreviousTrack();
+    if (success) {
+      // Get updated playlist queue item
+      final updatedItem = _queueProvider!.getCurrentPlaylistQueueItem();
+      if (updatedItem != null) {
+        await playPlaylistQueueItem(updatedItem);
+      }
+    }
+  }
+
+  Future<void> _checkAndPlayNextTrackFromPlaylist() async {
+    if (!_isPlayingFromPlaylist || _currentPlaylistQueueItem == null) {
+      await _checkAndPlayNextTrack();
+      return;
+    }
+    
+    // Check if current track is at the end (within 1 second of duration)
+    if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 1) {
+      await playNextTrackFromPlaylist();
     }
   }
 

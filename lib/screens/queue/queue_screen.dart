@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/queue_provider.dart';
 import '../../providers/music_provider.dart';
+import '../../models/music.dart';
 import '../../widgets/track_tile.dart';
 
-class QueueScreen extends StatelessWidget {
+class QueueScreen extends StatefulWidget {
   const QueueScreen({super.key});
 
+  @override
+  State<QueueScreen> createState() => _QueueScreenState();
+}
+
+class _QueueScreenState extends State<QueueScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,7 +107,7 @@ class QueueScreen extends StatelessWidget {
             );
           }
 
-          if (queueProvider.queue.isEmpty) {
+          if (queueProvider.queue.isEmpty && queueProvider.playlistQueue.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -118,7 +124,7 @@ class QueueScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add tracks to your queue to see them here',
+                    'Add tracks or playlists to your queue to see them here',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey[600],
                     ),
@@ -189,67 +195,124 @@ class QueueScreen extends StatelessWidget {
               ),
               // Queue items
               Expanded(
-                child: ReorderableListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: queueProvider.queue.length,
-            onReorder: (oldIndex, newIndex) async {
-              if (oldIndex < newIndex) {
-                newIndex -= 1;
-              }
-              
-              final item = queueProvider.queue[oldIndex];
-              final success = await queueProvider.reorderQueue(item.id, newIndex);
-              
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success 
-                        ? 'Queue reordered'
-                        : 'Failed to reorder queue',
-                    ),
-                    backgroundColor: success ? Colors.green : Colors.red,
+                child: _buildQueueItems(queueProvider),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildQueueItems(QueueProvider queueProvider) {
+    // Combine regular queue items and playlist queue items
+    final List<Widget> queueItems = [];
+    
+    // Add playlist queue items first
+    for (int i = 0; i < queueProvider.playlistQueue.length; i++) {
+      final playlistItem = queueProvider.playlistQueue[i];
+      queueItems.add(
+        _buildPlaylistQueueItem(playlistItem, i),
+      );
+    }
+    
+    // Add regular queue items
+    for (int i = 0; i < queueProvider.queue.length; i++) {
+      final queueItem = queueProvider.queue[i];
+      final track = queueItem.toTrack();
+      queueItems.add(
+        _buildTrackQueueItem(queueItem, track, i + queueProvider.playlistQueue.length),
+      );
+    }
+    
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      itemCount: queueItems.length,
+      itemBuilder: (context, index) => queueItems[index],
+    );
+  }
+
+  Widget _buildPlaylistQueueItem(PlaylistQueueItem playlistItem, int index) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+          child: Icon(
+            Icons.queue_music,
+            color: Theme.of(context).primaryColor,
+          ),
+        ),
+        title: Text(
+          playlistItem.playlistName,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${playlistItem.trackOrder.length} tracks • ${playlistItem.playMode.name} • ${playlistItem.loopMode.name}',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+            if (playlistItem.playlistDescription != null && playlistItem.playlistDescription!.isNotEmpty)
+              Text(
+                playlistItem.playlistDescription!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Consumer<MusicProvider>(
+              builder: (context, musicProvider, child) {
+                final isCurrentPlaylist = musicProvider.currentPlaylistQueueItem?.id == playlistItem.id;
+                return IconButton(
+                  icon: Icon(
+                    isCurrentPlaylist ? Icons.pause : Icons.play_arrow,
+                  ),
+                  onPressed: () async {
+                    if (isCurrentPlaylist) {
+                      await musicProvider.togglePlayPause();
+                    } else {
+                      await musicProvider.playPlaylistQueueItem(playlistItem);
+                    }
+                  },
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Remove from Queue'),
+                    content: Text('Remove "${playlistItem.playlistName}" from the queue?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Remove'),
+                      ),
+                    ],
                   ),
                 );
-              }
-            },
-            itemBuilder: (context, index) {
-              final queueItem = queueProvider.queue[index];
-              final track = queueItem.toTrack();
-              
-              return Dismissible(
-                key: Key(queueItem.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  color: Colors.red,
-                  child: const Icon(
-                    Icons.delete,
-                    color: Colors.white,
-                  ),
-                ),
-                confirmDismiss: (direction) async {
-                  return await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Remove from Queue'),
-                      content: Text('Remove "${track.title}" from the queue?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text('Remove'),
-                        ),
-                      ],
-                    ),
-                  ) ?? false;
-                },
-                onDismissed: (direction) async {
-                  final success = await queueProvider.removeFromQueue(queueItem.id);
+                
+                if (confirmed == true) {
+                  final queueProvider = context.read<QueueProvider>();
+                  final success = await queueProvider.removePlaylistFromQueue(playlistItem.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -262,31 +325,83 @@ class QueueScreen extends StatelessWidget {
                       ),
                     );
                   }
-                },
-                child: Consumer<MusicProvider>(
-                  builder: (context, musicProvider, child) {
-                    final isCurrentTrack = musicProvider.currentTrack?.id == track.id;
-                    final isPlaying = isCurrentTrack && musicProvider.isPlaying;
-                    final isLoading = isCurrentTrack && musicProvider.isLoading;
-                    
-                    return TrackTile(
-                      key: ValueKey(queueItem.id),
-                      track: track,
-                      isPlaying: isPlaying,
-                      isLoading: isLoading,
-                      showSaveButton: false,
-                      showQueueButton: false,
-                      onTap: () async {
-                        await musicProvider.playTrack(track);
-                      },
-                    );
-                  },
-                ),
-              );
-            },
-                ),
+                }
+              },
+            ),
+          ],
+        ),
+        onTap: () async {
+          final musicProvider = context.read<MusicProvider>();
+          await musicProvider.playPlaylistQueueItem(playlistItem);
+        },
+      ),
+    );
+  }
+
+  Widget _buildTrackQueueItem(QueueItem queueItem, Track track, int index) {
+    return Dismissible(
+      key: Key(queueItem.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.red,
+        child: const Icon(
+          Icons.delete,
+          color: Colors.white,
+        ),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove from Queue'),
+            content: Text('Remove "${track.title}" from the queue?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Remove'),
               ),
             ],
+          ),
+        ) ?? false;
+      },
+      onDismissed: (direction) async {
+        final queueProvider = context.read<QueueProvider>();
+        final success = await queueProvider.removeFromQueue(queueItem.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                success 
+                  ? 'Removed from queue'
+                  : 'Failed to remove from queue',
+              ),
+              backgroundColor: success ? Colors.green : Colors.red,
+            ),
+          );
+        }
+      },
+      child: Consumer<MusicProvider>(
+        builder: (context, musicProvider, child) {
+          final isCurrentTrack = musicProvider.currentTrack?.id == track.id;
+          final isPlaying = isCurrentTrack && musicProvider.isPlaying;
+          final isLoading = isCurrentTrack && musicProvider.isLoading;
+          
+          return TrackTile(
+            key: ValueKey(queueItem.id),
+            track: track,
+            isPlaying: isPlaying,
+            isLoading: isLoading,
+            showSaveButton: false,
+            showQueueButton: false,
+            onTap: () async {
+              await musicProvider.playTrack(track);
+            },
           );
         },
       ),

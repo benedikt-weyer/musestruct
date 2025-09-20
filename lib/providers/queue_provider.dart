@@ -5,13 +5,15 @@ import '../services/api_service.dart';
 
 class QueueProvider with ChangeNotifier {
   List<QueueItem> _queue = [];
+  List<PlaylistQueueItem> _playlistQueue = [];
   bool _isLoading = false;
   String? _error;
 
   List<QueueItem> get queue => _queue;
+  List<PlaylistQueueItem> get playlistQueue => _playlistQueue;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  int get queueLength => _queue.length;
+  int get queueLength => _queue.length + _playlistQueue.length;
 
   QueueProvider() {
     // Don't load queue immediately - wait for authentication
@@ -48,16 +50,17 @@ class QueueProvider with ChangeNotifier {
         try {
           await _loadQueue();
         } catch (e) {
-          // If reload fails, just clear the error and continue
-          print('Warning: Failed to reload queue after adding track: $e');
+          print('Error reloading queue: $e');
         }
         return true;
       } else {
         _error = response.message ?? 'Failed to add track to queue';
+        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to add track to queue: $e';
+      notifyListeners();
       return false;
     } finally {
       _isLoading = false;
@@ -72,14 +75,21 @@ class QueueProvider with ChangeNotifier {
 
       final response = await ApiService.removeFromQueue(queueItemId);
       if (response.success) {
-        await _loadQueue(); // Reload queue to get updated positions
+        // Reload queue to get updated positions
+        try {
+          await _loadQueue();
+        } catch (e) {
+          print('Error reloading queue: $e');
+        }
         return true;
       } else {
         _error = response.message ?? 'Failed to remove track from queue';
+        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to remove track from queue: $e';
+      notifyListeners();
       return false;
     } finally {
       _isLoading = false;
@@ -94,14 +104,21 @@ class QueueProvider with ChangeNotifier {
 
       final response = await ApiService.reorderQueue(queueItemId, newPosition);
       if (response.success) {
-        await _loadQueue(); // Reload queue to get updated positions
+        // Reload queue to get updated positions
+        try {
+          await _loadQueue();
+        } catch (e) {
+          print('Error reloading queue: $e');
+        }
         return true;
       } else {
         _error = response.message ?? 'Failed to reorder queue';
+        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to reorder queue: $e';
+      notifyListeners();
       return false;
     } finally {
       _isLoading = false;
@@ -117,13 +134,16 @@ class QueueProvider with ChangeNotifier {
       final response = await ApiService.clearQueue();
       if (response.success) {
         _queue.clear();
+        notifyListeners();
         return true;
       } else {
         _error = response.message ?? 'Failed to clear queue';
+        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to clear queue: $e';
+      notifyListeners();
       return false;
     } finally {
       _isLoading = false;
@@ -135,34 +155,210 @@ class QueueProvider with ChangeNotifier {
     await _loadQueue();
   }
 
-  // Get next track in queue
-  QueueItem? getNextTrack() {
-    if (_queue.isEmpty) return null;
-    return _queue.first;
-  }
-
-  // Get track at specific position
-  QueueItem? getTrackAt(int position) {
-    if (position < 0 || position >= _queue.length) return null;
-    return _queue[position];
-  }
-
-  // Move to next track (remove current track from queue)
-  Future<bool> moveToNext() async {
-    if (_queue.isEmpty) return false;
-    
-    final firstItem = _queue.first;
-    return await removeFromQueue(firstItem.id);
-  }
-
   void clearError() {
     _error = null;
     notifyListeners();
   }
 
-  // Initialize queue after authentication
+  QueueItem? getNextTrack() {
+    if (_queue.isEmpty) return null;
+    return _queue.first;
+  }
+
+  Future<void> moveToNext() async {
+    if (_queue.isNotEmpty) {
+      await removeFromQueue(_queue.first.id);
+    }
+  }
+
   Future<void> initialize() async {
     await _loadQueue();
+  }
+
+  // Playlist Queue Methods
+  Future<bool> addPlaylistToQueue({
+    required String playlistId,
+    required String playlistName,
+    String? playlistDescription,
+    String? coverUrl,
+    PlayMode playMode = PlayMode.normal,
+    LoopMode loopMode = LoopMode.once,
+    required List<String> trackOrder,
+    String? currentTrackId,
+    String? currentTrackTitle,
+    String? currentTrackArtist,
+    String? currentTrackAlbum,
+    int? currentTrackDuration,
+    String? currentTrackSource,
+    String? currentTrackCoverUrl,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // Create playlist queue item
+      final playlistQueueItem = PlaylistQueueItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        playlistId: playlistId,
+        playlistName: playlistName,
+        playlistDescription: playlistDescription,
+        coverUrl: coverUrl,
+        playMode: playMode,
+        loopMode: loopMode,
+        trackOrder: trackOrder,
+        currentTrackIndex: 0,
+        addedAt: DateTime.now(),
+        currentTrackId: currentTrackId,
+        currentTrackTitle: currentTrackTitle,
+        currentTrackArtist: currentTrackArtist,
+        currentTrackAlbum: currentTrackAlbum,
+        currentTrackDuration: currentTrackDuration,
+        currentTrackSource: currentTrackSource,
+        currentTrackCoverUrl: currentTrackCoverUrl,
+      );
+
+      // Add to playlist queue
+      _playlistQueue.add(playlistQueueItem);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      _error = 'Failed to add playlist to queue: $e';
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> removePlaylistFromQueue(String playlistQueueItemId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      _playlistQueue.removeWhere((item) => item.id == playlistQueueItemId);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      _error = 'Failed to remove playlist from queue: $e';
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updatePlaylistQueueItem(PlaylistQueueItem updatedItem) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final index = _playlistQueue.indexWhere((item) => item.id == updatedItem.id);
+      if (index != -1) {
+        _playlistQueue[index] = updatedItem;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _error = 'Failed to update playlist queue item: $e';
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  PlaylistQueueItem? getCurrentPlaylistQueueItem() {
+    if (_playlistQueue.isEmpty) return null;
+    return _playlistQueue.first;
+  }
+
+  String? getCurrentTrackId() {
+    final currentPlaylist = getCurrentPlaylistQueueItem();
+    if (currentPlaylist == null) return null;
+    
+    if (currentPlaylist.currentTrackIndex >= currentPlaylist.trackOrder.length) {
+      return null;
+    }
+    
+    return currentPlaylist.trackOrder[currentPlaylist.currentTrackIndex];
+  }
+
+  Future<bool> moveToNextTrack() async {
+    final currentPlaylist = getCurrentPlaylistQueueItem();
+    if (currentPlaylist == null) return false;
+
+    final nextIndex = currentPlaylist.currentTrackIndex + 1;
+    
+    // Check if we've reached the end of the playlist
+    if (nextIndex >= currentPlaylist.trackOrder.length) {
+      // Handle loop modes
+      switch (currentPlaylist.loopMode) {
+        case LoopMode.once:
+          // Remove playlist from queue
+          return await removePlaylistFromQueue(currentPlaylist.id);
+        case LoopMode.twice:
+          // Check if we've played twice
+          if (currentPlaylist.currentTrackIndex >= currentPlaylist.trackOrder.length * 2) {
+            return await removePlaylistFromQueue(currentPlaylist.id);
+          }
+          // Reset to beginning for second play
+          final updatedItem = currentPlaylist.copyWith(
+            currentTrackIndex: 0,
+          );
+          return await updatePlaylistQueueItem(updatedItem);
+        case LoopMode.infinite:
+          // Reset to beginning
+          final updatedItem = currentPlaylist.copyWith(
+            currentTrackIndex: 0,
+          );
+          return await updatePlaylistQueueItem(updatedItem);
+      }
+    }
+
+    // Move to next track
+    final updatedItem = currentPlaylist.copyWith(
+      currentTrackIndex: nextIndex,
+    );
+    return await updatePlaylistQueueItem(updatedItem);
+  }
+
+  Future<bool> moveToPreviousTrack() async {
+    final currentPlaylist = getCurrentPlaylistQueueItem();
+    if (currentPlaylist == null) return false;
+
+    final prevIndex = currentPlaylist.currentTrackIndex - 1;
+    
+    if (prevIndex < 0) {
+      // Handle loop modes for going backwards
+      switch (currentPlaylist.loopMode) {
+        case LoopMode.once:
+          return false; // Can't go back from first track
+        case LoopMode.twice:
+        case LoopMode.infinite:
+          // Go to last track
+          final updatedItem = currentPlaylist.copyWith(
+            currentTrackIndex: currentPlaylist.trackOrder.length - 1,
+          );
+          return await updatePlaylistQueueItem(updatedItem);
+      }
+    }
+
+    // Move to previous track
+    final updatedItem = currentPlaylist.copyWith(
+      currentTrackIndex: prevIndex,
+    );
+    return await updatePlaylistQueueItem(updatedItem);
+  }
+
+  void clearPlaylistQueue() {
+    _playlistQueue.clear();
+    notifyListeners();
   }
 }
 

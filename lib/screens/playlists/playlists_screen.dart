@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/playlist_provider.dart';
+import '../../providers/queue_provider.dart';
+import '../../providers/music_provider.dart';
 import '../../models/playlist.dart';
+import '../../models/music.dart';
 import 'create_playlist_dialog.dart';
 import 'playlist_detail_screen.dart';
 
@@ -292,42 +295,168 @@ class PlaylistTile extends StatelessWidget {
             ),
           ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'edit':
-                onEdit();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit, size: 20),
-                  SizedBox(width: 8),
-                  Text('Edit'),
-                ],
-              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Play button
+            IconButton(
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () => _playPlaylist(context, playlist, PlayMode.normal),
+              tooltip: 'Play Playlist',
             ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, size: 20, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
-              ),
+            // Shuffle button
+            IconButton(
+              icon: const Icon(Icons.shuffle),
+              onPressed: () => _playPlaylist(context, playlist, PlayMode.shuffle),
+              tooltip: 'Shuffle Playlist',
+            ),
+            // Menu button
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    onEdit();
+                    break;
+                  case 'delete':
+                    onDelete();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 20),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, size: 20, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         onTap: onTap,
       ),
     );
+  }
+
+  Future<void> _playPlaylist(BuildContext context, Playlist playlist, PlayMode playMode) async {
+    try {
+      // Get playlist items to create track order
+      final playlistProvider = context.read<PlaylistProvider>();
+      final queueProvider = context.read<QueueProvider>();
+      
+      // Load playlist items
+      await playlistProvider.loadPlaylistItems(playlist.id);
+      
+      if (playlistProvider.currentPlaylistItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist is empty'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get track items and create track order
+      final trackItems = playlistProvider.currentPlaylistItems
+          .where((item) => !item.isPlaylist) // Only tracks for now
+          .toList();
+
+      if (trackItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist is empty'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create track order based on play mode
+      List<String> trackOrder = trackItems.map((item) => item.itemId).toList();
+
+      if (playMode == PlayMode.shuffle) {
+        trackOrder.shuffle();
+      }
+
+      // Get the first track item for current track details
+      final firstTrackItem = trackItems.first;
+      
+      // Add playlist to queue with current track details
+      final success = await queueProvider.addPlaylistToQueue(
+        playlistId: playlist.id,
+        playlistName: playlist.name,
+        playlistDescription: playlist.description,
+        coverUrl: null, // TODO: Add cover URL support
+        playMode: playMode,
+        loopMode: LoopMode.once,
+        trackOrder: trackOrder,
+        currentTrackId: firstTrackItem.itemId,
+        currentTrackTitle: firstTrackItem.title,
+        currentTrackArtist: firstTrackItem.artist,
+        currentTrackAlbum: firstTrackItem.album,
+        currentTrackDuration: firstTrackItem.duration,
+        currentTrackSource: firstTrackItem.source,
+        currentTrackCoverUrl: firstTrackItem.coverUrl,
+      );
+
+      if (success) {
+        // Start playing the first track from the playlist
+        final musicProvider = context.read<MusicProvider>();
+        
+        // Create track from playlist item data
+        final track = Track(
+          id: firstTrackItem.itemId,
+          title: firstTrackItem.title ?? 'Unknown Title',
+          artist: firstTrackItem.artist ?? 'Unknown Artist',
+          album: firstTrackItem.album ?? 'Unknown Album',
+          duration: firstTrackItem.duration,
+          coverUrl: firstTrackItem.coverUrl,
+          source: firstTrackItem.source ?? 'qobuz',
+        );
+        
+        await musicProvider.playTrack(track);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success 
+                ? 'Playing playlist'
+                : 'Failed to add playlist to queue',
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing playlist: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

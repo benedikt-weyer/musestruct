@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../providers/music_provider.dart';
+import '../../providers/queue_provider.dart';
 import '../../models/playlist.dart';
 import '../../models/music.dart';
 import '../../widgets/track_tile.dart';
@@ -30,12 +31,128 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     });
   }
 
+  Future<void> _playPlaylist(PlayMode playMode) async {
+    try {
+      final playlistProvider = context.read<PlaylistProvider>();
+      final queueProvider = context.read<QueueProvider>();
+      
+      if (playlistProvider.currentPlaylistItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist is empty'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get track items and create track order
+      final trackItems = playlistProvider.currentPlaylistItems
+          .where((item) => !item.isPlaylist) // Only tracks for now
+          .toList();
+
+      if (trackItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist is empty'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create track order based on play mode
+      List<String> trackOrder = trackItems.map((item) => item.itemId).toList();
+
+      if (playMode == PlayMode.shuffle) {
+        trackOrder.shuffle();
+      }
+
+      // Get the first track item for current track details
+      final firstTrackItem = trackItems.first;
+      
+      // Add playlist to queue with current track details
+      final success = await queueProvider.addPlaylistToQueue(
+        playlistId: widget.playlist.id,
+        playlistName: widget.playlist.name,
+        playlistDescription: widget.playlist.description,
+        coverUrl: null, // TODO: Add cover URL support
+        playMode: playMode,
+        loopMode: LoopMode.once,
+        trackOrder: trackOrder,
+        currentTrackId: firstTrackItem.itemId,
+        currentTrackTitle: firstTrackItem.title,
+        currentTrackArtist: firstTrackItem.artist,
+        currentTrackAlbum: firstTrackItem.album,
+        currentTrackDuration: firstTrackItem.duration,
+        currentTrackSource: firstTrackItem.source,
+        currentTrackCoverUrl: firstTrackItem.coverUrl,
+      );
+
+      if (success) {
+        // Start playing the first track from the playlist
+        final musicProvider = context.read<MusicProvider>();
+        
+        // Create track from playlist item data
+        final track = Track(
+          id: firstTrackItem.itemId,
+          title: firstTrackItem.title ?? 'Unknown Title',
+          artist: firstTrackItem.artist ?? 'Unknown Artist',
+          album: firstTrackItem.album ?? 'Unknown Album',
+          duration: firstTrackItem.duration,
+          coverUrl: firstTrackItem.coverUrl,
+          source: firstTrackItem.source ?? 'qobuz',
+        );
+        
+        await musicProvider.playTrack(track);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success 
+                ? 'Playing playlist'
+                : 'Failed to add playlist to queue',
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing playlist: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.playlist.name),
         actions: [
+          // Play button
+          IconButton(
+            icon: const Icon(Icons.play_arrow),
+            onPressed: () => _playPlaylist(PlayMode.normal),
+            tooltip: 'Play Playlist',
+          ),
+          // Shuffle button
+          IconButton(
+            icon: const Icon(Icons.shuffle),
+            onPressed: () => _playPlaylist(PlayMode.shuffle),
+            tooltip: 'Shuffle Playlist',
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _showAddItemDialog,

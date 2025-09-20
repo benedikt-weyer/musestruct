@@ -378,3 +378,146 @@ class BackendStreamUrlResponse {
     };
   }
 }
+
+enum PlayMode {
+  normal,
+  shuffle,
+}
+
+enum LoopMode {
+  once,
+  twice,
+  infinite,
+}
+
+class PlaylistQueueItem {
+  final String id;
+  final String playlistId;
+  final String playlistName;
+  final String? playlistDescription;
+  final String? coverUrl;
+  final PlayMode playMode;
+  final LoopMode loopMode;
+  final List<String> trackOrder; // Track IDs in play order
+  final int currentTrackIndex;
+  final DateTime addedAt;
+  
+  // Current track details
+  final String? currentTrackId;
+  final String? currentTrackTitle;
+  final String? currentTrackArtist;
+  final String? currentTrackAlbum;
+  final int? currentTrackDuration;
+  final String? currentTrackSource;
+  final String? currentTrackCoverUrl;
+
+  PlaylistQueueItem({
+    required this.id,
+    required this.playlistId,
+    required this.playlistName,
+    this.playlistDescription,
+    this.coverUrl,
+    required this.playMode,
+    required this.loopMode,
+    required this.trackOrder,
+    required this.currentTrackIndex,
+    required this.addedAt,
+    this.currentTrackId,
+    this.currentTrackTitle,
+    this.currentTrackArtist,
+    this.currentTrackAlbum,
+    this.currentTrackDuration,
+    this.currentTrackSource,
+    this.currentTrackCoverUrl,
+  });
+
+  factory PlaylistQueueItem.fromJson(Map<String, dynamic> json) {
+    return PlaylistQueueItem(
+      id: json['id'] as String,
+      playlistId: json['playlist_id'] as String,
+      playlistName: json['playlist_name'] as String,
+      playlistDescription: json['playlist_description'] as String?,
+      coverUrl: json['cover_url'] as String?,
+      playMode: PlayMode.values.firstWhere(
+        (e) => e.name == json['play_mode'],
+        orElse: () => PlayMode.normal,
+      ),
+      loopMode: LoopMode.values.firstWhere(
+        (e) => e.name == json['loop_mode'],
+        orElse: () => LoopMode.once,
+      ),
+      trackOrder: List<String>.from(json['track_order'] as List),
+      currentTrackIndex: json['current_track_index'] as int,
+      addedAt: DateTime.parse(json['added_at'] as String),
+      currentTrackId: json['current_track_id'] as String?,
+      currentTrackTitle: json['current_track_title'] as String?,
+      currentTrackArtist: json['current_track_artist'] as String?,
+      currentTrackAlbum: json['current_track_album'] as String?,
+      currentTrackDuration: json['current_track_duration'] as int?,
+      currentTrackSource: json['current_track_source'] as String?,
+      currentTrackCoverUrl: json['current_track_cover_url'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'playlist_id': playlistId,
+      'playlist_name': playlistName,
+      'playlist_description': playlistDescription,
+      'cover_url': coverUrl,
+      'play_mode': playMode.name,
+      'loop_mode': loopMode.name,
+      'track_order': trackOrder,
+      'current_track_index': currentTrackIndex,
+      'added_at': addedAt.toIso8601String(),
+      'current_track_id': currentTrackId,
+      'current_track_title': currentTrackTitle,
+      'current_track_artist': currentTrackArtist,
+      'current_track_album': currentTrackAlbum,
+      'current_track_duration': currentTrackDuration,
+      'current_track_source': currentTrackSource,
+      'current_track_cover_url': currentTrackCoverUrl,
+    };
+  }
+
+  PlaylistQueueItem copyWith({
+    String? id,
+    String? playlistId,
+    String? playlistName,
+    String? playlistDescription,
+    String? coverUrl,
+    PlayMode? playMode,
+    LoopMode? loopMode,
+    List<String>? trackOrder,
+    int? currentTrackIndex,
+    DateTime? addedAt,
+    String? currentTrackId,
+    String? currentTrackTitle,
+    String? currentTrackArtist,
+    String? currentTrackAlbum,
+    int? currentTrackDuration,
+    String? currentTrackSource,
+    String? currentTrackCoverUrl,
+  }) {
+    return PlaylistQueueItem(
+      id: id ?? this.id,
+      playlistId: playlistId ?? this.playlistId,
+      playlistName: playlistName ?? this.playlistName,
+      playlistDescription: playlistDescription ?? this.playlistDescription,
+      coverUrl: coverUrl ?? this.coverUrl,
+      playMode: playMode ?? this.playMode,
+      loopMode: loopMode ?? this.loopMode,
+      trackOrder: trackOrder ?? this.trackOrder,
+      currentTrackIndex: currentTrackIndex ?? this.currentTrackIndex,
+      addedAt: addedAt ?? this.addedAt,
+      currentTrackId: currentTrackId ?? this.currentTrackId,
+      currentTrackTitle: currentTrackTitle ?? this.currentTrackTitle,
+      currentTrackArtist: currentTrackArtist ?? this.currentTrackArtist,
+      currentTrackAlbum: currentTrackAlbum ?? this.currentTrackAlbum,
+      currentTrackDuration: currentTrackDuration ?? this.currentTrackDuration,
+      currentTrackSource: currentTrackSource ?? this.currentTrackSource,
+      currentTrackCoverUrl: currentTrackCoverUrl ?? this.currentTrackCoverUrl,
+    );
+  }
+}
