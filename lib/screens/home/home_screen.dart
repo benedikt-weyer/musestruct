@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/music_provider.dart';
 import '../../providers/streaming_provider.dart';
 import '../../providers/saved_tracks_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';
@@ -54,6 +55,21 @@ class _HomeScreenState extends State<HomeScreen> {
             top: 16,
             right: 16,
             child: BackendStatusIndicator(compact: true),
+          ),
+          // Floating theme toggle button
+          Positioned(
+            top: 16,
+            left: 16,
+            child: Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return FloatingActionButton.small(
+                  onPressed: () => themeProvider.toggleTheme(),
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  child: Icon(themeProvider.themeModeIcon),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -142,6 +158,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             // Backend status card
             const BackendStatusCard(),
+            const SizedBox(height: 16),
+            // Theme settings section
+            const Text(
+              'Appearance',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Consumer<ThemeProvider>(
+              builder: (context, themeProvider, child) {
+                return Card(
+                  child: ListTile(
+                    leading: Icon(themeProvider.themeModeIcon),
+                    title: const Text('Theme'),
+                    subtitle: Text(themeProvider.themeModeName),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () => _showThemeDialog(context, themeProvider),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 16),
             // Streaming services section
             const Text(
@@ -515,6 +554,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
     }
+  }
+
+  void _showThemeDialog(BuildContext context, ThemeProvider themeProvider) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Choose Theme'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.light_mode),
+              title: const Text('Light'),
+              subtitle: const Text('Always use light theme'),
+              trailing: themeProvider.themeMode == ThemeMode.light
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.light);
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dark_mode),
+              title: const Text('Dark'),
+              subtitle: const Text('Always use dark theme'),
+              trailing: themeProvider.themeMode == ThemeMode.dark
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.dark);
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.brightness_auto),
+              title: const Text('System'),
+              subtitle: const Text('Follow system setting'),
+              trailing: themeProvider.themeMode == ThemeMode.system
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.system);
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showLogoutDialog(BuildContext context) {

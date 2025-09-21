@@ -7,6 +7,8 @@ import 'providers/streaming_provider.dart';
 import 'providers/saved_tracks_provider.dart';
 import 'providers/queue_provider.dart';
 import 'providers/playlist_provider.dart';
+import 'providers/theme_provider.dart';
+import 'themes/app_themes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 // import 'widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
@@ -22,6 +24,7 @@ class MusestructApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MusicProvider()),
@@ -30,19 +33,17 @@ class MusestructApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => QueueProvider()),
         ChangeNotifierProvider(create: (_) => PlaylistProvider()),
       ],
-      child: MaterialApp(
-        title: 'Musestruct',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6366F1), // Indigo
-          ),
-          useMaterial3: true,
-          appBarTheme: const AppBarTheme(
-            centerTitle: true,
-          ),
-        ),
-        home: const AuthWrapper(),
-        debugShowCheckedModeBanner: false,
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            title: 'Musestruct',
+            theme: AppThemes.lightTheme,
+            darkTheme: AppThemes.darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: const AuthWrapper(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }
