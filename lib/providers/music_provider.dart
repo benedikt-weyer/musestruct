@@ -250,6 +250,67 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> searchPlaylists(String query) async {
+    if (query.trim().isEmpty) return;
+
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      ApiResponse<SearchResults> response;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service search
+        print('MusicProvider: Using multi-service playlist search with: $_selectedServices');
+        response = await ApiService.searchPlaylists(
+          query, 
+          limit: 20,
+          services: _selectedServices,
+        );
+      } else {
+        // Single service search
+        print('MusicProvider: Using single-service playlist search with: $_selectedService');
+        response = await ApiService.searchPlaylists(
+          query, 
+          limit: 20,
+          service: _selectedService,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        print('MusicProvider: Playlist search response data: ${response.data}');
+        print('MusicProvider: Playlists in response: ${response.data!.playlists ?? "null"}');
+        _searchResults = response.data;
+      } else {
+        _searchError = response.message ?? 'Playlist search failed';
+        // If playlist search fails, create an empty SearchResults with empty playlists
+        _searchResults = SearchResults(
+          tracks: [],
+          albums: [],
+          playlists: [],
+          total: 0,
+          offset: 0,
+          limit: 20,
+        );
+      }
+    } catch (e) {
+      _searchError = 'Playlist search failed: $e';
+      // If playlist search fails, create an empty SearchResults with empty playlists
+      _searchResults = SearchResults(
+        tracks: [],
+        albums: [],
+        playlists: [],
+        total: 0,
+        offset: 0,
+        limit: 20,
+      );
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> playTrack(Track track) async {
     try {
       _isLoading = true;

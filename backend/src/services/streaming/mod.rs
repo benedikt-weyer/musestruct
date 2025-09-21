@@ -35,9 +35,23 @@ pub struct StreamingAlbum {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingPlaylist {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub owner: String,
+    pub source: String,
+    pub cover_url: Option<String>,
+    pub track_count: u32,
+    pub is_public: bool,
+    pub external_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResults {
     pub tracks: Vec<StreamingTrack>,
     pub albums: Vec<StreamingAlbum>,
+    pub playlists: Vec<StreamingPlaylist>,
     pub total: u32,
     pub offset: u32,
     pub limit: u32,

@@ -54,8 +54,71 @@ class ServiceFilter extends StatelessWidget {
             .map((service) => service.name)
             .toList();
 
+        // Debug logging
+        print('ServiceFilter: Total services: ${streamingProvider.services.length}');
+        print('ServiceFilter: Connected services: $connectedServices');
+        print('ServiceFilter: StreamingProvider loading: ${streamingProvider.isLoading}');
+        print('ServiceFilter: StreamingProvider error: ${streamingProvider.error}');
+
         if (connectedServices.isEmpty) {
-          return const SizedBox.shrink();
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.warning_outlined,
+                      color: Colors.orange[700],
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'No Connected Services',
+                      style: TextStyle(
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Connect to a streaming service to search for music.',
+                  style: TextStyle(
+                    color: Colors.orange[700],
+                    fontSize: 12,
+                  ),
+                ),
+                if (streamingProvider.isLoading) ...[
+                  const SizedBox(height: 8),
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
+                if (streamingProvider.error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Error: ${streamingProvider.error}',
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
         }
 
         return Container(

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
+import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
+import '../../models/music.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -16,6 +18,7 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
   String _lastQuery = '';
+  SearchType _searchType = SearchType.tracks;
 
   @override
   void dispose() {
@@ -34,7 +37,11 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
       
-      musicProvider.searchMusic(query);
+      if (_searchType == SearchType.tracks) {
+        musicProvider.searchMusic(query);
+      } else {
+        musicProvider.searchPlaylists(query);
+      }
     }
   }
 
@@ -62,11 +69,112 @@ class _SearchScreenState extends State<SearchScreen> {
                 // Service filter
                 const ServiceFilter(),
                 
+                // Search type toggle
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _searchType = SearchType.tracks;
+                            });
+                            if (_searchController.text.isNotEmpty) {
+                              _performSearch(_searchController.text);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _searchType == SearchType.tracks
+                                  ? Theme.of(context).primaryColor
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.music_note,
+                                  color: _searchType == SearchType.tracks
+                                      ? Colors.white
+                                      : Colors.grey[600],
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Tracks',
+                                  style: TextStyle(
+                                    color: _searchType == SearchType.tracks
+                                        ? Colors.white
+                                        : Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _searchType = SearchType.playlists;
+                            });
+                            if (_searchController.text.isNotEmpty) {
+                              _performSearch(_searchController.text);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _searchType == SearchType.playlists
+                                  ? Theme.of(context).primaryColor
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.queue_music,
+                                  color: _searchType == SearchType.playlists
+                                      ? Colors.white
+                                      : Colors.grey[600],
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Playlists',
+                                  style: TextStyle(
+                                    color: _searchType == SearchType.playlists
+                                        ? Colors.white
+                                        : Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
                 // Search bar
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search for songs, artists, albums...',
+                    hintText: _searchType == SearchType.tracks
+                        ? 'Search for songs, artists, albums...'
+                        : 'Search for playlists...',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -193,7 +301,14 @@ class _SearchScreenState extends State<SearchScreen> {
                   );
                 }
 
-                if (searchResults.tracks.isEmpty) {
+                // At this point, searchResults is guaranteed to be non-null
+
+                // Check if we have results based on search type
+                final hasResults = _searchType == SearchType.tracks 
+                    ? (searchResults.tracks.isNotEmpty)
+                    : (searchResults.playlists?.isNotEmpty ?? false);
+
+                if (!hasResults) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -221,7 +336,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (searchResults.tracks.isNotEmpty) ...[
+                    if (_searchType == SearchType.tracks && searchResults.tracks.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
@@ -244,6 +359,52 @@ class _SearchScreenState extends State<SearchScreen> {
                               },
                               showPlaylistButton: true,
                             );
+                          },
+                        ),
+                      ),
+                    ] else if (_searchType == SearchType.playlists && (searchResults.playlists?.isNotEmpty ?? false)) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'Playlists (${searchResults.playlists?.length ?? 0})',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: searchResults.playlists?.length ?? 0,
+                          itemBuilder: (context, index) {
+                            try {
+                              final playlist = searchResults.playlists![index];
+                              return PlaylistSearchTile(
+                                playlist: playlist,
+                                onTap: () {
+                                  // Playlists are not playable for now
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Playlists are not playable yet. Use the clone button to add them to your library.'),
+                                      backgroundColor: Colors.orange,
+                                    ),
+                                  );
+                                },
+                              );
+                            } catch (e) {
+                              print('Error building playlist tile at index $index: $e');
+                              return Container(
+                                height: 80,
+                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Card(
+                                  child: ListTile(
+                                    leading: const Icon(Icons.error),
+                                    title: const Text('Error loading playlist'),
+                                    subtitle: Text('Error: $e'),
+                                  ),
+                                ),
+                              );
+                            }
                           },
                         ),
                       ),

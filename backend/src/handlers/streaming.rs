@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Query, Extension},
+    extract::{State, Query, Extension, Path},
     http::StatusCode,
     response::{Json, Html},
 };
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 
-use crate::services::streaming::{QobuzService, SpotifyService, StreamingService, SearchResults};
+use crate::services::streaming::{QobuzService, SpotifyService, StreamingService, SearchResults, StreamingTrack};
 use crate::services::streaming_service::StreamingService as BackendStreamingService;
 use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
 use crate::handlers::auth::{AppState, ApiResponse};
@@ -21,6 +21,7 @@ pub struct StreamingSearchQuery {
     pub offset: Option<u32>,
     pub service: Option<String>,
     pub services: Option<Vec<String>>, // For multi-service search
+    pub r#type: Option<String>, // "track" or "playlist"
 }
 
 #[derive(Deserialize)]
@@ -136,21 +137,46 @@ pub async fn search_music(
 
     let mut all_tracks = Vec::new();
     let mut all_albums = Vec::new();
+    let mut all_playlists = Vec::new();
     let mut total_results = 0;
     let mut search_errors = Vec::new();
+
+    // Determine search type
+    let search_type = params.r#type.as_deref().unwrap_or("track");
+    println!("Backend: Search type: {}", search_type);
+    println!("Backend: Services to search: {:?}", services_to_search);
 
     // Search each service
     for service_name in &services_to_search {
         match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
             Ok(service) => {
-                match service.search(&params.q, params.limit, params.offset).await {
-                    Ok(results) => {
-                        all_tracks.extend(results.tracks);
-                        all_albums.extend(results.albums);
-                        total_results += results.total;
-                    },
-                    Err(err) => {
-                        search_errors.push(format!("{}: {}", service_name, err));
+                if search_type == "playlist" {
+                    // Search for playlists
+                    println!("Backend: Searching playlists on {} for query: {}", service_name, params.q);
+                    match service.search_playlists(&params.q, params.limit, params.offset).await {
+                        Ok(playlists) => {
+                            let playlist_count = playlists.len() as u32;
+                            println!("Backend: Found {} playlists on {}", playlist_count, service_name);
+                            all_playlists.extend(playlists);
+                            total_results += playlist_count;
+                        },
+                        Err(err) => {
+                            println!("Backend: Error searching playlists on {}: {}", service_name, err);
+                            search_errors.push(format!("{}: {}", service_name, err));
+                        }
+                    }
+                } else {
+                    // Search for tracks and albums
+                    match service.search(&params.q, params.limit, params.offset).await {
+                        Ok(results) => {
+                            all_tracks.extend(results.tracks);
+                            all_albums.extend(results.albums);
+                            all_playlists.extend(results.playlists);
+                            total_results += results.total;
+                        },
+                        Err(err) => {
+                            search_errors.push(format!("{}: {}", service_name, err));
+                        }
                     }
                 }
             },
@@ -161,7 +187,7 @@ pub async fn search_music(
     }
 
     // If all services failed, return an error
-    if all_tracks.is_empty() && all_albums.is_empty() && !search_errors.is_empty() {
+    if all_tracks.is_empty() && all_albums.is_empty() && all_playlists.is_empty() && !search_errors.is_empty() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::error(format!("Search failed on all services: {}", search_errors.join(", ")))),
@@ -176,10 +202,14 @@ pub async fn search_music(
     if all_tracks.len() > limit {
         all_tracks.truncate(limit);
     }
+    if all_playlists.len() > limit {
+        all_playlists.truncate(limit);
+    }
 
     let combined_results = SearchResults {
         tracks: all_tracks,
         albums: all_albums,
+        playlists: all_playlists,
         total: total_results,
         offset: params.offset.unwrap_or(0),
         limit: params.limit.unwrap_or(20),
@@ -1499,4 +1529,39 @@ pub async fn get_backend_stream_url(
             ))
         }
     }
+}
+
+// Get tracks from a streaming service playlist
+pub async fn get_playlist_tracks(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Path(playlist_id): Path<String>,
+    Query(params): Query<GetPlaylistTracksQuery>,
+) -> Result<Json<ApiResponse<Vec<StreamingTrack>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let service_name = params.service.as_deref().unwrap_or("spotify");
+    
+    let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
+        Ok(service) => service,
+        Err(err) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error(err)),
+            ));
+        }
+    };
+
+    match service.get_playlist_tracks(&playlist_id, params.limit, params.offset).await {
+        Ok(tracks) => Ok(Json(ApiResponse::success(tracks))),
+        Err(err) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to get playlist tracks: {}", err))),
+        )),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GetPlaylistTracksQuery {
+    pub service: Option<String>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
 }

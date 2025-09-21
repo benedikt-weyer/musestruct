@@ -117,6 +117,7 @@ impl StreamingService for QobuzService {
     async fn search(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults> {
         let mut params = HashMap::new();
         params.insert("query".to_string(), query.to_string());
+        // Don't set type parameter for general search - Qobuz searches all types when no type is specified
         params.insert("limit".to_string(), limit.unwrap_or(20).to_string());
         params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
 
@@ -160,10 +161,81 @@ impl StreamingService for QobuzService {
         Ok(SearchResults {
             tracks,
             albums,
+            playlists: vec![], // Qobuz doesn't have playlists in search results
             total: response.tracks.total,
             offset: response.tracks.offset,
             limit: response.tracks.limit,
         })
+    }
+
+    async fn search_playlists(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<super::StreamingPlaylist>> {
+        let mut params = HashMap::new();
+        params.insert("query".to_string(), query.to_string());
+        params.insert("type".to_string(), "playlists".to_string());
+        params.insert("limit".to_string(), limit.unwrap_or(20).to_string());
+        params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+
+        let response: QobuzCatalogSearchResponse = self.make_request("catalog/search", &params).await?;
+
+        let playlists = response.playlists.items.into_iter().map(|playlist| {
+            super::StreamingPlaylist {
+                id: Self::json_value_to_string(&playlist.id),
+                name: playlist.name,
+                description: playlist.description,
+                owner: playlist.creator.as_ref().map(|c| c.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
+                source: "qobuz".to_string(),
+                cover_url: playlist.image.as_ref().and_then(|i| i.large.clone()),
+                track_count: playlist.tracks_count.unwrap_or(0),
+                is_public: playlist.is_public.unwrap_or(false),
+                external_url: playlist.url,
+            }
+        }).collect();
+
+        Ok(playlists)
+    }
+
+    async fn get_playlist_tracks(&self, playlist_id: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<super::StreamingTrack>> {
+        let mut params = HashMap::new();
+        params.insert("playlist_id".to_string(), playlist_id.to_string());
+        params.insert("extra".to_string(), "tracks".to_string());
+        params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
+        params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+
+        let response: QobuzPlaylistTracksResponse = self.make_request("playlist/get", &params).await?;
+
+        let tracks = response.tracks.items.into_iter().enumerate().filter_map(|(index, track)| {
+            // Skip tracks without valid ID (similar to Python code)
+            if track.id.is_null() {
+                return None;
+            }
+
+            // Qobuz typically provides high-quality audio
+            let (bitrate, sample_rate, bit_depth) = if self.user_auth_token.is_some() {
+                // Authenticated users get access to Hi-Res quality
+                (Some(1411), Some(44100), Some(16)) // CD quality as baseline, Hi-Res can be up to 24bit/192kHz
+            } else {
+                // Non-authenticated users get MP3 quality
+                (Some(320), None, None)
+            };
+
+            Some(super::StreamingTrack {
+                id: Self::json_value_to_string(&track.id),
+                title: track.title,
+                artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+                album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+                duration: track.duration,
+                stream_url: None, // Will be fetched when needed
+                cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
+                quality: Some("lossless".to_string()),
+                source: "qobuz".to_string(),
+                bitrate,
+                sample_rate,
+                bit_depth,
+                // Note: Position tracking would need to be added to StreamingTrack struct if needed
+            })
+        }).collect();
+
+        Ok(tracks)
     }
 
     async fn get_stream_url(&self, track_id: &str, quality: Option<&str>) -> Result<String> {
@@ -308,4 +380,47 @@ struct QobuzAuthResponse {
 struct QobuzUser {
     id: serde_json::Value, // Can be string or number
     login: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzCatalogSearchResponse {
+    playlists: QobuzPlaylistList,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzPlaylistList {
+    items: Vec<QobuzPlaylist>,
+    total: u32,
+    limit: u32,
+    offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzPlaylist {
+    id: serde_json::Value, // Can be string or number
+    name: String,
+    description: Option<String>,
+    creator: Option<QobuzPlaylistCreator>,
+    image: Option<QobuzImage>,
+    tracks_count: Option<u32>,
+    is_public: Option<bool>,
+    url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzPlaylistCreator {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzPlaylistTracksResponse {
+    tracks: QobuzPlaylistTracksList,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzPlaylistTracksList {
+    items: Vec<QobuzTrack>,
+    total: u32,
+    limit: u32,
+    offset: u32,
 }

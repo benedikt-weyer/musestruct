@@ -209,6 +209,77 @@ class ApiService {
     }
   }
 
+  static Future<ApiResponse<SearchResults>> searchPlaylists(
+    String query, {
+    int? limit,
+    int? offset,
+    String? service,
+    List<String>? services,
+  }) async {
+    try {
+      final params = <String, String>{
+        'q': query,
+        'type': 'playlist',
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
+        if (service != null) 'service': service,
+      };
+
+      // Add services parameter if provided
+      if (services != null && services.isNotEmpty) {
+        for (int i = 0; i < services.length; i++) {
+          params['services[$i]'] = services[i];
+        }
+      }
+
+      final uri = Uri.parse('$baseUrl/streaming/search').replace(
+        queryParameters: params,
+      );
+
+      final response = await http.get(
+        uri,
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        print('ApiService: Playlist search response: $json');
+        print('ApiService: Playlists field in response: ${json['playlists']}');
+        
+        try {
+          return ApiResponse<SearchResults>.fromJson(
+            json,
+            (data) => SearchResults.fromJson(data as Map<String, dynamic>),
+          );
+        } catch (e) {
+          print('ApiService: Error parsing SearchResults: $e');
+          // Return a safe empty SearchResults
+          return ApiResponse<SearchResults>.success(
+            SearchResults(
+              tracks: [],
+              albums: [],
+              playlists: [],
+              total: 0,
+              offset: 0,
+              limit: 20,
+            ),
+          );
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>(
+          success: false,
+          message: json['message'] ?? 'Playlist search failed',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<SearchResults>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
   static Future<ApiResponse<String>> getStreamUrl(
     String trackId, {
     String? quality,
@@ -1166,6 +1237,38 @@ class PlaylistApiService {
         success: false,
         message: 'Network error: $e',
       );
+    }
+  }
+
+  // Get tracks from a streaming service playlist
+  static Future<ApiResponse<List<Track>>> getPlaylistTracks(
+    String playlistId, {
+    String? service,
+    int? limit,
+    int? offset,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/streaming/playlist/$playlistId/tracks').replace(
+        queryParameters: {
+          if (service != null) 'service': service,
+          if (limit != null) 'limit': limit.toString(),
+          if (offset != null) 'offset': offset.toString(),
+        },
+      );
+
+      final response = await http.get(uri, headers: await _getAuthHeaders());
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        return ApiResponse<List<Track>>.fromJson(data, (json) {
+          final tracksJson = json as List<dynamic>;
+          return tracksJson.map((trackJson) => Track.fromJson(trackJson as Map<String, dynamic>)).toList();
+        });
+      } else {
+        return ApiResponse<List<Track>>.error('Failed to get playlist tracks: ${response.statusCode}');
+      }
+    } catch (e) {
+      return ApiResponse<List<Track>>.error('Error getting playlist tracks: $e');
     }
   }
 }

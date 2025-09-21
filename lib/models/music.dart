@@ -192,6 +192,7 @@ class Album {
 class SearchResults {
   final List<Track> tracks;
   final List<Album> albums;
+  final List<PlaylistSearchResult>? playlists;
   final int total;
   final int offset;
   final int limit;
@@ -199,33 +200,161 @@ class SearchResults {
   SearchResults({
     required this.tracks,
     required this.albums,
+    this.playlists,
     required this.total,
     required this.offset,
     required this.limit,
   });
 
   factory SearchResults.fromJson(Map<String, dynamic> json) {
-    return SearchResults(
+    print('SearchResults.fromJson: Received json: $json');
+    
+    // Safely extract playlists with extensive error handling
+    List<PlaylistSearchResult> playlists = [];
+    try {
+      if (json.containsKey('playlists') && json['playlists'] != null) {
+        final playlistsData = json['playlists'];
+        print('SearchResults.fromJson: playlists data type: ${playlistsData.runtimeType}');
+        print('SearchResults.fromJson: playlists data: $playlistsData');
+        
+        if (playlistsData is List) {
+          playlists = playlistsData
+              .map((e) {
+                try {
+                  return PlaylistSearchResult.fromJson(e as Map<String, dynamic>);
+                } catch (e) {
+                  print('SearchResults.fromJson: Error parsing playlist item: $e');
+                  return null;
+                }
+              })
+              .where((e) => e != null)
+              .cast<PlaylistSearchResult>()
+              .toList();
+        } else {
+          print('SearchResults.fromJson: playlists is not a List, it is: ${playlistsData.runtimeType}');
+        }
+      } else {
+        print('SearchResults.fromJson: playlists field missing or null');
+      }
+    } catch (e) {
+      print('SearchResults.fromJson: Error processing playlists: $e');
+      playlists = [];
+    }
+    
+    final result = SearchResults(
       tracks: (json['tracks'] as List<dynamic>?)
           ?.map((e) => Track.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
       albums: (json['albums'] as List<dynamic>?)
           ?.map((e) => Album.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
+      playlists: playlists, // Always use the list (empty or populated)
       total: (json['total'] as num?)?.toInt() ?? 0,
       offset: (json['offset'] as num?)?.toInt() ?? 0,
       limit: (json['limit'] as num?)?.toInt() ?? 0,
     );
+    
+    print('SearchResults.fromJson: Created SearchResults with ${result.playlists?.length ?? 0} playlists');
+    return result;
   }
 
   Map<String, dynamic> toJson() {
     return {
       'tracks': tracks.map((e) => e.toJson()).toList(),
       'albums': albums.map((e) => e.toJson()).toList(),
+      'playlists': playlists?.map((e) => e.toJson()).toList() ?? [],
       'total': total,
       'offset': offset,
       'limit': limit,
     };
+  }
+}
+
+class PlaylistSearchResult {
+  final String id;
+  final String name;
+  final String? description;
+  final String owner;
+  final String source;
+  final String? coverUrl;
+  final int trackCount;
+  final bool isPublic;
+  final String? externalUrl;
+
+  PlaylistSearchResult({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.owner,
+    required this.source,
+    this.coverUrl,
+    required this.trackCount,
+    required this.isPublic,
+    this.externalUrl,
+  });
+
+  factory PlaylistSearchResult.fromJson(Map<String, dynamic> json) {
+    try {
+      print('PlaylistSearchResult.fromJson: Parsing playlist: $json');
+      return PlaylistSearchResult(
+        id: json['id'] as String? ?? 'unknown',
+        name: json['name'] as String? ?? 'Unknown Playlist',
+        description: json['description'] as String?,
+        owner: json['owner'] as String? ?? 'Unknown',
+        source: json['source'] as String? ?? 'unknown',
+        coverUrl: json['cover_url'] as String?,
+        trackCount: (json['track_count'] as num?)?.toInt() ?? 0,
+        isPublic: json['is_public'] as bool? ?? true,
+        externalUrl: json['external_url'] as String?,
+      );
+    } catch (e) {
+      print('PlaylistSearchResult.fromJson: Error parsing playlist: $e');
+      // Return a default playlist if parsing fails
+      return PlaylistSearchResult(
+        id: 'error_${DateTime.now().millisecondsSinceEpoch}',
+        name: 'Error Loading Playlist',
+        description: 'Failed to load playlist data',
+        owner: 'Unknown',
+        source: 'unknown',
+        coverUrl: null,
+        trackCount: 0,
+        isPublic: false,
+        externalUrl: null,
+      );
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'owner': owner,
+      'source': source,
+      'cover_url': coverUrl,
+      'track_count': trackCount,
+      'is_public': isPublic,
+      'external_url': externalUrl,
+    };
+  }
+
+  String get formattedSource {
+    switch (source.toLowerCase()) {
+      case 'qobuz':
+        return 'Qobuz';
+      case 'spotify':
+        return 'Spotify';
+      case 'tidal':
+        return 'Tidal';
+      case 'apple_music':
+        return 'Apple Music';
+      case 'youtube_music':
+        return 'YouTube Music';
+      case 'deezer':
+        return 'Deezer';
+      default:
+        return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
+    }
   }
 }
 
@@ -388,6 +517,11 @@ enum LoopMode {
   once,
   twice,
   infinite,
+}
+
+enum SearchType {
+  tracks,
+  playlists,
 }
 
 class PlaylistQueueItem {

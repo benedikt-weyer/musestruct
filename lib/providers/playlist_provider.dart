@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/playlist.dart';
+import '../models/music.dart';
 import '../services/api_service.dart';
 
 class PlaylistProvider with ChangeNotifier {
@@ -254,6 +255,77 @@ class PlaylistProvider with ChangeNotifier {
     }
   }
 
+  // Add item to playlist without modifying global loading state (for use during cloning)
+  Future<bool> _addItemToPlaylistSilent({
+    required String playlistId,
+    required String itemType, // "track" or "playlist"
+    required String itemId,
+    int? position,
+    // Track details (only used when itemType is "track")
+    String? title,
+    String? artist,
+    String? album,
+    int? duration,
+    String? source,
+    String? coverUrl,
+    // Playlist details (only used when itemType is "playlist")
+    String? playlistName,
+  }) async {
+    try {
+      final request = AddPlaylistItemRequest(
+        itemType: itemType,
+        itemId: itemId,
+        position: position,
+        title: title,
+        artist: artist,
+        album: album,
+        duration: duration,
+        source: source,
+        coverUrl: coverUrl,
+        playlistName: playlistName,
+      );
+
+      final response = await PlaylistApiService.addPlaylistItem(playlistId, request);
+
+      if (response.success && response.data != null) {
+        // Reload playlist items to get updated list (silent version)
+        await _loadPlaylistItemsSilent(playlistId);
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Load playlist items without modifying global loading state (for use during cloning)
+  Future<void> _loadPlaylistItemsSilent(String playlistId) async {
+    try {
+      final response = await PlaylistApiService.getPlaylistItems(playlistId);
+
+      if (response.success && response.data != null) {
+        _currentPlaylistItems = response.data!;
+        // Also load the playlist details
+        await _loadPlaylistDetailsSilent(playlistId);
+      }
+    } catch (e) {
+      // Ignore errors for playlist items during cloning
+    }
+  }
+
+  // Load playlist details without modifying global loading state (for use during cloning)
+  Future<void> _loadPlaylistDetailsSilent(String playlistId) async {
+    try {
+      final response = await PlaylistApiService.getPlaylist(playlistId);
+      if (response.success && response.data != null) {
+        _currentPlaylist = response.data!;
+      }
+    } catch (e) {
+      // Ignore errors for playlist details during cloning
+    }
+  }
+
   // Convenience method for adding tracks
   Future<bool> addTrackToPlaylist({
     required String playlistId,
@@ -362,5 +434,73 @@ class PlaylistProvider with ChangeNotifier {
   // Clear search
   Future<void> clearSearch() async {
     await loadPlaylists();
+  }
+
+  // Clone playlist from search result
+  Future<bool> clonePlaylistFromSearch(PlaylistSearchResult searchResult) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      // Create a new playlist with the same name
+      final createResponse = await PlaylistApiService.createPlaylist(
+        CreatePlaylistRequest(
+          name: '${searchResult.name} (from ${searchResult.formattedSource})',
+          description: 'Cloned from ${searchResult.formattedSource} playlist by ${searchResult.owner}',
+          isPublic: false,
+        ),
+      );
+
+      if (!createResponse.success || createResponse.data == null) {
+        _error = createResponse.message ?? 'Failed to create playlist';
+        return false;
+      }
+
+      final newPlaylist = createResponse.data!;
+      
+      // Fetch tracks from the original playlist
+      final tracksResponse = await PlaylistApiService.getPlaylistTracks(
+        searchResult.id,
+        service: searchResult.source,
+        limit: 100, // Get up to 100 tracks
+      );
+
+      if (tracksResponse.success && tracksResponse.data != null) {
+        // Add each track to the new playlist
+        for (int i = 0; i < tracksResponse.data!.length; i++) {
+          final track = tracksResponse.data![i];
+          final success = await _addItemToPlaylistSilent(
+            playlistId: newPlaylist.id,
+            itemType: 'track',
+            itemId: track.id,
+            position: i,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            source: track.source,
+            coverUrl: track.coverUrl,
+          );
+          
+          // If adding a track fails, continue with other tracks
+          if (!success) {
+            // Track addition failed, but continue with others
+          }
+        }
+      }
+      
+      // Add the playlist to our local list
+      _playlists.insert(0, newPlaylist);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      _error = 'Failed to clone playlist: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }

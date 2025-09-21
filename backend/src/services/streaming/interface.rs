@@ -1,11 +1,17 @@
 use async_trait::async_trait;
 use anyhow::Result;
-use super::{SearchResults, StreamingTrack};
+use super::{SearchResults, StreamingTrack, StreamingPlaylist};
 
 #[async_trait]
 pub trait StreamingService: Send + Sync {
     /// Search for tracks across the streaming service
     async fn search(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults>;
+    
+    /// Search for playlists across the streaming service
+    async fn search_playlists(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingPlaylist>>;
+    
+    /// Get tracks from a specific playlist
+    async fn get_playlist_tracks(&self, playlist_id: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingTrack>>;
     
     /// Get stream URL for a track
     async fn get_stream_url(&self, track_id: &str, quality: Option<&str>) -> Result<String>;
