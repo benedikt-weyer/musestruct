@@ -4,52 +4,51 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    android-nixpkgs = {
-      url = "github:tadfisher/android-nixpkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, android-nixpkgs }:
+  outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          config.allowUnfree = true;
+          config = {
+            allowUnfree = true;
+            android_sdk.accept_license = true;
+          };
+
         };
+
+        buildToolsVersion = "35.0.0";
+        cmakeVersion = "3.22.1";
         
-        # Android SDK configuration
-        android-sdk = android-nixpkgs.sdk.${system} (sdkPkgs: with sdkPkgs; [
-          cmdline-tools-latest
-          build-tools-35-0-0
-          build-tools-34-0-0
-          build-tools-33-0-0
-          platform-tools
-          platforms-android-36
-          platforms-android-35
-          platforms-android-34
-          platforms-android-33
-          platforms-android-32
-          emulator
-          system-images-android-34-google-apis-x86-64
-          system-images-android-33-google-apis-x86-64
-          ndk-27-0-12077973
-          cmake-3-22-1
-        ]);
+        androidComposition = pkgs.androidenv.composeAndroidPackages {
+          buildToolsVersions = [ buildToolsVersion ];
+          platformVersions = [ "36" "35" "34"];
+          abiVersions = [ "armeabi-v7a" "arm64-v8a" "x86_64" ];
+          systemImageTypes = [ "google_apis" "google_apis_playstore" ];
+          includeEmulator = true;
+          useGoogleAPIs = true;
+          includeNDK = true;
+          ndkVersions = [ "27.0.12077973" ];
+          includeSystemImages = true;
+          includeCmake = true;
+          cmakeVersions = [ cmakeVersion ];
+        };
+        androidSdk = androidComposition.androidsdk;
 
         # Flutter version - using stable channel
         flutter = pkgs.flutter;
 
       in
       {
-        devShells.default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell rec {
           buildInputs = with pkgs; [
             # Flutter and Dart
             flutter
             dart
 
             # Android development
-            android-sdk
+            androidSdk
             jdk17
 
             # Desktop development (Linux/GTK)
@@ -122,11 +121,24 @@
             webkitgtk_4_1
           ];
 
+          # Set environment variables for the shell
+          ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
+          ANDROID_SDK_ROOT = "${androidSdk}/libexec/android-sdk";
+          JAVA_HOME = "${pkgs.jdk17}";
+          FLUTTER_ROOT = "${flutter}";
+          CHROME_EXECUTABLE = "${pkgs.google-chrome}/bin/google-chrome-stable";
+          ANDROID_NDK_ROOT="$ANDROID_HOME/ndk-bundle";
+          GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${ANDROID_HOME}/build-tools/${buildToolsVersion}/aapt2";
+
           shellHook = ''
             # Set up Android SDK
-            export ANDROID_HOME="${android-sdk}/share/android-sdk"
+            export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
             export ANDROID_SDK_ROOT="$ANDROID_HOME"
-            export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+            export PATH="$(echo "$ANDROID_HOME/cmake/${cmakeVersion}".*/bin):$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+            export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk-bundle";
+            export GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${ANDROID_HOME}/build-tools/${buildToolsVersion}/aapt2";
+
             
             # Set up Java
             export JAVA_HOME="${pkgs.jdk17}"
@@ -146,11 +158,12 @@
             alias stop-backend="docker-compose down && echo 'Backend and database stopped'"
             
             # Android emulator aliases
-            alias start-emulator="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu swiftshader_indirect -no-snapshot -wipe-data"
-            alias start-emulator-software="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu off -no-snapshot"
-            alias start-emulator-headless="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu off -no-window -no-snapshot"
+            alias start-emulator="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu swiftshader_indirect -no-snapshot -wipe-data"
+            alias start-emulator-software="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu off -no-snapshot"
+            alias start-emulator-headless="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu off -no-window -no-snapshot"
             alias list-emulators="$ANDROID_HOME/emulator/emulator -list-avds"
-            alias create-emulator="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n Pixel_7_API_34 -k 'system-images;android-34;google_apis;x86_64' -d 'pixel_7'"
+            alias create-emulator="avdmanager create avd -n Pixel_7_API_36 -k 'system-images;android-36;google_apis;x86_64' -d 'pixel_7'"
+            alias delete-emulator="$avdmanager delete avd -n Pixel_7_API_36"
             
             echo "🚀 Flutter development environment activated!"
             echo ""
@@ -179,6 +192,7 @@
             echo "    3. Run 'start-emulator-software' for pure software rendering (slower but stable)"
             echo "    4. Run 'start-emulator-headless' for headless testing"
             echo "    5. Run 'list-emulators' to see available emulators"
+            echo "    6. Run 'delete-emulator' to delete the Pixel_7_API_36 emulator"
             echo ""
             echo "Platform support:"
             echo "  - Mobile: Android (SDK included)"
@@ -194,12 +208,7 @@
             fi
           '';
 
-          # Set environment variables for the shell
-          ANDROID_HOME = "${android-sdk}/share/android-sdk";
-          ANDROID_SDK_ROOT = "${android-sdk}/share/android-sdk";
-          JAVA_HOME = "${pkgs.jdk17}";
-          FLUTTER_ROOT = "${flutter}";
-          CHROME_EXECUTABLE = "${pkgs.google-chrome}/bin/google-chrome-stable";
+          
         };
 
         # Formatter for the flake
