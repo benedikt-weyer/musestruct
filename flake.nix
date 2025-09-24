@@ -139,6 +139,13 @@
             alias start-backend="docker-compose up -d postgres && cd backend && cargo watch -x run"
             alias stop-backend="docker-compose down && echo 'Backend and database stopped'"
             
+            # Android emulator aliases
+            alias start-emulator="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu swiftshader_indirect -no-snapshot -wipe-data"
+            alias start-emulator-software="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu off -no-snapshot"
+            alias start-emulator-headless="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -gpu off -no-window -no-snapshot"
+            alias list-emulators="$ANDROID_HOME/emulator/emulator -list-avds"
+            alias create-emulator="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n Pixel_7_API_34 -k 'system-images;android-34;google_apis;x86_64' -d 'pixel_7'"
+            
             echo "🚀 Flutter development environment activated!"
             echo ""
             echo "Available tools:"
@@ -159,6 +166,13 @@
             echo "    1. Run 'cargo new project_name' to create a new Rust project"
             echo "    2. Run 'start-backend' for hot-reload development in backend/ dir"
             echo "    3. Run 'cargo build' to build your project"
+            echo ""
+            echo "  Android Emulator:"
+            echo "    1. Run 'create-emulator' to create a new Pixel 7 API 34 emulator"
+            echo "    2. Run 'start-emulator' to start emulator with software rendering"
+            echo "    3. Run 'start-emulator-software' for pure software rendering (slower but stable)"
+            echo "    4. Run 'start-emulator-headless' for headless testing"
+            echo "    5. Run 'list-emulators' to see available emulators"
             echo ""
             echo "Platform support:"
             echo "  - Mobile: Android (SDK included)"
