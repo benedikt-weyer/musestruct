@@ -11,6 +11,10 @@ import 'app_config_service.dart';
 class ApiService {
   static const _storage = FlutterSecureStorage();
   
+  // Timeout configurations
+  static const Duration _defaultTimeout = Duration(seconds: 30);
+  static const Duration _streamingTimeout = Duration(minutes: 3); // Longer timeout for streaming operations
+  
   static Future<String> get baseUrl async {
     return await AppConfigService.instance.getApiBaseUrl();
   }
@@ -54,7 +58,7 @@ class ApiService {
         Uri.parse('$apiBaseUrl/auth/login'),
         headers: _getHeaders(),
         body: jsonEncode(request.toJson()),
-      );
+      ).timeout(_defaultTimeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
@@ -310,7 +314,7 @@ class ApiService {
       final response = await http.get(
         uri,
         headers: await _getAuthHeaders(),
-      );
+      ).timeout(_streamingTimeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
@@ -353,7 +357,7 @@ class ApiService {
       final response = await http.get(
         uri,
         headers: await _getAuthHeaders(),
-      );
+      ).timeout(_streamingTimeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);

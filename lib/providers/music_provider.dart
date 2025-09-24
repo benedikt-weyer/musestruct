@@ -339,48 +339,68 @@ class MusicProvider with ChangeNotifier {
   // _playSpotifyTrack method removed - Spotify WebView playback disabled
 
   Future<void> _playRegularTrack(Track track) async {
-    // First get the original stream URL
-    final originalResponse = await ApiService.getStreamUrl(
-      track.id,
-      service: track.source,
-    );
-    
-    if (!originalResponse.success || originalResponse.data == null) {
-      throw Exception(originalResponse.message ?? 'Failed to get original stream URL');
-    }
-    
-    // Now get the backend stream URL
-    final backendResponse = await ApiService.getBackendStreamUrl(
-      track.id,
-      track.source,
-      originalResponse.data!,
-    );
-    
-    if (backendResponse.success && backendResponse.data != null) {
-      // Use the backend stream URL for playback
-      final configuredBackendUrl = await AppConfigService.instance.getBackendUrl();
-      final backendUrl = '$configuredBackendUrl${backendResponse.data!.streamUrl}';
+    try {
+      print('MusicProvider: Getting stream URL for ${track.title}...');
       
-      // Update the current track with the backend stream URL
-      _currentTrack = Track(
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        album: track.album,
-        duration: track.duration,
-        streamUrl: backendUrl, // This is the key change!
-        coverUrl: track.coverUrl,
-        source: track.source,
-        quality: track.quality,
-        bitrate: track.bitrate,
-        sampleRate: track.sampleRate,
-        bitDepth: track.bitDepth,
+      // First get the original stream URL
+      final originalResponse = await ApiService.getStreamUrl(
+        track.id,
+        service: track.source,
       );
       
-      await _audioService.playTrack(_currentTrack!, backendUrl);
-      _startAudioInfoUpdates();
-    } else {
-      throw Exception(backendResponse.message ?? 'Failed to get backend stream URL');
+      if (!originalResponse.success || originalResponse.data == null) {
+        throw Exception(originalResponse.message ?? 'Failed to get original stream URL');
+      }
+      
+      print('MusicProvider: Original stream URL obtained, preparing backend cache...');
+      
+      // Now get the backend stream URL (this may take time for caching)
+      final backendResponse = await ApiService.getBackendStreamUrl(
+        track.id,
+        track.source,
+        originalResponse.data!,
+      );
+      
+      if (backendResponse.success && backendResponse.data != null) {
+        // Use the backend stream URL for playback
+        final configuredBackendUrl = await AppConfigService.instance.getBackendUrl();
+        final backendUrl = '$configuredBackendUrl${backendResponse.data!.streamUrl}';
+        
+        print('MusicProvider: Backend stream URL ready: $backendUrl');
+        
+        // Update the current track with the backend stream URL
+        _currentTrack = Track(
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          duration: track.duration,
+          streamUrl: backendUrl, // This is the key change!
+          coverUrl: track.coverUrl,
+          source: track.source,
+          quality: track.quality,
+          bitrate: track.bitrate,
+          sampleRate: track.sampleRate,
+          bitDepth: track.bitDepth,
+        );
+        
+        print('MusicProvider: Starting audio playback...');
+        await _audioService.playTrack(_currentTrack!, backendUrl);
+        _startAudioInfoUpdates();
+      } else {
+        throw Exception(backendResponse.message ?? 'Failed to get backend stream URL');
+      }
+    } catch (e) {
+      print('MusicProvider: Error in _playRegularTrack: $e');
+      
+      // Provide more user-friendly error messages
+      if (e.toString().contains('timeout') || e.toString().contains('Timeout')) {
+        throw Exception('The track is taking too long to load. This may be due to a slow internet connection or the file being very large. Please try again.');
+      } else if (e.toString().contains('AndroidAudioError')) {
+        throw Exception('Unable to play this audio format. Please try a different track.');
+      } else {
+        rethrow;
+      }
     }
   }
 

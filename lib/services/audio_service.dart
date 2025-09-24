@@ -60,7 +60,15 @@ class AudioService {
   Future<void> playTrack(Track track, String streamUrl) async {
     try {
       _currentTrack = track;
-      await _player.play(UrlSource(streamUrl));
+      print('AudioService: Starting playback for ${track.title} from $streamUrl');
+      
+      // Set a longer timeout for the play operation
+      await _player.play(UrlSource(streamUrl)).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          throw TimeoutException('Audio playback timed out after 45 seconds. The audio file may be too large or the network connection is slow.', const Duration(seconds: 45));
+        },
+      );
       
       // Analyze audio stream for real-time info (with delay to ensure playback started)
       Timer(const Duration(seconds: 2), () {
@@ -68,14 +76,28 @@ class AudioService {
       });
     } catch (e) {
       print('Error playing track: $e');
-      rethrow;
+      
+      // Provide more user-friendly error messages
+      if (e is TimeoutException) {
+        throw Exception('Playback timed out: ${e.message}');
+      } else if (e.toString().contains('AndroidAudioError')) {
+        throw Exception('Audio playback failed. Please check your internet connection and try again.');
+      } else {
+        throw Exception('Failed to play track: ${e.toString()}');
+      }
     }
   }
 
   Future<void> _analyzeAudioStream(String streamUrl) async {
     try {
-      // Try to get basic info from HTTP headers
-      final response = await http.head(Uri.parse(streamUrl));
+      // Try to get basic info from HTTP headers with timeout
+      final response = await http.head(Uri.parse(streamUrl)).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('AudioService: HTTP HEAD request timed out for $streamUrl');
+          throw TimeoutException('HTTP HEAD request timed out', const Duration(seconds: 10));
+        },
+      );
       
       String? contentType = response.headers['content-type'];
       String? contentLength = response.headers['content-length'];

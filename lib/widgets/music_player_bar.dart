@@ -200,172 +200,179 @@ class MusicPlayerBar extends StatelessWidget {
                         ),
                       ),
                       
-                      // Controls
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Position info
-                          Text(
-                            '${_formatDuration(musicProvider.position)} / ${_formatDuration(musicProvider.duration)}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
+                      // Controls - Use Flexible to prevent overflow
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Position info - hide on small screens
+                            if (MediaQuery.of(context).size.width > 600)
+                              Text(
+                                '${_formatDuration(musicProvider.position)} / ${_formatDuration(musicProvider.duration)}',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            if (MediaQuery.of(context).size.width > 600)
+                              const SizedBox(width: 8),
+                            
+                            // Play/Pause button
+                            IconButton(
+                              onPressed: musicProvider.isLoading 
+                                  ? null 
+                                  : musicProvider.togglePlayPause,
+                              icon: musicProvider.isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : Icon(
+                                      musicProvider.isPlaying 
+                                          ? Icons.pause 
+                                          : Icons.play_arrow,
+                                      size: 28,
+                                    ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          
-                          // Play/Pause button
-                          IconButton(
-                            onPressed: musicProvider.isLoading 
-                                ? null 
-                                : musicProvider.togglePlayPause,
-                            icon: musicProvider.isLoading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : Icon(
-                                    musicProvider.isPlaying 
-                                        ? Icons.pause 
-                                        : Icons.play_arrow,
-                                    size: 32,
-                                  ),
-                          ),
-                          
-                          // Stop button
-                          IconButton(
-                            onPressed: musicProvider.stopPlayback,
-                            icon: const Icon(Icons.stop),
-                          ),
-                          
-                          // Play next track button
-                          Consumer<QueueProvider>(
-                            builder: (context, queueProvider, child) {
-                              final hasNextTrack = queueProvider.getNextTrack() != null;
-                              return IconButton(
-                                onPressed: hasNextTrack && !musicProvider.isLoading
-                                    ? musicProvider.playNextTrack
-                                    : null,
-                                icon: const Icon(Icons.skip_next),
-                                tooltip: hasNextTrack ? 'Play next track' : 'No next track',
-                              );
-                            },
-                          ),
-                          
-                          // Queue button
-                          Consumer<QueueProvider>(
-                            builder: (context, queueProvider, child) {
-                              return Stack(
-                                children: [
-                                  IconButton(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) => const QueueScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.queue_music),
-                                    tooltip: 'Queue (${queueProvider.queueLength})',
-                                  ),
-                                  if (queueProvider.queueLength > 0)
-                                    Positioned(
-                                      right: 8,
-                                      top: 8,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(2),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).primaryColor,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          minWidth: 16,
-                                          minHeight: 16,
-                                        ),
-                                        child: Text(
-                                          '${queueProvider.queueLength}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                            
+                            // Stop button - hide on small screens
+                            if (MediaQuery.of(context).size.width > 500)
+                              IconButton(
+                                onPressed: musicProvider.stopPlayback,
+                                icon: const Icon(Icons.stop, size: 20),
+                              ),
+                            
+                            // Play next track button
+                            Consumer<QueueProvider>(
+                              builder: (context, queueProvider, child) {
+                                final hasNextTrack = queueProvider.getNextTrack() != null;
+                                return IconButton(
+                                  onPressed: hasNextTrack && !musicProvider.isLoading
+                                      ? musicProvider.playNextTrack
+                                      : null,
+                                  icon: const Icon(Icons.skip_next, size: 20),
+                                  tooltip: hasNextTrack ? 'Play next track' : 'No next track',
+                                );
+                              },
+                            ),
+                            
+                            // Queue button
+                            Consumer<QueueProvider>(
+                              builder: (context, queueProvider, child) {
+                                return Stack(
+                                  children: [
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) => const QueueScreen(),
                                           ),
-                                          textAlign: TextAlign.center,
+                                        );
+                                      },
+                                      icon: const Icon(Icons.queue_music, size: 20),
+                                      tooltip: 'Queue (${queueProvider.queueLength})',
+                                    ),
+                                    if (queueProvider.queueLength > 0)
+                                      Positioned(
+                                        right: 6,
+                                        top: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 14,
+                                            minHeight: 14,
+                                          ),
+                                          child: Text(
+                                            '${queueProvider.queueLength}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                ],
-                              );
-                            },
-                          ),
-                          
-                          // Save/Remove button
-                          Consumer<SavedTracksProvider>(
-                            builder: (context, savedTracksProvider, child) {
-                              final isSaved = savedTracksProvider.isTrackSaved(
-                                musicProvider.currentTrack!.id, 
-                                musicProvider.currentTrack!.source
-                              );
-                              return IconButton(
-                                onPressed: () async {
-                                  if (isSaved) {
-                                    // Find the saved track to remove
-                                    final savedTrack = savedTracksProvider.savedTracks
-                                        .where((st) => 
-                                            st.trackId == musicProvider.currentTrack!.id && 
-                                            st.source == musicProvider.currentTrack!.source)
-                                        .firstOrNull;
-                                    if (savedTrack != null) {
-                                      await savedTracksProvider.removeSavedTrack(
-                                        savedTrack.id,
-                                        musicProvider.currentTrack!.id,
-                                        musicProvider.currentTrack!.source,
-                                      );
+                                  ],
+                                );
+                              },
+                            ),
+                            
+                            // Save/Remove button
+                            Consumer<SavedTracksProvider>(
+                              builder: (context, savedTracksProvider, child) {
+                                final isSaved = savedTracksProvider.isTrackSaved(
+                                  musicProvider.currentTrack!.id, 
+                                  musicProvider.currentTrack!.source
+                                );
+                                return IconButton(
+                                  onPressed: () async {
+                                    if (isSaved) {
+                                      // Find the saved track to remove
+                                      final savedTrack = savedTracksProvider.savedTracks
+                                          .where((st) => 
+                                              st.trackId == musicProvider.currentTrack!.id && 
+                                              st.source == musicProvider.currentTrack!.source)
+                                          .firstOrNull;
+                                      if (savedTrack != null) {
+                                        await savedTracksProvider.removeSavedTrack(
+                                          savedTrack.id,
+                                          musicProvider.currentTrack!.id,
+                                          musicProvider.currentTrack!.source,
+                                        );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Removed "${musicProvider.currentTrack!.title}" from saved tracks'),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    } else {
+                                      final success = await savedTracksProvider.saveTrack(musicProvider.currentTrack!);
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
-                                            content: Text('Removed "${musicProvider.currentTrack!.title}" from saved tracks'),
+                                            content: Text(
+                                              success 
+                                                ? 'Added "${musicProvider.currentTrack!.title}" to saved tracks'
+                                                : 'Failed to save track',
+                                            ),
+                                            backgroundColor: success ? Colors.green : Colors.red,
                                           ),
                                         );
                                       }
                                     }
-                                  } else {
-                                    final success = await savedTracksProvider.saveTrack(musicProvider.currentTrack!);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            success 
-                                              ? 'Added "${musicProvider.currentTrack!.title}" to saved tracks'
-                                              : 'Failed to save track',
-                                          ),
-                                          backgroundColor: success ? Colors.green : Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  }
+                                  },
+                                  icon: Icon(
+                                    isSaved ? Icons.favorite : Icons.favorite_border,
+                                    color: isSaved ? Colors.red : Colors.grey[600],
+                                    size: 20,
+                                  ),
+                                  tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
+                                );
+                              },
+                            ),
+                            
+                            // Add to playlist button - hide on very small screens
+                            if (MediaQuery.of(context).size.width > 400)
+                              IconButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
+                                  );
                                 },
-                                icon: Icon(
-                                  isSaved ? Icons.favorite : Icons.favorite_border,
-                                  color: isSaved ? Colors.red : Colors.grey[600],
-                                ),
-                                tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
-                              );
-                            },
-                          ),
-                          
-                          // Add to playlist button
-                          IconButton(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
-                              );
-                            },
-                            icon: const Icon(Icons.playlist_add),
-                            tooltip: 'Add to playlist',
-                          ),
-                        ],
+                                icon: const Icon(Icons.playlist_add, size: 20),
+                                tooltip: 'Add to playlist',
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
