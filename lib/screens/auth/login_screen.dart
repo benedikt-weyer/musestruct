@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
+import '../../services/app_config_service.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,17 +17,36 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _backendUrlController = TextEditingController();
   bool _obscurePassword = true;
+  bool _showAdvancedSettings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentBackendUrl();
+  }
+
+  Future<void> _loadCurrentBackendUrl() async {
+    final currentUrl = await AppConfigService.instance.getBackendUrl();
+    _backendUrlController.text = currentUrl;
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _backendUrlController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
+      // Save the backend URL configuration first
+      if (_backendUrlController.text.isNotEmpty) {
+        await AppConfigService.instance.setBackendUrl(_backendUrlController.text.trim());
+      }
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
       await authProvider.login(
@@ -129,6 +149,51 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                
+                // Advanced settings toggle
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showAdvancedSettings = !_showAdvancedSettings;
+                    });
+                  },
+                  icon: Icon(
+                    _showAdvancedSettings ? Icons.expand_less : Icons.expand_more,
+                  ),
+                  label: Text('Advanced Settings'),
+                ),
+                
+                // Backend URL field (collapsible)
+                if (_showAdvancedSettings) ...[
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _backendUrlController,
+                    decoration: InputDecoration(
+                      labelText: 'Backend URL',
+                      hintText: 'http://127.0.0.1:8080',
+                      prefixIcon: const Icon(Icons.cloud),
+                      border: const OutlineInputBorder(),
+                      helperText: 'Configure the Musestruct backend server URL',
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () {
+                          _backendUrlController.text = AppConfigService.defaultBackendUrl;
+                        },
+                        tooltip: 'Reset to default',
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a backend URL';
+                      }
+                      if (!AppConfigService.isValidBackendUrl(value)) {
+                        return 'Please enter a valid URL (e.g., http://127.0.0.1:8080)';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 
                 // Error message
                 Consumer<AuthProvider>(

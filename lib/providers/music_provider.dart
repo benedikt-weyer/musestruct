@@ -4,6 +4,7 @@ import '../models/music.dart';
 import '../models/api_response.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
+import '../services/app_config_service.dart';
 import 'queue_provider.dart';
 // import '../services/spotify_webview_player.dart'; // Disabled
 // import '../widgets/spotify_webview_widget.dart'; // Disabled
@@ -357,7 +358,8 @@ class MusicProvider with ChangeNotifier {
     
     if (backendResponse.success && backendResponse.data != null) {
       // Use the backend stream URL for playback
-      final backendUrl = 'http://127.0.0.1:8080${backendResponse.data!.streamUrl}';
+      final configuredBackendUrl = await AppConfigService.instance.getBackendUrl();
+      final backendUrl = '$configuredBackendUrl${backendResponse.data!.streamUrl}';
       
       // Update the current track with the backend stream URL
       _currentTrack = Track(

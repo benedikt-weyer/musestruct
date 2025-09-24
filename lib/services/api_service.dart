@@ -6,10 +6,14 @@ import '../models/music.dart';
 import '../models/playlist.dart';
 import '../models/api_response.dart';
 import '../providers/queue_provider.dart';
+import 'app_config_service.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8080/api';
   static const _storage = FlutterSecureStorage();
+  
+  static Future<String> get baseUrl async {
+    return await AppConfigService.instance.getApiBaseUrl();
+  }
   
   static const String _sessionTokenKey = 'session_token';
 
@@ -45,8 +49,9 @@ class ApiService {
   // User Authentication
   static Future<ApiResponse<LoginResponse>> login(LoginRequest request) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
+        Uri.parse('$apiBaseUrl/auth/login'),
         headers: _getHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -80,8 +85,9 @@ class ApiService {
 
   static Future<ApiResponse<User>> register(RegisterRequest request) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/register'),
+        Uri.parse('$apiBaseUrl/auth/register'),
         headers: _getHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -109,8 +115,9 @@ class ApiService {
 
   static Future<ApiResponse<User>> getCurrentUser() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/auth/me'),
+        Uri.parse('$apiBaseUrl/auth/me'),
         headers: await _getAuthHeaders(),
       );
 
@@ -136,8 +143,9 @@ class ApiService {
 
   static Future<ApiResponse<void>> logout() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/logout'),
+        Uri.parse('$apiBaseUrl/auth/logout'),
         headers: await _getAuthHeaders(),
       );
 
@@ -179,7 +187,8 @@ class ApiService {
         }
       }
 
-      final uri = Uri.parse('$baseUrl/streaming/search').replace(
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/streaming/search').replace(
         queryParameters: params,
       );
 
@@ -232,7 +241,8 @@ class ApiService {
         }
       }
 
-      final uri = Uri.parse('$baseUrl/streaming/search').replace(
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/streaming/search').replace(
         queryParameters: params,
       );
 
@@ -292,7 +302,8 @@ class ApiService {
         if (service != null) 'service': service,
       };
 
-      final uri = Uri.parse('$baseUrl/streaming/stream-url').replace(
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/streaming/stream-url').replace(
         queryParameters: params,
       );
 
@@ -334,7 +345,8 @@ class ApiService {
         'url': originalUrl,
       };
 
-      final uri = Uri.parse('$baseUrl/streaming/backend-stream-url').replace(
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/streaming/backend-stream-url').replace(
         queryParameters: params,
       );
 
@@ -366,8 +378,9 @@ class ApiService {
 
   static Future<ApiResponse<List<ServiceInfo>>> getAvailableServices() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/streaming/services'),
+        Uri.parse('$apiBaseUrl/streaming/services'),
         headers: await _getAuthHeaders(),
       );
 
@@ -399,8 +412,9 @@ class ApiService {
     String password,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/streaming/connect/qobuz'),
+        Uri.parse('$apiBaseUrl/streaming/connect/qobuz'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({
           'username': username,
@@ -434,8 +448,9 @@ class ApiService {
     String? refreshToken,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/streaming/connect/spotify'),
+        Uri.parse('$apiBaseUrl/streaming/connect/spotify'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({
           'access_token': accessToken,
@@ -466,8 +481,9 @@ class ApiService {
 
   static Future<ApiResponse<ServiceStatusResponse>> getServiceStatus() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/streaming/status'),
+        Uri.parse('$apiBaseUrl/streaming/status'),
         headers: await _getAuthHeaders(),
       );
 
@@ -494,8 +510,9 @@ class ApiService {
 
   static Future<ApiResponse<String>> disconnectService(String serviceName) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/streaming/disconnect'),
+        Uri.parse('$apiBaseUrl/streaming/disconnect'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({
           'service_name': serviceName,
@@ -526,8 +543,9 @@ class ApiService {
   // Spotify OAuth2 methods
   static Future<ApiResponse<SpotifyAuthUrlResponse>> getSpotifyAuthUrl() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/streaming/spotify/auth-url'),
+        Uri.parse('$apiBaseUrl/streaming/spotify/auth-url'),
         headers: await _getAuthHeaders(),
       );
 
@@ -551,8 +569,9 @@ class ApiService {
 
   static Future<ApiResponse<String>> spotifyCallback(String code, String state) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/streaming/spotify/callback?code=$code&state=$state'),
+        Uri.parse('$apiBaseUrl/streaming/spotify/callback?code=$code&state=$state'),
         headers: await _getAuthHeaders(),
       );
 
@@ -570,8 +589,9 @@ class ApiService {
 
   static Future<ApiResponse<String>> transferSpotifyPlayback(String deviceId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/streaming/spotify/transfer'),
+        Uri.parse('$apiBaseUrl/streaming/spotify/transfer'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({'device_id': deviceId}),
       );
@@ -590,8 +610,9 @@ class ApiService {
 
   static Future<ApiResponse<String>> getSpotifyAccessToken() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/streaming/spotify/token'),
+        Uri.parse('$apiBaseUrl/streaming/spotify/token'),
         headers: await _getAuthHeaders(),
       );
 
@@ -611,10 +632,11 @@ class ApiService {
   static Future<ApiResponse<SavedTrack>> saveTrack(SaveTrackRequest request) async {
     try {
       print('Saving track: ${request.toJson()}');
+      final apiBaseUrl = await baseUrl;
       final headers = await _getAuthHeaders();
       print('Headers: $headers');
       final response = await http.post(
-        Uri.parse('$baseUrl/saved-tracks'),
+        Uri.parse('$apiBaseUrl/saved-tracks'),
         headers: headers,
         body: jsonEncode(request.toJson()),
       );
@@ -645,10 +667,11 @@ class ApiService {
 
   static Future<ApiResponse<List<SavedTrack>>> getSavedTracks({int page = 1, int limit = 50}) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final headers = await _getAuthHeaders();
       print('Headers: $headers');
       final response = await http.get(
-        Uri.parse('$baseUrl/saved-tracks?page=$page&limit=$limit'),
+        Uri.parse('$apiBaseUrl/saved-tracks?page=$page&limit=$limit'),
         headers: headers,
       );
 
@@ -684,8 +707,9 @@ class ApiService {
 
   static Future<ApiResponse<void>> removeSavedTrack(String trackId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/saved-tracks/$trackId'),
+        Uri.parse('$apiBaseUrl/saved-tracks/$trackId'),
         headers: await _getAuthHeaders(),
       );
 
@@ -703,8 +727,9 @@ class ApiService {
 
   static Future<ApiResponse<bool>> isTrackSaved(String trackId, String source) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/saved-tracks/check?track_id=$trackId&source=$source'),
+        Uri.parse('$apiBaseUrl/saved-tracks/check?track_id=$trackId&source=$source'),
         headers: await _getAuthHeaders(),
       );
 
@@ -723,8 +748,9 @@ class ApiService {
   // Queue management methods
   static Future<ApiResponse<List<QueueItem>>> getQueue() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/queue'),
+        Uri.parse('$apiBaseUrl/queue'),
         headers: await _getAuthHeaders(),
       );
 
@@ -744,8 +770,9 @@ class ApiService {
 
   static Future<ApiResponse<bool>> addToQueue(Track track) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/queue'),
+        Uri.parse('$apiBaseUrl/queue'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({
           'track_id': track.id,
@@ -776,8 +803,9 @@ class ApiService {
 
   static Future<ApiResponse<bool>> removeFromQueue(String queueItemId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/queue/$queueItemId'),
+        Uri.parse('$apiBaseUrl/queue/$queueItemId'),
         headers: await _getAuthHeaders(),
       );
 
@@ -799,8 +827,9 @@ class ApiService {
 
   static Future<ApiResponse<bool>> reorderQueue(String queueItemId, int newPosition) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.put(
-        Uri.parse('$baseUrl/queue/$queueItemId/reorder'),
+        Uri.parse('$apiBaseUrl/queue/$queueItemId/reorder'),
         headers: await _getAuthHeaders(),
         body: jsonEncode({
           'new_position': newPosition,
@@ -825,8 +854,9 @@ class ApiService {
 
   static Future<ApiResponse<bool>> clearQueue() async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/queue'),
+        Uri.parse('$apiBaseUrl/queue'),
         headers: await _getAuthHeaders(),
       );
 
@@ -931,7 +961,9 @@ class SpotifyAuthUrlResponse {
 
 // Playlist API methods
 class PlaylistApiService {
-  static const String baseUrl = 'http://127.0.0.1:8080/api';
+  static Future<String> get baseUrl async {
+    return await AppConfigService.instance.getApiBaseUrl();
+  }
 
   static Future<Map<String, String>> _getAuthHeaders() async {
     final token = await ApiService.getSessionToken();
@@ -957,8 +989,9 @@ class PlaylistApiService {
         params['search'] = search;
       }
 
-      final uri = Uri.parse('$baseUrl/v2/playlists').replace(queryParameters: params);
-      print('PlaylistApiService: baseUrl = $baseUrl');
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/v2/playlists').replace(queryParameters: params);
+      print('PlaylistApiService: baseUrl = $apiBaseUrl');
       print('PlaylistApiService: constructed uri = $uri');
       final headers = await _getAuthHeaders();
       print('PlaylistApiService: Making request to $uri');
@@ -992,8 +1025,9 @@ class PlaylistApiService {
   // Create playlist
   static Future<ApiResponse<Playlist>> createPlaylist(CreatePlaylistRequest request) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/v2/playlists'),
+        Uri.parse('$apiBaseUrl/v2/playlists'),
         headers: await _getAuthHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -1022,8 +1056,9 @@ class PlaylistApiService {
   // Get playlist by ID
   static Future<ApiResponse<Playlist>> getPlaylist(String playlistId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId'),
         headers: await _getAuthHeaders(),
       );
 
@@ -1054,8 +1089,9 @@ class PlaylistApiService {
     UpdatePlaylistRequest request,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.put(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId'),
         headers: await _getAuthHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -1084,8 +1120,9 @@ class PlaylistApiService {
   // Delete playlist
   static Future<ApiResponse<bool>> deletePlaylist(String playlistId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId'),
         headers: await _getAuthHeaders(),
       );
 
@@ -1113,8 +1150,9 @@ class PlaylistApiService {
   // Get playlist items
   static Future<ApiResponse<List<PlaylistItem>>> getPlaylistItems(String playlistId) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.get(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId/items'),
         headers: await _getAuthHeaders(),
       );
 
@@ -1147,8 +1185,9 @@ class PlaylistApiService {
     String itemId,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.delete(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId/items/$itemId'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId/items/$itemId'),
         headers: await _getAuthHeaders(),
       );
 
@@ -1180,8 +1219,9 @@ class PlaylistApiService {
     ReorderPlaylistItemRequest request,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.put(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId/items/$itemId/reorder'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId/items/$itemId/reorder'),
         headers: await _getAuthHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -1213,8 +1253,9 @@ class PlaylistApiService {
     AddPlaylistItemRequest request,
   ) async {
     try {
+      final apiBaseUrl = await baseUrl;
       final response = await http.post(
-        Uri.parse('$baseUrl/v2/playlists/$playlistId/items'),
+        Uri.parse('$apiBaseUrl/v2/playlists/$playlistId/items'),
         headers: await _getAuthHeaders(),
         body: jsonEncode(request.toJson()),
       );
@@ -1248,7 +1289,8 @@ class PlaylistApiService {
     int? offset,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/streaming/playlist/$playlistId/tracks').replace(
+      final apiBaseUrl = await baseUrl;
+      final uri = Uri.parse('$apiBaseUrl/streaming/playlist/$playlistId/tracks').replace(
         queryParameters: {
           if (service != null) 'service': service,
           if (limit != null) 'limit': limit.toString(),

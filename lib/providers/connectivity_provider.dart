@@ -42,6 +42,11 @@ class ConnectivityProvider with ChangeNotifier {
     _connectivityService.startMonitoring();
   }
 
+  /// Force an immediate connectivity check
+  void forceCheck() {
+    _connectivityService.forceCheck();
+  }
+
   @override
   void dispose() {
     _connectivityService.dispose();

@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/music_provider.dart';
 import '../../providers/streaming_provider.dart';
-import '../../providers/saved_tracks_provider.dart';
+import '../../providers/connectivity_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
@@ -12,6 +12,7 @@ import '../music/my_tracks_screen.dart';
 import '../playlists/playlists_screen.dart';
 import '../../widgets/music_player_bar.dart';
 import '../../services/api_service.dart';
+import '../../services/app_config_service.dart';
 import '../../widgets/copyable_error.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -112,13 +113,36 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _backendUrlController = TextEditingController();
+  bool _isBackendConfigExpanded = false;
+  String? _backendSuccessMessage;
+  String? _backendErrorMessage;
+
   @override
   void initState() {
     super.initState();
     // Load service status when the screen is initialized
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StreamingProvider>().loadServiceStatus();
+      _loadBackendUrl();
     });
+  }
+
+  @override
+  void dispose() {
+    _backendUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBackendUrl() async {
+    try {
+      final currentUrl = await AppConfigService.instance.getBackendUrl();
+      _backendUrlController.text = currentUrl;
+    } catch (e) {
+      setState(() {
+        _backendErrorMessage = 'Failed to load backend URL: $e';
+      });
+    }
   }
 
   @override
@@ -158,6 +182,108 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             // Backend status card
             const BackendStatusCard(),
+            const SizedBox(height: 16),
+            // Backend Configuration section
+            Card(
+              child: ExpansionTile(
+                leading: const Icon(Icons.cloud),
+                title: const Text('Backend Configuration'),
+                subtitle: const Text('Configure server connection'),
+                initiallyExpanded: _isBackendConfigExpanded,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    _isBackendConfigExpanded = expanded;
+                  });
+                },
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _backendUrlController,
+                          decoration: InputDecoration(
+                            labelText: 'Backend URL',
+                            hintText: 'http://127.0.0.1:8080',
+                            prefixIcon: const Icon(Icons.link),
+                            border: const OutlineInputBorder(),
+                            helperText: 'URL of the Musestruct backend server',
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.refresh),
+                              onPressed: () {
+                                _backendUrlController.text = AppConfigService.defaultBackendUrl;
+                              },
+                              tooltip: 'Reset to default',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Status Messages
+                        if (_backendSuccessMessage != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle, color: Colors.green),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(_backendSuccessMessage!)),
+                              ],
+                            ),
+                          ),
+                        
+                        if (_backendErrorMessage != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error, color: Colors.red),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(_backendErrorMessage!)),
+                              ],
+                            ),
+                          ),
+                        
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _saveBackendUrl,
+                                icon: const Icon(Icons.save),
+                                label: const Text('Save'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _testConnection,
+                                icon: const Icon(Icons.wifi_protected_setup),
+                                label: const Text('Test'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             // Theme settings section
             const Text(
@@ -238,6 +364,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveBackendUrl() async {
+    final url = _backendUrlController.text.trim();
+    
+    if (url.isEmpty) {
+      setState(() {
+        _backendErrorMessage = 'Please enter a backend URL';
+        _backendSuccessMessage = null;
+      });
+      return;
+    }
+
+    if (!AppConfigService.isValidBackendUrl(url)) {
+      setState(() {
+        _backendErrorMessage = 'Please enter a valid URL (e.g., http://127.0.0.1:8080)';
+        _backendSuccessMessage = null;
+      });
+      return;
+    }
+
+    try {
+      await AppConfigService.instance.setBackendUrl(url);
+      
+      // Trigger connectivity check with new URL
+      if (mounted) {
+        final connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
+        connectivityProvider.forceCheck();
+      }
+      
+      setState(() {
+        _backendSuccessMessage = 'Backend URL saved successfully!';
+        _backendErrorMessage = null;
+      });
+
+      // Clear success message after 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _backendSuccessMessage = null;
+          });
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _backendErrorMessage = 'Failed to save backend URL: $e';
+        _backendSuccessMessage = null;
+      });
+    }
+  }
+
+  Future<void> _testConnection() async {
+    final url = _backendUrlController.text.trim();
+    
+    if (url.isEmpty) {
+      setState(() {
+        _backendErrorMessage = 'Please enter a backend URL to test';
+        _backendSuccessMessage = null;
+      });
+      return;
+    }
+
+    if (!AppConfigService.isValidBackendUrl(url)) {
+      setState(() {
+        _backendErrorMessage = 'Please enter a valid URL (e.g., http://127.0.0.1:8080)';
+        _backendSuccessMessage = null;
+      });
+      return;
+    }
+
+    try {
+      // Temporarily save the URL to test it
+      final originalUrl = await AppConfigService.instance.getBackendUrl();
+      await AppConfigService.instance.setBackendUrl(url);
+      
+      // Force a connectivity check
+      if (mounted) {
+        final connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
+        connectivityProvider.forceCheck();
+        
+        // Wait a moment for the check to complete
+        await Future.delayed(const Duration(seconds: 2));
+        
+        final isOnline = connectivityProvider.isOnline;
+        
+        if (isOnline) {
+          setState(() {
+            _backendSuccessMessage = 'Connection test successful!';
+            _backendErrorMessage = null;
+          });
+        } else {
+          setState(() {
+            _backendErrorMessage = 'Connection test failed. Please check the URL and ensure the backend is running.';
+            _backendSuccessMessage = null;
+          });
+          // Restore original URL if test failed
+          await AppConfigService.instance.setBackendUrl(originalUrl);
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _backendErrorMessage = 'Connection test failed: $e';
+        _backendSuccessMessage = null;
+      });
+    }
   }
 
   Widget _buildServiceCard(BuildContext context, ConnectedServiceInfo service) {

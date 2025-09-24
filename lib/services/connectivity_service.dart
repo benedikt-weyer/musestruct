@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'app_config_service.dart';
 
 enum BackendStatus {
   online,
@@ -9,7 +9,6 @@ enum BackendStatus {
 }
 
 class ConnectivityService {
-  static const String _healthEndpoint = 'http://127.0.0.1:8080/health';
   static const Duration _checkInterval = Duration(seconds: 5);
   static const Duration _timeout = Duration(seconds: 3);
 
@@ -38,10 +37,16 @@ class ConnectivityService {
     _timer = null;
   }
 
+  /// Force an immediate health check
+  void forceCheck() {
+    _checkBackendHealth();
+  }
+
   Future<void> _checkBackendHealth() async {
     try {
+      final healthEndpoint = await AppConfigService.instance.getHealthEndpoint();
       final response = await http.get(
-        Uri.parse(_healthEndpoint),
+        Uri.parse(healthEndpoint),
       ).timeout(_timeout);
 
       if (response.statusCode == 200 && response.body.trim() == 'OK') {
