@@ -21,14 +21,20 @@
         # Android SDK configuration
         android-sdk = android-nixpkgs.sdk.${system} (sdkPkgs: with sdkPkgs; [
           cmdline-tools-latest
+          build-tools-35-0-0
           build-tools-34-0-0
+          build-tools-33-0-0
           platform-tools
+          platforms-android-36
+          platforms-android-35
           platforms-android-34
           platforms-android-33
           platforms-android-32
           emulator
           system-images-android-34-google-apis-x86-64
           system-images-android-33-google-apis-x86-64
+          ndk-27-0-12077973
+          cmake-3-22-1
         ]);
 
         # Flutter version - using stable channel
