@@ -8,7 +8,7 @@ import 'music/providers/saved_tracks_provider.dart';
 import 'queue/providers/queue_provider.dart';
 import 'playlists/providers/playlist_provider.dart';
 import 'core/providers/theme_provider.dart';
-import 'themes/app_themes.dart';
+import 'core/themes/app_themes.dart';
 import 'core/screens/auth/login_screen.dart';
 import 'core/screens/home/home_screen.dart';
 // import 'core/widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
