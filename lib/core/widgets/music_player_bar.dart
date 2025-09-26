@@ -247,7 +247,7 @@ class MusicPlayerBar extends StatelessWidget {
                       // Controls - Use Flexible to prevent overflow
                       Flexible(
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             // Position info - hide on small screens
                             if (MediaQuery.of(context).size.width > 600)
