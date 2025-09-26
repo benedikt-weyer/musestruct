@@ -128,6 +128,8 @@ class _MyTracksScreenState extends State<MyTracksScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Playing "${track.title}"'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                             ),
                           );
                         }
@@ -137,6 +139,8 @@ class _MyTracksScreenState extends State<MyTracksScreen> {
                             SnackBar(
                               content: Text('Failed to play track: $e'),
                               backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                             ),
                           );
                         }
@@ -157,6 +161,8 @@ class _MyTracksScreenState extends State<MyTracksScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Removed "${savedTrack.title}" from saved tracks'),
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                             action: SnackBarAction(
                               label: 'Undo',
                               onPressed: () {

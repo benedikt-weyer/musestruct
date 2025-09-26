@@ -225,6 +225,7 @@ class PlaylistSearchTile extends StatelessWidget {
                 : 'Failed to clone playlist',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -238,6 +239,7 @@ class PlaylistSearchTile extends StatelessWidget {
           SnackBar(
             content: Text('Error cloning playlist: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }

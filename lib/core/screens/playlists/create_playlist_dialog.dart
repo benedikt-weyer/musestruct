@@ -149,6 +149,7 @@ class _CreatePlaylistDialogState extends State<CreatePlaylistDialog> {
                   : 'Playlist created successfully',
             ),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
@@ -161,6 +162,7 @@ class _CreatePlaylistDialogState extends State<CreatePlaylistDialog> {
                       : 'Failed to create playlist'),
             ),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }

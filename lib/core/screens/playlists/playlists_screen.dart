@@ -367,6 +367,7 @@ class PlaylistTile extends StatelessWidget {
             const SnackBar(
               content: Text('Playlist is empty'),
               backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -384,6 +385,7 @@ class PlaylistTile extends StatelessWidget {
             const SnackBar(
               content: Text('Playlist is empty'),
               backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -445,6 +447,7 @@ class PlaylistTile extends StatelessWidget {
                 : 'Failed to add playlist to queue',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -454,6 +457,7 @@ class PlaylistTile extends StatelessWidget {
           SnackBar(
             content: Text('Error playing playlist: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }

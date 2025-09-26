@@ -42,6 +42,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             const SnackBar(
               content: Text('Playlist is empty'),
               backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -59,6 +60,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             const SnackBar(
               content: Text('Playlist is empty'),
               backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -120,6 +122,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                 : 'Failed to add playlist to queue',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -129,6 +132,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           SnackBar(
             content: Text('Error playing playlist: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -582,7 +586,10 @@ class PlaylistItemTile extends StatelessWidget {
     // TODO: Navigate to the nested playlist
     // For now, just show a message
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Nested playlists not yet implemented')),
+      const SnackBar(
+        content: Text('Nested playlists not yet implemented'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 

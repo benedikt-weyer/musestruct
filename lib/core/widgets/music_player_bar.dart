@@ -76,6 +76,8 @@ class MusicPlayerBar extends StatelessWidget {
                             content: Text(message),
                             duration: const Duration(seconds: 3),
                             backgroundColor: Colors.orange,
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                           ),
                         );
                       }
@@ -436,6 +438,8 @@ class MusicPlayerBar extends StatelessWidget {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
                                               content: Text('Removed "${musicProvider.currentTrack!.title}" from saved tracks'),
+                                              behavior: SnackBarBehavior.floating,
+                                              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                                             ),
                                           );
                                         }
@@ -451,6 +455,8 @@ class MusicPlayerBar extends StatelessWidget {
                                                 : 'Failed to save track',
                                             ),
                                             backgroundColor: success ? Colors.green : Colors.red,
+                                            behavior: SnackBarBehavior.floating,
+                                            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
                                           ),
                                         );
                                       }

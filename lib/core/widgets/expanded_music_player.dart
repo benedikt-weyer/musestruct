@@ -283,6 +283,8 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                         ),
                                         duration: Duration(seconds: 2),
                                         backgroundColor: Colors.orange,
+                                        behavior: SnackBarBehavior.floating,
+                                        margin: EdgeInsets.only(bottom: 100, left: 16, right: 16),
                                       ),
                                     );
                                   }
@@ -580,6 +582,8 @@ class ExpandedMusicPlayer extends StatelessWidget {
               content: Text(
                 'Removed "${musicProvider.currentTrack!.title}" from saved tracks',
               ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
             ),
           );
         }
@@ -597,6 +601,8 @@ class ExpandedMusicPlayer extends StatelessWidget {
                   : 'Failed to save track',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),
         );
       }

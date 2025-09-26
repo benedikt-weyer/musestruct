@@ -55,6 +55,7 @@ class _QueueScreenState extends State<QueueScreen> {
                                     : 'Failed to clear queue',
                                 ),
                                 backgroundColor: success ? Colors.green : Colors.red,
+                                behavior: SnackBarBehavior.floating,
                               ),
                             );
                           }
@@ -292,6 +293,7 @@ class _QueueScreenState extends State<QueueScreen> {
                           : 'Failed to change repeat mode',
                       ),
                       backgroundColor: success ? Colors.green : Colors.red,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -349,6 +351,7 @@ class _QueueScreenState extends State<QueueScreen> {
                           : 'Failed to change playback order',
                       ),
                       backgroundColor: success ? Colors.green : Colors.red,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -426,6 +429,7 @@ class _QueueScreenState extends State<QueueScreen> {
                             : 'Failed to remove from queue',
                         ),
                         backgroundColor: success ? Colors.green : Colors.red,
+                        behavior: SnackBarBehavior.floating,
                       ),
                     );
                   }
@@ -486,6 +490,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   : 'Failed to remove from queue',
               ),
               backgroundColor: success ? Colors.green : Colors.red,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }

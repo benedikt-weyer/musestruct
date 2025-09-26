@@ -44,6 +44,7 @@ class _SelectPlaylistDialogState extends State<SelectPlaylistDialog> {
               ? 'Added "${widget.track.title}" to "${playlist.name}"'
               : 'Failed to add track to playlist'),
           backgroundColor: success ? Colors.green : Colors.red,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       

@@ -149,6 +149,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog>
           SnackBar(
             content: Text('Added "${track.title}" to playlist'),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
@@ -156,6 +157,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog>
           SnackBar(
             content: Text(playlistProvider.error ?? 'Failed to add track'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -178,6 +180,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog>
           SnackBar(
             content: Text('Added "${playlist.name}" to playlist'),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
@@ -185,6 +188,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog>
           SnackBar(
             content: Text(playlistProvider.error ?? 'Failed to add playlist'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }

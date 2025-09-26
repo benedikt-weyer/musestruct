@@ -380,6 +380,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                     const SnackBar(
                                       content: Text('Playlists are not playable yet. Use the clone button to add them to your library.'),
                                       backgroundColor: Colors.orange,
+                                      behavior: SnackBarBehavior.floating,
                                     ),
                                   );
                                 },

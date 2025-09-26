@@ -556,6 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SnackBar(
                   content: Text('Disconnecting from ${service.displayName}...'),
                   duration: const Duration(seconds: 30),
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
 
@@ -569,6 +570,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SnackBar(
                     content: Text('Successfully disconnected from ${service.displayName}'),
                     backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               } else {
@@ -577,6 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SnackBar(
                     content: Text(error ?? 'Failed to disconnect'),
                     backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               }
@@ -637,6 +640,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SnackBar(
                     content: Text('Please enter both username and password'),
                     backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
                 return;
@@ -649,6 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SnackBar(
                   content: Text('Connecting to Qobuz...'),
                   duration: Duration(seconds: 30),
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
               
@@ -665,6 +670,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SnackBar(
                       content: Text('Successfully connected to Qobuz!'),
                       backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 } else {
@@ -736,6 +742,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SnackBar(
               content: Text('Please complete authorization in your browser and return to the app.'),
               duration: Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
             ),
           );
           
@@ -747,6 +754,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           scaffoldMessenger.showSnackBar(
             const SnackBar(
               content: Text('Could not open browser for Spotify authorization.'),
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -754,6 +762,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text('Failed to get Spotify authorization URL: ${response.message}'),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -764,6 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text('Error connecting to Spotify: $e'),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
