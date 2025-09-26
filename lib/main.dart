@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'auth/providers/auth_provider.dart';
 import 'music/providers/music_provider.dart';
 import 'core/providers/connectivity_provider.dart';
+import 'core/providers/navigation_provider.dart';
 import 'music/providers/streaming_provider.dart';
 import 'music/providers/saved_tracks_provider.dart';
 import 'queue/providers/queue_provider.dart';
@@ -11,6 +12,12 @@ import 'core/providers/theme_provider.dart';
 import 'core/themes/app_themes.dart';
 import 'core/screens/auth/login_screen.dart';
 import 'core/screens/home/home_screen.dart';
+import 'core/screens/music/search_screen.dart';
+import 'core/screens/music/my_tracks_screen.dart';
+import 'core/screens/playlists/playlists_screen.dart';
+import 'core/screens/playlists/playlist_detail_screen.dart';
+import 'core/widgets/base_layout.dart';
+import 'playlists/models/playlist.dart';
 // import 'core/widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
 
 void main() {
@@ -26,6 +33,7 @@ class MusestructApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MusicProvider()),
         ChangeNotifierProvider(create: (_) => StreamingProvider()),
@@ -139,16 +147,57 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
             await queueProvider.initialize();
           });
           
-          return const Stack(
-            children: [
-              HomeScreen(),
-              // Hidden WebView for Spotify playback - DISABLED
-              // HiddenSpotifyWebView(),
-            ],
-          );
+          // Return the authenticated app with proper navigator
+          return const AuthenticatedApp();
         } else {
           return const LoginScreen();
         }
+      },
+    );
+  }
+}
+
+class AuthenticatedApp extends StatelessWidget {
+  const AuthenticatedApp({super.key});
+
+  final List<Widget> _screens = const [
+    SearchScreen(),
+    MyTracksScreen(),
+    PlaylistsScreen(),
+    SettingsScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+      onGenerateRoute: (settings) {
+        Widget page;
+        
+        // Handle playlist detail route with parameters
+        if (settings.name?.startsWith('/playlist/') == true) {
+          final playlist = settings.arguments as Playlist?;
+          if (playlist != null) {
+            page = PlaylistDetailContent(playlist: playlist);
+          } else {
+            page = Consumer<NavigationProvider>(
+              builder: (context, navigationProvider, child) {
+                return _screens[navigationProvider.currentIndex];
+              },
+            );
+          }
+        } else {
+          // For main tab navigation, show screen based on current index
+          page = Consumer<NavigationProvider>(
+            builder: (context, navigationProvider, child) {
+              return _screens[navigationProvider.currentIndex];
+            },
+          );
+        }
+        
+        return MaterialPageRoute(
+          builder: (context) => BaseLayout(child: page),
+          settings: settings,
+        );
       },
     );
   }

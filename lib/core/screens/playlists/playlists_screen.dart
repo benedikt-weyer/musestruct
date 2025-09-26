@@ -5,8 +5,8 @@ import '../../../queue/providers/queue_provider.dart';
 import '../../../music/providers/music_provider.dart';
 import '../../../playlists/models/playlist.dart';
 import '../../../music/models/music.dart';
+import '../../providers/navigation_provider.dart';
 import 'create_playlist_dialog.dart';
-import 'playlist_detail_screen.dart';
 
 class PlaylistsScreen extends StatefulWidget {
   const PlaylistsScreen({super.key});
@@ -224,10 +224,9 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
   }
 
   void _navigateToPlaylistDetail(Playlist playlist) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => PlaylistDetailScreen(playlist: playlist),
-      ),
+    context.read<NavigationProvider>().navigateToPlaylistDetail(
+      playlist.id,
+      playlist,
     );
   }
 }

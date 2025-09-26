@@ -379,68 +379,13 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               ),
             ],
           ),
-          // Music player bar at the bottom
-          Consumer<MusicProvider>(
-            builder: (context, musicProvider, child) {
-              if (musicProvider.currentTrack != null) {
-                return const Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: MusicPlayerBar(),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 2, // Playlists tab is selected
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              // Go back to home screen and switch to search tab
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              break;
-            case 1:
-              // Go back to home screen and switch to my tracks tab
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              break;
-            case 2:
-              // Stay in playlists - just go back to playlists list
-              Navigator.of(context).pop();
-              break;
-            case 3:
-              // Go back to home screen and switch to settings tab
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              break;
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite),
-            label: 'My Tracks',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.playlist_play),
-            label: 'Playlists',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddItemDialog,
         child: const Icon(Icons.add),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -516,6 +461,19 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         ],
       ),
     );
+  }
+}
+
+// Content-only version for use with BaseLayout
+class PlaylistDetailContent extends StatelessWidget {
+  final Playlist playlist;
+
+  const PlaylistDetailContent({super.key, required this.playlist});
+
+  @override
+  Widget build(BuildContext context) {
+    // Just return the original screen for now - the BaseLayout will handle the persistent elements
+    return PlaylistDetailScreen(playlist: playlist);
   }
 }
 
@@ -599,3 +557,4 @@ class PlaylistItemTile extends StatelessWidget {
     musicProvider.playTrack(track);
   }
 }
+
