@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../models/music.dart';
-import '../services/api_service.dart';
+import '../services/queue_api_service.dart';
 
 class QueueProvider with ChangeNotifier {
   List<QueueItem> _queue = [];
@@ -25,7 +25,7 @@ class QueueProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.getQueue();
+      final response = await QueueApiService.getQueue();
       if (response.success && response.data != null) {
         _queue = response.data!;
       } else {
@@ -44,7 +44,7 @@ class QueueProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final response = await ApiService.addToQueue(track);
+      final response = await QueueApiService.addToQueue(track);
       if (response.success) {
         // Reload queue to get updated positions
         try {
@@ -73,7 +73,7 @@ class QueueProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final response = await ApiService.removeFromQueue(queueItemId);
+      final response = await QueueApiService.removeFromQueue(queueItemId);
       if (response.success) {
         // Reload queue to get updated positions
         try {
@@ -102,7 +102,7 @@ class QueueProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final response = await ApiService.reorderQueue(queueItemId, newPosition);
+      final response = await QueueApiService.reorderQueue(queueItemId, newPosition);
       if (response.success) {
         // Reload queue to get updated positions
         try {
@@ -131,7 +131,7 @@ class QueueProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final response = await ApiService.clearQueue();
+      final response = await QueueApiService.clearQueue();
       if (response.success) {
         _queue.clear();
         notifyListeners();

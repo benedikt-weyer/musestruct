@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
-import '../services/api_service.dart';
+import '../services/auth_api_service.dart';
 
 class AuthProvider with ChangeNotifier {
   User? _user;
@@ -18,7 +18,7 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final request = LoginRequest(email: email, password: password);
-      final response = await ApiService.login(request);
+      final response = await AuthApiService.login(request);
 
       if (response.success && response.data != null) {
         _user = response.data!.user;
@@ -46,7 +46,7 @@ class AuthProvider with ChangeNotifier {
         username: username,
         password: password,
       );
-      final response = await ApiService.register(request);
+      final response = await AuthApiService.register(request);
 
       if (response.success) {
         // After successful registration, login automatically
@@ -67,7 +67,7 @@ class AuthProvider with ChangeNotifier {
     _setLoading(true);
 
     try {
-      await ApiService.logout();
+      await AuthApiService.logout();
     } catch (e) {
       print('Logout error: $e');
     } finally {
@@ -78,19 +78,19 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> checkAuthStatus() async {
-    final token = await ApiService.getSessionToken();
+    final token = await AuthApiService.getSessionToken();
     if (token != null) {
       _setLoading(true);
       try {
-        final response = await ApiService.getCurrentUser();
+        final response = await AuthApiService.getCurrentUser();
         if (response.success && response.data != null) {
           _user = response.data;
         } else {
           // Token is invalid, clear it
-          await ApiService.clearSessionToken();
+          await AuthApiService.clearSessionToken();
         }
       } catch (e) {
-        await ApiService.clearSessionToken();
+        await AuthApiService.clearSessionToken();
       } finally {
         _setLoading(false);
       }

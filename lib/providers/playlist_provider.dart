@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../models/playlist.dart';
 import '../models/music.dart';
-import '../services/api_service.dart';
+import '../services/playlist_api_service.dart';
+import '../services/music_api_service.dart';
 
 class PlaylistProvider with ChangeNotifier {
   List<Playlist> _playlists = [];
@@ -460,7 +461,7 @@ class PlaylistProvider with ChangeNotifier {
       final newPlaylist = createResponse.data!;
       
       // Fetch tracks from the original playlist
-      final tracksResponse = await PlaylistApiService.getPlaylistTracks(
+      final tracksResponse = await MusicApiService.getPlaylistTracks(
         searchResult.id,
         service: searchResult.source,
         limit: 100, // Get up to 100 tracks

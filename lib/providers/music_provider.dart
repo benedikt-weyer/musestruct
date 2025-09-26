@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../models/music.dart';
 import '../models/api_response.dart';
-import '../services/api_service.dart';
+import '../services/music_api_service.dart';
 import '../services/audio_service.dart';
 import '../services/app_config_service.dart';
 import 'queue_provider.dart';
@@ -165,7 +165,7 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> _loadAvailableServices() async {
     try {
-      final response = await ApiService.getAvailableServices();
+      final response = await MusicApiService.getAvailableServices();
       if (response.success && response.data != null) {
         _availableServices = response.data!;
         notifyListeners();
@@ -224,14 +224,14 @@ class MusicProvider with ChangeNotifier {
       
       if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
         // Multi-service search
-        response = await ApiService.searchMusic(
+        response = await MusicApiService.searchMusic(
           query, 
           limit: 20,
           services: _selectedServices,
         );
       } else {
         // Single service search
-        response = await ApiService.searchMusic(
+        response = await MusicApiService.searchMusic(
           query, 
           limit: 20,
           service: _selectedService,
@@ -264,7 +264,7 @@ class MusicProvider with ChangeNotifier {
       if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
         // Multi-service search
         print('MusicProvider: Using multi-service playlist search with: $_selectedServices');
-        response = await ApiService.searchPlaylists(
+        response = await MusicApiService.searchPlaylists(
           query, 
           limit: 20,
           services: _selectedServices,
@@ -272,7 +272,7 @@ class MusicProvider with ChangeNotifier {
       } else {
         // Single service search
         print('MusicProvider: Using single-service playlist search with: $_selectedService');
-        response = await ApiService.searchPlaylists(
+        response = await MusicApiService.searchPlaylists(
           query, 
           limit: 20,
           service: _selectedService,
@@ -343,7 +343,7 @@ class MusicProvider with ChangeNotifier {
       print('MusicProvider: Getting stream URL for ${track.title}...');
       
       // First get the original stream URL
-      final originalResponse = await ApiService.getStreamUrl(
+      final originalResponse = await MusicApiService.getStreamUrl(
         track.id,
         service: track.source,
       );
@@ -355,7 +355,7 @@ class MusicProvider with ChangeNotifier {
       print('MusicProvider: Original stream URL obtained, preparing backend cache...');
       
       // Now get the backend stream URL (this may take time for caching)
-      final backendResponse = await ApiService.getBackendStreamUrl(
+      final backendResponse = await MusicApiService.getBackendStreamUrl(
         track.id,
         track.source,
         originalResponse.data!,

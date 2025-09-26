@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../services/api_service.dart';
+import '../services/music_api_service.dart';
 
 class StreamingProvider with ChangeNotifier {
   List<ConnectedServiceInfo> _services = [];
@@ -28,7 +28,7 @@ class StreamingProvider with ChangeNotifier {
     _clearError();
 
     try {
-      final response = await ApiService.getServiceStatus();
+      final response = await MusicApiService.getServiceStatus();
       
       if (response.success && response.data != null) {
         _services = response.data!.services;
@@ -47,7 +47,7 @@ class StreamingProvider with ChangeNotifier {
     _clearError();
 
     try {
-      final response = await ApiService.disconnectService(serviceName);
+      final response = await MusicApiService.disconnectService(serviceName);
       
       if (response.success) {
         // Update local state

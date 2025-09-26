@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/music.dart';
-import '../services/api_service.dart';
+import '../services/saved_tracks_api_service.dart';
 
 class SavedTracksProvider with ChangeNotifier {
   List<SavedTrack> _savedTracks = [];
@@ -23,7 +23,7 @@ class SavedTracksProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.getSavedTracks(page: page, limit: limit);
+      final response = await SavedTracksApiService.getSavedTracks(page: page, limit: limit);
       
       if (response.success && response.data != null) {
         if (page == 1) {
@@ -46,7 +46,7 @@ class SavedTracksProvider with ChangeNotifier {
   Future<bool> saveTrack(Track track) async {
     try {
       final request = SaveTrackRequest.fromTrack(track);
-      final response = await ApiService.saveTrack(request);
+      final response = await SavedTracksApiService.saveTrack(request);
       
       if (response.success && response.data != null) {
         _savedTracks.insert(0, response.data!);
@@ -67,7 +67,7 @@ class SavedTracksProvider with ChangeNotifier {
 
   Future<bool> removeSavedTrack(String savedTrackId, String trackId, String source) async {
     try {
-      final response = await ApiService.removeSavedTrack(savedTrackId);
+      final response = await SavedTracksApiService.removeSavedTrack(savedTrackId);
       
       if (response.success) {
         _savedTracks.removeWhere((track) => track.id == savedTrackId);
@@ -88,7 +88,7 @@ class SavedTracksProvider with ChangeNotifier {
 
   Future<void> checkTrackSavedStatus(String trackId, String source) async {
     try {
-      final response = await ApiService.isTrackSaved(trackId, source);
+      final response = await SavedTracksApiService.isTrackSaved(trackId, source);
       
       if (response.success && response.data != null) {
         _trackSavedStatus['${trackId}_$source'] = response.data!;

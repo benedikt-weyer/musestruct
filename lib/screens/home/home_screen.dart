@@ -11,7 +11,8 @@ import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';
 import '../playlists/playlists_screen.dart';
 import '../../widgets/music_player_bar.dart';
-import '../../services/api_service.dart';
+import '../../services/music_api_service.dart';
+import '../../services/spotify_api_service.dart';
 import '../../services/app_config_service.dart';
 import '../../widgets/copyable_error.dart';
 
@@ -671,7 +672,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
               
               try {
-                final response = await ApiService.connectQobuz(username, password);
+                final response = await MusicApiService.connectQobuz(username, password);
                 
                 scaffoldMessenger.hideCurrentSnackBar();
                 
@@ -735,7 +736,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       // Get Spotify authorization URL
-      final response = await ApiService.getSpotifyAuthUrl();
+      final response = await SpotifyApiService.getSpotifyAuthUrl();
       
       // Close loading dialog
       Navigator.of(context).pop();
