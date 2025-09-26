@@ -102,27 +102,29 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       builder: (context, authProvider, child) {
         if (authProvider.isLoading) {
           return const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.music_note,
-                    size: 64,
-                    color: Color(0xFF6366F1),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Musestruct',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+            body: SafeArea(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.music_note,
+                      size: 64,
                       color: Color(0xFF6366F1),
                     ),
-                  ),
-                  SizedBox(height: 32),
-                  CircularProgressIndicator(),
-                ],
+                    SizedBox(height: 16),
+                    Text(
+                      'Musestruct',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    CircularProgressIndicator(),
+                  ],
+                ),
               ),
             ),
           );

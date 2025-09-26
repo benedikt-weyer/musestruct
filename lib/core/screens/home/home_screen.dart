@@ -53,14 +53,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           // Floating status indicator
-          const Positioned(
-            top: 16,
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
             right: 16,
-            child: BackendStatusIndicator(compact: true),
+            child: const BackendStatusIndicator(compact: true),
           ),
           // Floating theme toggle button
           Positioned(
-            top: 16,
+            top: MediaQuery.of(context).padding.top + 16,
             left: 16,
             child: Consumer<ThemeProvider>(
               builder: (context, themeProvider, child) {
