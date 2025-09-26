@@ -3,10 +3,10 @@ import 'dart:async';
 import '../../models/music.dart';
 import '../../models/api_response.dart';
 import '../services/music_api_service.dart';
-import '../../services/audio_service.dart';
-import '../../services/app_config_service.dart';
+import '../../core/services/audio_service.dart';
+import '../../core/services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
-// import '../services/spotify_webview_player.dart'; // Disabled
+// import '../../core/services/spotify_webview_player.dart'; // Disabled
 // import '../../core/widgets/spotify_webview_widget.dart'; // Disabled
 
 class MusicProvider with ChangeNotifier {

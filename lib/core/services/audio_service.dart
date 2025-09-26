@@ -1,6 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
-import '../models/music.dart';
+import '../../models/music.dart';
 import 'dart:async';
 
 class AudioService {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/connectivity_provider.dart';
-import '../../services/connectivity_service.dart';
+import '../services/connectivity_service.dart';
 
 class BackendStatusIndicator extends StatelessWidget {
   final bool showText;

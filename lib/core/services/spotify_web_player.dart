@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/music.dart';
+import '../../models/music.dart';
 
 class SpotifyWebPlayer {
   static final SpotifyWebPlayer _instance = SpotifyWebPlayer._internal();
