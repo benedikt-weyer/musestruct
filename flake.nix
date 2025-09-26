@@ -154,8 +154,8 @@
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
             
             # Rust development aliases
-            alias start-backend="docker-compose up -d postgres && cd backend && cargo watch -x run"
-            alias stop-backend="docker-compose down && echo 'Backend and database stopped'"
+            alias start-backend="docker-compose up -d postgres && cargo watch -C backend -x run"
+            alias stop-backend="pkill -f 'cargo watch' && pkill -f 'cargo run' && docker-compose down && echo 'Backend and database stopped'"
             
             # Android emulator aliases
             alias start-emulator="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu swiftshader_indirect -no-snapshot -wipe-data"
