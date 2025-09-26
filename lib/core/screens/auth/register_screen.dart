@@ -49,6 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Register'),
         backgroundColor: Colors.transparent,
@@ -65,10 +66,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height - 
+                             MediaQuery.of(context).padding.top - 
+                             MediaQuery.of(context).padding.bottom - 
+                             kToolbarHeight - 48, // account for padding and AppBar
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                 // Title
                 Text(
                   'Create Account',
@@ -235,7 +245,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                   child: const Text('Already have an account? Login'),
                 ),
-              ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
