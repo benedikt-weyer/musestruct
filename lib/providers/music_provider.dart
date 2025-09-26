@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../models/music.dart';
 import '../models/api_response.dart';
-import '../services/music_api_service.dart';
+import '../music/services/music_api_service.dart';
 import '../services/audio_service.dart';
 import '../services/app_config_service.dart';
 import 'queue_provider.dart';

@@ -1,8 +1,8 @@
 import 'dart:convert';
-import '../models/api_response.dart';
-import '../models/music.dart';
-import '../providers/queue_provider.dart';
-import 'base_api_service.dart';
+import '../../models/api_response.dart';
+import '../../models/music.dart';
+import '../../providers/queue_provider.dart';
+import '../../core/services/base_api_service.dart';
 
 /// API service for queue management operations
 class QueueApiService extends BaseApiService {

@@ -11,8 +11,8 @@ import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';
 import '../playlists/playlists_screen.dart';
 import '../../widgets/music_player_bar.dart';
-import '../../services/music_api_service.dart';
-import '../../services/spotify_api_service.dart';
+import '../../music/services/music_api_service.dart';
+import '../../music/services/spotify_api_service.dart';
 import '../../services/app_config_service.dart';
 import '../../widgets/copyable_error.dart';
 

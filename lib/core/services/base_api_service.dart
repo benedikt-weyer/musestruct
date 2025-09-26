@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'app_config_service.dart';
+import '../../services/app_config_service.dart';
 
 /// Base API service with shared functionality for all API services
 abstract class BaseApiService {

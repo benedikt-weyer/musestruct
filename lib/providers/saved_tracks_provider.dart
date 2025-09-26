@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/music.dart';
-import '../services/saved_tracks_api_service.dart';
+import '../music/services/saved_tracks_api_service.dart';
 
 class SavedTracksProvider with ChangeNotifier {
   List<SavedTrack> _savedTracks = [];

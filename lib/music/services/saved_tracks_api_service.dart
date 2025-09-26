@@ -1,7 +1,7 @@
 import 'dart:convert';
-import '../models/api_response.dart';
-import '../models/music.dart';
-import 'base_api_service.dart';
+import '../../models/api_response.dart';
+import '../../models/music.dart';
+import '../../core/services/base_api_service.dart';
 
 /// API service for saved tracks operations
 class SavedTracksApiService extends BaseApiService {

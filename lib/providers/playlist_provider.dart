@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../models/playlist.dart';
 import '../models/music.dart';
-import '../services/playlist_api_service.dart';
-import '../services/music_api_service.dart';
+import '../playlists/services/playlist_api_service.dart';
+import '../music/services/music_api_service.dart';
 
 class PlaylistProvider with ChangeNotifier {
   List<Playlist> _playlists = [];
