@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/music.dart';
-import '../providers/playlist_provider.dart';
+import '../playlists/providers/playlist_provider.dart';
 
 class PlaylistSearchTile extends StatelessWidget {
   final PlaylistSearchResult playlist;

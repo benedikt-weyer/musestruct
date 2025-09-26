@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
-import '../models/music.dart';
-import '../models/api_response.dart';
-import '../music/services/music_api_service.dart';
-import '../services/audio_service.dart';
-import '../services/app_config_service.dart';
-import 'queue_provider.dart';
+import '../../models/music.dart';
+import '../../models/api_response.dart';
+import '../services/music_api_service.dart';
+import '../../services/audio_service.dart';
+import '../../services/app_config_service.dart';
+import '../../queue/providers/queue_provider.dart';
 // import '../services/spotify_webview_player.dart'; // Disabled
 // import '../widgets/spotify_webview_widget.dart'; // Disabled
 

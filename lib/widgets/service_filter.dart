@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/music_provider.dart';
-import '../providers/streaming_provider.dart';
+import '../music/providers/music_provider.dart';
+import '../music/providers/streaming_provider.dart';
 
 class ServiceFilter extends StatelessWidget {
   const ServiceFilter({super.key});

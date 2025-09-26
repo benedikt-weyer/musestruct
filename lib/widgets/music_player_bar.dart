@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/music_provider.dart';
-import '../providers/saved_tracks_provider.dart';
-import '../providers/queue_provider.dart';
+import '../music/providers/music_provider.dart';
+import '../music/providers/saved_tracks_provider.dart';
+import '../queue/providers/queue_provider.dart';
 import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 

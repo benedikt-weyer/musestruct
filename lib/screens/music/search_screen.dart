@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/music_provider.dart';
+import '../../music/providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/backend_status_indicator.dart';

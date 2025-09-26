@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../music/services/music_api_service.dart';
+import '../services/music_api_service.dart';
 
 class StreamingProvider with ChangeNotifier {
   List<ConnectedServiceInfo> _services = [];

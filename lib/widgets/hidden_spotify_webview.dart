@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/streaming_provider.dart';
+import '../music/providers/streaming_provider.dart';
 import 'spotify_webview_widget.dart';
 
 class HiddenSpotifyWebView extends StatefulWidget {

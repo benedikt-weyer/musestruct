@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/music_provider.dart';
-import '../../providers/streaming_provider.dart';
-import '../../providers/connectivity_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../music/providers/music_provider.dart';
+import '../../music/providers/streaming_provider.dart';
+import '../../core/providers/connectivity_provider.dart';
+import '../../core/providers/theme_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';

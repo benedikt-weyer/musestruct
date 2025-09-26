@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/music.dart';
-import '../providers/saved_tracks_provider.dart';
-import '../providers/queue_provider.dart';
+import '../music/providers/saved_tracks_provider.dart';
+import '../queue/providers/queue_provider.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 
 class TrackTile extends StatelessWidget {
