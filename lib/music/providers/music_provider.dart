@@ -7,7 +7,7 @@ import '../../services/audio_service.dart';
 import '../../services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
 // import '../services/spotify_webview_player.dart'; // Disabled
-// import '../widgets/spotify_webview_widget.dart'; // Disabled
+// import '../../core/widgets/spotify_webview_widget.dart'; // Disabled
 
 class MusicProvider with ChangeNotifier {
   final AudioService _audioService = AudioService();

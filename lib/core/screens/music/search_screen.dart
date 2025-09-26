@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../music/providers/music_provider.dart';
+import '../../../music/providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
-import '../../models/music.dart';
+import '../../../models/music.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});

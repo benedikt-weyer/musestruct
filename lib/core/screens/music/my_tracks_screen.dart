@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../music/providers/saved_tracks_provider.dart';
-import '../../music/providers/music_provider.dart';
+import '../../../music/providers/saved_tracks_provider.dart';
+import '../../../music/providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 
 class MyTracksScreen extends StatefulWidget {

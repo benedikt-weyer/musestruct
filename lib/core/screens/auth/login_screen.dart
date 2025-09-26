@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../auth/providers/auth_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
-import '../../services/app_config_service.dart';
+import '../../../services/app_config_service.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {

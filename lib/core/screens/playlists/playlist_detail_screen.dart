@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../playlists/providers/playlist_provider.dart';
-import '../../music/providers/music_provider.dart';
-import '../../queue/providers/queue_provider.dart';
-import '../../models/playlist.dart';
-import '../../models/music.dart';
+import '../../../playlists/providers/playlist_provider.dart';
+import '../../../music/providers/music_provider.dart';
+import '../../../queue/providers/queue_provider.dart';
+import '../../../models/playlist.dart';
+import '../../../models/music.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/music_player_bar.dart';
 import 'add_to_playlist_dialog.dart';
