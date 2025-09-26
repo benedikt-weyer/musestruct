@@ -66,7 +66,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -96,7 +96,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   Icons.music_note,
                                   color: _searchType == SearchType.tracks
                                       ? Colors.white
-                                      : Colors.grey[600],
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -105,7 +105,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   style: TextStyle(
                                     color: _searchType == SearchType.tracks
                                         ? Colors.white
-                                        : Colors.grey[600],
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -139,7 +139,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   Icons.queue_music,
                                   color: _searchType == SearchType.playlists
                                       ? Colors.white
-                                      : Colors.grey[600],
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -148,7 +148,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   style: TextStyle(
                                     color: _searchType == SearchType.playlists
                                         ? Colors.white
-                                        : Colors.grey[600],
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -183,8 +183,6 @@ class _SearchScreenState extends State<SearchScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    filled: true,
-                    fillColor: Colors.grey[100],
                   ),
                   onSubmitted: _performSearch,
                   onChanged: (value) {
