@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../../models/api_response.dart';
+import '../../core/models/api_response.dart';
 import '../../core/services/base_api_service.dart';
 
 /// API service for Spotify-specific operations

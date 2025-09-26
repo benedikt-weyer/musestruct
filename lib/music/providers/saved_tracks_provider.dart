@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../../models/music.dart';
+import '../models/music.dart';
 import '../services/saved_tracks_api_service.dart';
 
 class SavedTracksProvider with ChangeNotifier {

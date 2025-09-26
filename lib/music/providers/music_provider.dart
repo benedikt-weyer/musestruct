@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
-import '../../models/music.dart';
-import '../../models/api_response.dart';
+import '../models/music.dart';
+import '../../core/models/api_response.dart';
 import '../services/music_api_service.dart';
 import '../../core/services/audio_service.dart';
 import '../../core/services/app_config_service.dart';

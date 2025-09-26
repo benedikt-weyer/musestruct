@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../playlists/providers/playlist_provider.dart';
 import '../../../music/providers/music_provider.dart';
-import '../../../models/playlist.dart';
-import '../../../models/music.dart';
+import '../../../playlists/models/playlist.dart';
+import '../../../music/models/music.dart';
 
 class AddToPlaylistDialog extends StatefulWidget {
   final String playlistId;

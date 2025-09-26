@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../queue/providers/queue_provider.dart';
 import '../../../music/providers/music_provider.dart';
-import '../../../models/music.dart';
+import '../../../music/models/music.dart';
 import '../../widgets/track_tile.dart';
 
 class QueueScreen extends StatefulWidget {

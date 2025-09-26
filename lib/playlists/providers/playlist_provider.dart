@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../../models/playlist.dart';
-import '../../models/music.dart';
+import '../models/playlist.dart';
+import '../../music/models/music.dart';
 import '../services/playlist_api_service.dart';
 import '../../music/services/music_api_service.dart';
 

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../../models/music.dart';
+import '../../music/models/music.dart';
 
 class SpotifyWebViewPlayer {
   static final SpotifyWebViewPlayer _instance = SpotifyWebViewPlayer._internal();

@@ -1,6 +1,6 @@
 import 'dart:convert';
-import '../../models/api_response.dart';
-import '../../models/music.dart';
+import '../../core/models/api_response.dart';
+import '../models/music.dart';
 import '../../core/services/base_api_service.dart';
 
 /// API service for music streaming operations

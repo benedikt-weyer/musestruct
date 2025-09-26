@@ -6,7 +6,7 @@ import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
-import '../../../models/music.dart';
+import '../../../music/models/music.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});

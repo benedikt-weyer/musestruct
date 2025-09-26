@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
-import '../../models/music.dart';
+import '../../music/models/music.dart';
 import '../services/queue_api_service.dart';
 
 class QueueProvider with ChangeNotifier {
