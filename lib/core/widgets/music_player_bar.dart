@@ -5,6 +5,7 @@ import '../../music/providers/saved_tracks_provider.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
+import 'expanded_music_player.dart';
 
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
@@ -105,6 +106,12 @@ class MusicPlayerBar extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Row(
                     children: [
+                      // Track info area - tappable on small screens
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _handleTrackInfoTap(context, musicProvider),
+                          child: Row(
+                            children: [
                       // Album art
                       Container(
                         width: 48,
@@ -197,6 +204,10 @@ class MusicPlayerBar extends StatelessWidget {
                               ],
                             ),
                           ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       
@@ -234,13 +245,6 @@ class MusicPlayerBar extends StatelessWidget {
                                           : Icons.play_arrow,
                                       size: 28,
                                     ),
-                            ),
-                            
-                            // Stop button - hide on small screens
-                            if (MediaQuery.of(context).size.width > 500)
-                              IconButton(
-                                onPressed: musicProvider.stopPlayback,
-                                icon: const Icon(Icons.stop, size: 20),
                               ),
                             
                             // Play next track button
@@ -257,53 +261,7 @@ class MusicPlayerBar extends StatelessWidget {
                               },
                             ),
                             
-                            // Queue button
-                            Consumer<QueueProvider>(
-                              builder: (context, queueProvider, child) {
-                                return Stack(
-                                  children: [
-                                    IconButton(
-                                      onPressed: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (context) => const QueueScreen(),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.queue_music, size: 20),
-                                      tooltip: 'Queue (${queueProvider.queueLength})',
-                                    ),
-                                    if (queueProvider.queueLength > 0)
-                                      Positioned(
-                                        right: 6,
-                                        top: 6,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).primaryColor,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 14,
-                                            minHeight: 14,
-                                          ),
-                                          child: Text(
-                                            '${queueProvider.queueLength}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                );
-                              },
-                            ),
-                            
-                            // Save/Remove button
+                            // Save/Remove button (heart)
                             Consumer<SavedTracksProvider>(
                               builder: (context, savedTracksProvider, child) {
                                 final isSaved = savedTracksProvider.isTrackSaved(
@@ -311,7 +269,156 @@ class MusicPlayerBar extends StatelessWidget {
                                   musicProvider.currentTrack!.source
                                 );
                                 return IconButton(
-                                  onPressed: () async {
+                                  onPressed: () => _handleSaveAction(context, musicProvider, savedTracksProvider, isSaved),
+                                  icon: Icon(
+                                    isSaved ? Icons.favorite : Icons.favorite_border,
+                                    color: isSaved ? Colors.red : Colors.grey[600],
+                                    size: 20,
+                                  ),
+                                  tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
+                                );
+                              },
+                            ),
+                            
+                            // More actions menu
+                            _buildMoreActionsMenu(context, musicProvider),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+                                          ),
+                                        );
+                                      },
+    );
+  }
+
+  Widget _buildMoreActionsMenu(BuildContext context, MusicProvider musicProvider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isLargeScreen = screenWidth >= 600;
+    
+    // Only show menu on large screens, small screens use the expandable player
+    if (!isLargeScreen) {
+      return const SizedBox.shrink();
+    }
+    
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 20),
+      onSelected: (value) => _handleMenuAction(context, value, musicProvider),
+      itemBuilder: (context) => [
+        const PopupMenuItem<String>(
+          value: 'stop',
+          child: Row(
+            children: [
+              Icon(Icons.stop, size: 20),
+              SizedBox(width: 8),
+              Text('Stop'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'queue',
+          child: Consumer<QueueProvider>(
+            builder: (context, queueProvider, child) {
+              return Row(
+                children: [
+                  Stack(
+                    children: [
+                      const Icon(Icons.queue_music, size: 20),
+                                    if (queueProvider.queueLength > 0)
+                                      Positioned(
+                          right: 0,
+                          top: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor,
+                              borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          constraints: const BoxConstraints(
+                              minWidth: 12,
+                              minHeight: 12,
+                                          ),
+                                          child: Text(
+                                            '${queueProvider.queueLength}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  Text('View Queue${queueProvider.queueLength > 0 ? ' (${queueProvider.queueLength})' : ''}'),
+                                  ],
+                                );
+                              },
+                            ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'playlist',
+          child: Row(
+            children: [
+              Icon(Icons.playlist_add, size: 20),
+              SizedBox(width: 8),
+              Text('Add to Playlist'),
+            ],
+          ),
+        ),
+      ],
+      tooltip: 'More actions',
+    );
+  }
+
+  void _handleTrackInfoTap(BuildContext context, MusicProvider musicProvider) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
+    // Only expand on small screens
+    if (isSmallScreen) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => ExpandedMusicPlayer(musicProvider: musicProvider),
+      );
+    }
+  }
+
+  void _handleMenuAction(BuildContext context, String action, MusicProvider musicProvider) {
+    switch (action) {
+      case 'stop':
+        musicProvider.stopPlayback();
+        break;
+      case 'queue':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const QueueScreen(),
+          ),
+        );
+        break;
+      case 'playlist':
+        showDialog(
+          context: context,
+          builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
+        );
+        break;
+    }
+  }
+
+  Future<void> _handleSaveAction(
+    BuildContext context,
+    MusicProvider musicProvider,
+    SavedTracksProvider savedTracksProvider,
+    bool isSaved,
+  ) async {
                                     if (isSaved) {
                                       // Find the saved track to remove
                                       final savedTrack = savedTracksProvider.savedTracks
@@ -348,41 +455,6 @@ class MusicPlayerBar extends StatelessWidget {
                                         );
                                       }
                                     }
-                                  },
-                                  icon: Icon(
-                                    isSaved ? Icons.favorite : Icons.favorite_border,
-                                    color: isSaved ? Colors.red : Colors.grey[600],
-                                    size: 20,
-                                  ),
-                                  tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',
-                                );
-                              },
-                            ),
-                            
-                            // Add to playlist button - hide on very small screens
-                            if (MediaQuery.of(context).size.width > 400)
-                              IconButton(
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
-                                  );
-                                },
-                                icon: const Icon(Icons.playlist_add, size: 20),
-                                tooltip: 'Add to playlist',
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
   String _formatDuration(Duration duration) {
@@ -391,3 +463,4 @@ class MusicPlayerBar extends StatelessWidget {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 }
+
