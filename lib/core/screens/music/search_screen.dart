@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../music/providers/music_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/playlist_search_tile.dart';
-import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
 import '../../../music/models/music.dart';
@@ -52,12 +51,6 @@ class _SearchScreenState extends State<SearchScreen> {
         title: const Text('Search Music'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16.0),
-            child: BackendStatusIndicator(compact: true),
-          ),
-        ],
       ),
       body: Column(
         children: [

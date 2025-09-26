@@ -52,27 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          // Floating status indicator
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            right: 16,
-            child: const BackendStatusIndicator(compact: true),
-          ),
-          // Floating theme toggle button
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            left: 16,
-            child: Consumer<ThemeProvider>(
-              builder: (context, themeProvider, child) {
-                return FloatingActionButton.small(
-                  onPressed: () => themeProvider.toggleTheme(),
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
-                  child: Icon(themeProvider.themeModeIcon),
-                );
-              },
-            ),
-          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

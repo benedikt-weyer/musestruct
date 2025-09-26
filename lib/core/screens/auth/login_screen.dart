@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 import '../../services/app_config_service.dart';
 import 'register_screen.dart';
@@ -79,12 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                // Backend status at the top
-                const Align(
-                  alignment: Alignment.topRight,
-                  child: BackendStatusIndicator(compact: true),
-                ),
-                const SizedBox(height: 16),
                 // Logo and title
                 Icon(
                   Icons.music_note,

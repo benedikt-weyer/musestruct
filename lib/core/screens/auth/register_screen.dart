@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../widgets/backend_status_indicator.dart';
 import '../../widgets/copyable_error.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -54,12 +53,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         title: const Text('Register'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16.0),
-            child: BackendStatusIndicator(compact: true),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Padding(
