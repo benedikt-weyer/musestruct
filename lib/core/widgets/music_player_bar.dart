@@ -10,7 +10,7 @@ import 'expanded_music_player.dart';
 class MusicPlayerBar extends StatelessWidget {
   const MusicPlayerBar({super.key});
 
-  Color _getSourceColor(String source) {
+  Color _getSourceColor(String source, BuildContext context) {
     switch (source.toLowerCase()) {
       case 'qobuz':
         return const Color(0xFF00D4AA); // Qobuz green
@@ -25,7 +25,7 @@ class MusicPlayerBar extends StatelessWidget {
       case 'deezer':
         return const Color(0xFF00C7B7); // Deezer cyan
       default:
-        return Colors.grey[600]!;
+        return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 
@@ -88,16 +88,47 @@ class MusicPlayerBar extends StatelessWidget {
                   cursor: musicProvider.audioService.isSeekSupported 
                       ? SystemMouseCursors.click 
                       : SystemMouseCursors.forbidden,
-                  child: LinearProgressIndicator(
-                    value: musicProvider.duration.inMilliseconds > 0
-                        ? musicProvider.position.inMilliseconds / 
-                          musicProvider.duration.inMilliseconds
-                        : 0,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).primaryColor,
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(3),
+                        bottomRight: Radius.circular(3),
+                      ),
                     ),
-                    minHeight: 6,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(3),
+                        bottomRight: Radius.circular(3),
+                      ),
+                      child: Stack(
+                        children: [
+                          // Progress bar
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: musicProvider.duration.inMilliseconds > 0
+                                  ? (musicProvider.position.inMilliseconds / 
+                                    musicProvider.duration.inMilliseconds).clamp(0.0, 1.0)
+                                  : 0.0,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark 
+                                      ? Colors.white 
+                                      : Theme.of(context).primaryColor,
+                                  borderRadius: const BorderRadius.only(
+                                    topRight: Radius.circular(3),
+                                    bottomRight: Radius.circular(3),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -131,14 +162,14 @@ class MusicPlayerBar extends StatelessWidget {
                                   errorBuilder: (context, error, stackTrace) {
                                     return Icon(
                                       Icons.music_note,
-                                      color: Colors.grey[600],
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     );
                                   },
                                 ),
                               )
                             : Icon(
                                 Icons.music_note,
-                                color: Colors.grey[600],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                       ),
                       const SizedBox(width: 12),
@@ -161,7 +192,7 @@ class MusicPlayerBar extends StatelessWidget {
                             Text(
                               track.artist,
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontSize: 12,
                               ),
                               maxLines: 1,
@@ -174,17 +205,17 @@ class MusicPlayerBar extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: _getSourceColor(track.source).withOpacity(0.1),
+                                    color: _getSourceColor(track.source, context).withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
-                                      color: _getSourceColor(track.source).withOpacity(0.3),
+                                      color: _getSourceColor(track.source, context).withOpacity(0.3),
                                       width: 0.5,
                                     ),
                                   ),
                                   child: Text(
                                     track.formattedSource,
                                     style: TextStyle(
-                                      color: _getSourceColor(track.source),
+                                      color: _getSourceColor(track.source, context),
                                       fontSize: 9,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -223,7 +254,7 @@ class MusicPlayerBar extends StatelessWidget {
                               Text(
                                 '${_formatDuration(musicProvider.position)} / ${_formatDuration(musicProvider.duration)}',
                                 style: TextStyle(
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontSize: 12,
                                 ),
                               ),
@@ -274,7 +305,7 @@ class MusicPlayerBar extends StatelessWidget {
                                   onPressed: () => _handleSaveAction(context, musicProvider, savedTracksProvider, isSaved),
                                   icon: Icon(
                                     isSaved ? Icons.favorite : Icons.favorite_border,
-                                    color: isSaved ? Colors.red : Colors.grey[600],
+                                    color: isSaved ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
                                     size: 20,
                                   ),
                                   tooltip: isSaved ? 'Remove from saved tracks' : 'Add to saved tracks',

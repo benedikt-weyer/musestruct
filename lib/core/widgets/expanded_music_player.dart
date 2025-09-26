@@ -11,7 +11,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
 
   const ExpandedMusicPlayer({super.key, required this.musicProvider});
 
-  Color _getSourceColor(String source) {
+  Color _getSourceColor(String source, BuildContext context) {
     switch (source.toLowerCase()) {
       case 'qobuz':
         return const Color(0xFF00D4AA);
@@ -26,7 +26,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
       case 'deezer':
         return const Color(0xFF00C7B7);
       default:
-        return Colors.grey[600]!;
+        return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 
@@ -64,7 +64,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                 height: 4,
                 margin: const EdgeInsets.only(top: 12, bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.grey[400],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -131,7 +131,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                       return Icon(
                                         Icons.music_note,
                                         size: 120,
-                                        color: Colors.grey[600],
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       );
                                     },
                                   ),
@@ -139,7 +139,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                               : Icon(
                                   Icons.music_note,
                                   size: 120,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                         );
                       },
@@ -165,7 +165,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                             track.artist,
                             style: TextStyle(
                               fontSize: 18,
-                              color: Colors.grey[600],
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             textAlign: TextAlign.center,
                             maxLines: 1,
@@ -189,7 +189,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                   albumOrPlaylist,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.grey[500],
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
                                   ),
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
@@ -212,11 +212,13 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   color: _getSourceColor(
                                     track.source,
+                                    context,
                                   ).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
                                     color: _getSourceColor(
                                       track.source,
+                                      context,
                                     ).withOpacity(0.3),
                                     width: 1,
                                   ),
@@ -224,7 +226,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                 child: Text(
                                   track.formattedSource,
                                   style: TextStyle(
-                                    color: _getSourceColor(track.source),
+                                    color: _getSourceColor(track.source, context),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -291,24 +293,40 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                 }
                               }
                             },
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 6,
-                                ),
-                                trackHeight: 4,
+                            child: Container(
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(2),
                               ),
-                              child: Slider(
-                                value: musicProvider.duration.inMilliseconds > 0
-                                    ? (musicProvider.position.inMilliseconds /
-                                              musicProvider
-                                                  .duration
-                                                  .inMilliseconds)
-                                          .clamp(0.0, 1.0)
-                                    : 0,
-                                onChanged: null, // Handled by gesture detector
-                                activeColor: Theme.of(context).primaryColor,
-                                inactiveColor: Colors.grey[300],
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: Stack(
+                                  children: [
+                                    // Progress bar
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: FractionallySizedBox(
+                                        widthFactor: musicProvider.duration.inMilliseconds > 0
+                                            ? (musicProvider.position.inMilliseconds /
+                                              musicProvider.duration.inMilliseconds).clamp(0.0, 1.0)
+                                            : 0.0,
+                                        child: Container(
+                                          height: 4,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).brightness == Brightness.dark 
+                                                ? Colors.white 
+                                                : Theme.of(context).primaryColor,
+                                            borderRadius: const BorderRadius.only(
+                                              topRight: Radius.circular(2),
+                                              bottomRight: Radius.circular(2),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -318,14 +336,14 @@ class ExpandedMusicPlayer extends StatelessWidget {
                               Text(
                                 _formatDuration(musicProvider.position),
                                 style: TextStyle(
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontSize: 14,
                                 ),
                               ),
                               Text(
                                 _formatDuration(musicProvider.duration),
                                 style: TextStyle(
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   fontSize: 14,
                                 ),
                               ),
@@ -472,7 +490,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                     'Queue',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[600],
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -503,7 +521,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                           : Icons.favorite_border,
                                       color: isSaved
                                           ? Colors.red
-                                          : Colors.grey[600],
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
                                       size: 28,
                                     ),
                                   ),
@@ -511,7 +529,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                     isSaved ? 'Saved' : 'Save',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[600],
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -537,7 +555,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                 'Playlist',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
