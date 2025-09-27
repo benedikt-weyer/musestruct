@@ -54,11 +54,7 @@ class ServiceFilter extends StatelessWidget {
             .map((service) => service.name)
             .toList();
 
-        // Debug logging
-        print('ServiceFilter: Total services: ${streamingProvider.services.length}');
-        print('ServiceFilter: Connected services: $connectedServices');
-        print('ServiceFilter: StreamingProvider loading: ${streamingProvider.isLoading}');
-        print('ServiceFilter: StreamingProvider error: ${streamingProvider.error}');
+        // Debug logging removed to prevent console spam
 
         if (connectedServices.isEmpty) {
           return Container(

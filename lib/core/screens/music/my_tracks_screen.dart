@@ -122,7 +122,7 @@ class _MyTracksScreenState extends State<MyTracksScreen> {
                     track: track,
                     onTap: () async {
                       try {
-                        await context.read<MusicProvider>().playTrack(track);
+                        await context.read<MusicProvider>().playTrack(track); // Default clears queue
                         
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

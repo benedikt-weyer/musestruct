@@ -337,7 +337,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             return TrackTile(
                               track: track,
                               onTap: () {
-                                musicProvider.playTrack(track);
+                                musicProvider.playTrack(track); // Default clears queue
                               },
                               showPlaylistButton: true,
                             );

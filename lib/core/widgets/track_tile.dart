@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../music/models/music.dart';
 import '../../music/providers/saved_tracks_provider.dart';
+import '../../music/providers/music_provider.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 
@@ -102,11 +103,14 @@ class TrackTile extends StatelessWidget {
         children: actions,
       );
     } else {
-      // On larger screens, show all action buttons
+      // On larger screens, show all action buttons plus menu for play options
       if (showQueueButton) actions.add(_buildQueueButton(context));
       if (showSaveButton) actions.add(_buildSaveButton(context));
       if (showPlaylistButton) actions.add(_buildPlaylistButton(context));
       if (showRemoveButton) actions.add(_buildRemoveButton(context));
+      
+      // Always add menu button for play options
+      actions.add(_buildMenuButton(context));
       
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -116,28 +120,94 @@ class TrackTile extends StatelessWidget {
   }
 
   Widget _buildMenuButton(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrowScreen = screenWidth < 600;
     final menuItems = <PopupMenuEntry<String>>[];
     
-    if (showQueueButton) {
-      menuItems.add(
-        PopupMenuItem<String>(
-          value: 'queue',
-          child: Row(
-            children: [
-              Icon(
-                Icons.queue_music, 
-                size: 20,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8),
-              const Text('Add to Queue'),
-            ],
-          ),
+    // Always add play options
+    menuItems.add(
+      PopupMenuItem<String>(
+        value: 'play_clear_queue',
+        child: Row(
+          children: [
+            Icon(
+              Icons.play_arrow, 
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 8),
+            const Text('Play Now (Clear Queue)'),
+          ],
         ),
-      );
+      ),
+    );
+    
+    menuItems.add(
+      PopupMenuItem<String>(
+        value: 'play_keep_queue',
+        child: Row(
+          children: [
+            Icon(
+              Icons.play_arrow, 
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 8),
+            const Text('Play Now (Keep Queue)'),
+          ],
+        ),
+      ),
+    );
+    
+    // On narrow screens, include all options in menu
+    // On larger screens, only include options that don't have dedicated buttons
+    if (isNarrowScreen) {
+      if (showQueueButton) {
+        menuItems.add(const PopupMenuDivider());
+        menuItems.add(
+          PopupMenuItem<String>(
+            value: 'queue',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.queue_music, 
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                const SizedBox(width: 8),
+                const Text('Add to Queue'),
+              ],
+            ),
+          ),
+        );
+      }
+    } else {
+      // On larger screens, queue button is separate, so don't duplicate it in menu
+      // Only show queue option if the button is not shown
+      if (showQueueButton == false) {
+        menuItems.add(const PopupMenuDivider());
+        menuItems.add(
+          PopupMenuItem<String>(
+            value: 'queue',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.queue_music, 
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                const SizedBox(width: 8),
+                const Text('Add to Queue'),
+              ],
+            ),
+          ),
+        );
+      }
     }
     
-    if (showSaveButton) {
+    // Handle save button - add to menu on narrow screens only (on larger screens it has its own button)
+    if (showSaveButton && isNarrowScreen) {
+      if (menuItems.isNotEmpty) menuItems.add(const PopupMenuDivider());
       menuItems.add(
         PopupMenuItem<String>(
           value: 'save',
@@ -161,7 +231,9 @@ class TrackTile extends StatelessWidget {
       );
     }
     
-    if (showPlaylistButton) {
+    // Handle playlist button - add to menu on narrow screens only (on larger screens it has its own button)
+    if (showPlaylistButton && isNarrowScreen) {
+      if (menuItems.isNotEmpty) menuItems.add(const PopupMenuDivider());
       menuItems.add(
         PopupMenuItem<String>(
           value: 'playlist',
@@ -180,7 +252,9 @@ class TrackTile extends StatelessWidget {
       );
     }
     
+    // Handle remove button - always in menu when shown
     if (showRemoveButton) {
+      if (menuItems.isNotEmpty) menuItems.add(const PopupMenuDivider());
       menuItems.add(
         const PopupMenuItem<String>(
           value: 'remove',
@@ -212,6 +286,12 @@ class TrackTile extends StatelessWidget {
 
   void _handleMenuAction(BuildContext context, String action) {
     switch (action) {
+      case 'play_clear_queue':
+        _handlePlayAction(context, clearQueue: true);
+        break;
+      case 'play_keep_queue':
+        _handlePlayAction(context, clearQueue: false);
+        break;
       case 'queue':
         _handleQueueAction(context);
         break;
@@ -288,6 +368,39 @@ class TrackTile extends StatelessWidget {
       padding: EdgeInsets.zero,
       iconSize: 20,
     );
+  }
+
+  Future<void> _handlePlayAction(BuildContext context, {required bool clearQueue}) async {
+    final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+    try {
+      await musicProvider.playTrack(track, clearQueue: clearQueue);
+      
+      if (context.mounted) {
+        final message = clearQueue 
+            ? 'Playing "${track.title}"'
+            : 'Playing "${track.title}" (queue kept)';
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to play track: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleQueueAction(BuildContext context) async {

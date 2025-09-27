@@ -405,11 +405,17 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  Future<void> playTrack(Track track) async {
+  Future<void> playTrack(Track track, {bool clearQueue = true}) async {
     try {
       _isLoading = true;
       _currentTrack = track;
       notifyListeners();
+
+      // Clear queue if requested (default behavior)
+      if (clearQueue && _queueProvider != null) {
+        await _queueProvider!.clearQueue();
+        _queueProvider!.clearPlaylistQueue();
+      }
 
       // Get stream URL
       
