@@ -154,16 +154,16 @@
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
             
             # Rust development aliases
-            alias start-backend="docker-compose up -d postgres && cargo watch -C backend -x run"
-            alias stop-backend="pkill -f 'cargo watch' && pkill -f 'cargo run' && docker-compose down && echo 'Backend and database stopped'"
+            alias start-backend="./scripts/start-backend.sh"
+            alias stop-backend="./scripts/stop-backend.sh"
             
             # Android emulator aliases
-            alias start-emulator="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu swiftshader_indirect -no-snapshot -wipe-data"
-            alias start-emulator-software="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu off -no-snapshot"
-            alias start-emulator-headless="$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_36 -gpu off -no-window -no-snapshot"
-            alias list-emulators="$ANDROID_HOME/emulator/emulator -list-avds"
-            alias create-emulator="avdmanager create avd -n Pixel_7_API_36 -k 'system-images;android-36;google_apis;x86_64' -d 'pixel_7'"
-            alias delete-emulator="$avdmanager delete avd -n Pixel_7_API_36"
+            alias start-emulator="./scripts/start-emulator.sh"
+            alias start-emulator-software="./scripts/start-emulator-software.sh"
+            alias start-emulator-headless="./scripts/start-emulator-headless.sh"
+            alias list-emulators="./scripts/list-emulators.sh"
+            alias create-emulator="./scripts/create-emulator.sh"
+            alias delete-emulator="./scripts/delete-emulator.sh"
             
             echo "🚀 Flutter development environment activated!"
             echo ""
