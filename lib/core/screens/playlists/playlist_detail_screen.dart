@@ -6,7 +6,6 @@ import '../../../queue/providers/queue_provider.dart';
 import '../../../playlists/models/playlist.dart';
 import '../../../music/models/music.dart';
 import '../../widgets/track_tile.dart';
-import '../../widgets/music_player_bar.dart';
 import 'add_to_playlist_dialog.dart';
 import 'create_playlist_dialog.dart';
 
@@ -31,7 +30,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     });
   }
 
-  Future<void> _playPlaylist(PlayMode playMode) async {
+  Future<void> _playPlaylist(PlayMode playMode, {bool clearQueue = true}) async {
     try {
       final playlistProvider = context.read<PlaylistProvider>();
       final queueProvider = context.read<QueueProvider>();
@@ -65,6 +64,12 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           );
         }
         return;
+      }
+
+      // Clear queue if requested (default behavior for main play buttons)
+      if (clearQueue) {
+        await queueProvider.clearQueue();
+        queueProvider.clearPlaylistQueue();
       }
 
       // Create track order based on play mode
@@ -115,13 +120,20 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       }
 
       if (context.mounted) {
+        String message;
+        if (success) {
+          if (clearQueue) {
+            message = playMode == PlayMode.shuffle ? 'Shuffling playlist' : 'Playing playlist';
+          } else {
+            message = playMode == PlayMode.shuffle ? 'Shuffling playlist (queue kept)' : 'Playing playlist (queue kept)';
+          }
+        } else {
+          message = 'Failed to add playlist to queue';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              success 
-                ? 'Playing playlist'
-                : 'Failed to add playlist to queue',
-            ),
+            content: Text(message),
             backgroundColor: success ? Colors.green : Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -132,6 +144,91 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error playing playlist: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _addPlaylistToQueue(PlayMode playMode) async {
+    try {
+      final playlistProvider = context.read<PlaylistProvider>();
+      final queueProvider = context.read<QueueProvider>();
+      
+      if (playlistProvider.currentPlaylistItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist is empty'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get track items and add them individually to the queue
+      final trackItems = playlistProvider.currentPlaylistItems
+          .where((item) => !item.isPlaylist)
+          .toList();
+
+      if (trackItems.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Playlist contains no tracks'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Create track list and shuffle if needed
+      List<dynamic> tracksToAdd = List.from(trackItems);
+      if (playMode == PlayMode.shuffle) {
+        tracksToAdd.shuffle();
+      }
+
+      // Add each track to the queue
+      int successCount = 0;
+      for (final trackItem in tracksToAdd) {
+        final track = Track(
+          id: trackItem.itemId,
+          title: trackItem.title ?? 'Unknown Title',
+          artist: trackItem.artist ?? 'Unknown Artist',
+          album: trackItem.album ?? 'Unknown Album',
+          duration: trackItem.duration,
+          coverUrl: trackItem.coverUrl,
+          source: trackItem.source ?? 'qobuz',
+        );
+        
+        final success = await queueProvider.addToQueue(track);
+        if (success) successCount++;
+      }
+
+      if (context.mounted) {
+        final message = successCount == tracksToAdd.length
+            ? 'Added ${tracksToAdd.length} tracks to queue'
+            : 'Added $successCount of ${tracksToAdd.length} tracks to queue';
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: successCount > 0 ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding playlist to queue: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -165,6 +262,18 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
+                case 'play_keep_queue':
+                  _playPlaylist(PlayMode.normal, clearQueue: false);
+                  break;
+                case 'shuffle_keep_queue':
+                  _playPlaylist(PlayMode.shuffle, clearQueue: false);
+                  break;
+                case 'add_to_queue':
+                  _addPlaylistToQueue(PlayMode.normal);
+                  break;
+                case 'add_to_queue_shuffle':
+                  _addPlaylistToQueue(PlayMode.shuffle);
+                  break;
                 case 'edit':
                   _showEditDialog();
                   break;
@@ -174,6 +283,48 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'play_keep_queue',
+                child: Row(
+                  children: [
+                    Icon(Icons.play_arrow, size: 20),
+                    SizedBox(width: 8),
+                    Text('Play Now (Keep Queue)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'shuffle_keep_queue',
+                child: Row(
+                  children: [
+                    Icon(Icons.shuffle, size: 20),
+                    SizedBox(width: 8),
+                    Text('Shuffle Now (Keep Queue)'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'add_to_queue',
+                child: Row(
+                  children: [
+                    Icon(Icons.queue_music, size: 20),
+                    SizedBox(width: 8),
+                    Text('Add to Queue'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'add_to_queue_shuffle',
+                child: Row(
+                  children: [
+                    Icon(Icons.queue_music, size: 20),
+                    SizedBox(width: 8),
+                    Text('Add to Queue (Shuffled)'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'edit',
                 child: Row(
