@@ -36,11 +36,8 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
       
-      if (_searchType == SearchType.tracks) {
-        musicProvider.searchMusic(query);
-      } else {
-        musicProvider.searchPlaylists(query);
-      }
+      // Search both tracks and playlists simultaneously
+      musicProvider.searchBoth(query);
     }
   }
 
@@ -77,9 +74,6 @@ class _SearchScreenState extends State<SearchScreen> {
                             setState(() {
                               _searchType = SearchType.tracks;
                             });
-                            if (_searchController.text.isNotEmpty) {
-                              _performSearch(_searchController.text);
-                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -120,9 +114,6 @@ class _SearchScreenState extends State<SearchScreen> {
                             setState(() {
                               _searchType = SearchType.playlists;
                             });
-                            if (_searchController.text.isNotEmpty) {
-                              _performSearch(_searchController.text);
-                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 12),

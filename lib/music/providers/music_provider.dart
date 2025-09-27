@@ -312,6 +312,92 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> searchBoth(String query) async {
+    if (query.trim().isEmpty) return;
+
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      // Perform both searches simultaneously
+      late ApiResponse<SearchResults> musicResponse;
+      late ApiResponse<SearchResults> playlistResponse;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service search
+        final futures = await Future.wait([
+          MusicApiService.searchMusic(
+            query, 
+            limit: 20,
+            services: _selectedServices,
+          ),
+          MusicApiService.searchPlaylists(
+            query, 
+            limit: 20,
+            services: _selectedServices,
+          ),
+        ]);
+        musicResponse = futures[0];
+        playlistResponse = futures[1];
+      } else {
+        // Single service search
+        final futures = await Future.wait([
+          MusicApiService.searchMusic(
+            query, 
+            limit: 20,
+            service: _selectedService,
+          ),
+          MusicApiService.searchPlaylists(
+            query, 
+            limit: 20,
+            service: _selectedService,
+          ),
+        ]);
+        musicResponse = futures[0];
+        playlistResponse = futures[1];
+      }
+      
+      // Combine the results
+      List<Track> tracks = [];
+      List<PlaylistSearchResult> playlists = [];
+      
+      if (musicResponse.success && musicResponse.data != null) {
+        tracks = musicResponse.data!.tracks;
+      }
+      
+      if (playlistResponse.success && playlistResponse.data != null) {
+        playlists = playlistResponse.data!.playlists ?? [];
+      }
+      
+      // Create combined search results
+      _searchResults = SearchResults(
+        tracks: tracks,
+        albums: [], // Not used in current implementation
+        playlists: playlists,
+        total: tracks.length + playlists.length,
+        offset: 0,
+        limit: 20,
+      );
+      
+      print('MusicProvider: Combined search results - ${tracks.length} tracks, ${playlists.length} playlists');
+      
+    } catch (e) {
+      _searchError = 'Combined search failed: $e';
+      _searchResults = SearchResults(
+        tracks: [],
+        albums: [],
+        playlists: [],
+        total: 0,
+        offset: 0,
+        limit: 20,
+      );
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> playTrack(Track track) async {
     try {
       _isLoading = true;
