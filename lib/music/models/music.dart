@@ -102,6 +102,8 @@ class Track {
         return 'YouTube Music';
       case 'deezer':
         return 'Deezer';
+      case 'server':
+        return 'Server';
       default:
         return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
     }
@@ -356,6 +358,8 @@ class PlaylistSearchResult {
         return 'YouTube Music';
       case 'deezer':
         return 'Deezer';
+      case 'server':
+        return 'Server';
       default:
         return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
     }
@@ -438,6 +442,8 @@ class SavedTrack {
         return 'Spotify';
       case 'qobuz':
         return 'Qobuz';
+      case 'server':
+        return 'Server';
       default:
         return source;
     }
@@ -521,6 +527,8 @@ class SavedAlbum {
         return 'YouTube Music';
       case 'deezer':
         return 'Deezer';
+      case 'server':
+        return 'Server';
       default:
         return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
     }

@@ -126,3 +126,5 @@ backend/cache/
 result
 
 .direnv/
+
+backend/own_music/

@@ -1,10 +1,12 @@
 pub mod qobuz;
 pub mod spotify;
+pub mod local;
 pub mod interface;
 
 pub use interface::*;
 pub use qobuz::*;
 pub use spotify::*;
+pub use local::*;
 
 use serde::{Deserialize, Serialize};
 

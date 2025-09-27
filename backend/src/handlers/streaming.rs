@@ -1,14 +1,14 @@
 use axum::{
     extract::{State, Query, Extension, Path},
-    http::StatusCode,
-    response::{Json, Html},
+    http::{StatusCode, HeaderMap, header},
+    response::{Json, Html, Response},
 };
 use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 
-use crate::services::streaming::{QobuzService, SpotifyService, StreamingService, SearchResults, StreamingTrack};
+use crate::services::streaming::{QobuzService, SpotifyService, LocalMusicService, StreamingService, SearchResults, StreamingTrack};
 use crate::services::streaming_service::StreamingService as BackendStreamingService;
 use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
 use crate::handlers::auth::{AppState, ApiResponse};
@@ -45,6 +45,14 @@ fn get_streaming_service(service_name: &str) -> Result<Box<dyn StreamingService>
                 std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default(),
                 std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default(),
             );
+            Ok(Box::new(service))
+        },
+        "server" => {
+            // Create own_music directory path
+            let music_dir = std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("own_music");
+            let service = LocalMusicService::new(music_dir);
             Ok(Box::new(service))
         },
         _ => Err(format!("Unsupported streaming service: {}", service_name)),
@@ -110,6 +118,14 @@ async fn get_authenticated_streaming_service(
             } else {
                 Err("Spotify service not connected for this user. Please connect to Spotify first.".to_string())
             }
+        },
+        "server" => {
+            // Server service doesn't require authentication, just return the service
+            let music_dir = std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("own_music");
+            let service = LocalMusicService::new(music_dir);
+            Ok(Box::new(service))
         },
         _ => Err(format!("Unknown streaming service: {}", service_name)),
     }
@@ -1358,6 +1374,12 @@ pub async fn get_available_services(
             supports_full_tracks: false, // Only 30-second previews via Web API
             requires_premium: false,
         },
+        ServiceInfo {
+            name: "server".to_string(),
+            display_name: "Server".to_string(),
+            supports_full_tracks: true,
+            requires_premium: false,
+        },
     ];
 
     Json(ApiResponse::success(AvailableServicesResponse { services }))
@@ -1430,6 +1452,13 @@ pub async fn get_service_status(
             is_connected: spotify_connected,
             connected_at: spotify_service.as_ref().map(|s| s.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
             account_username: spotify_service.as_ref().and_then(|s| s.account_username.clone()),
+        },
+        ConnectedServiceInfo {
+            name: "server".to_string(),
+            display_name: "Server".to_string(),
+            is_connected: true, // Server is always "connected" as it's local
+            connected_at: None, // No connection time for local server
+            account_username: Some("Local Server".to_string()),
         },
     ];
 
@@ -1512,6 +1541,17 @@ pub async fn get_backend_stream_url(
 ) -> Result<Json<ApiResponse<BackendStreamUrlResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
     debug!("Getting backend stream URL for track {} from {}", query.track_id, query.source);
 
+    // Handle server source differently - don't cache local files
+    if query.source == "server" {
+        // For server tracks, return the URL directly without caching
+        let response = BackendStreamUrlResponse {
+            stream_url: query.url,
+            is_cached: false, // Server files are not cached, they're served directly
+        };
+        return Ok(Json(ApiResponse::success(response)));
+    }
+
+    // For other sources, use the caching streaming service
     match state.streaming_service
         .get_stream_url(&query.track_id, &query.source, &query.url, query.title.as_deref(), query.artist.as_deref())
         .await
@@ -1566,4 +1606,103 @@ pub struct GetPlaylistTracksQuery {
     pub service: Option<String>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+}
+
+// Stream local music files
+pub async fn stream_local_file(
+    axum::extract::Path(file_path_param): axum::extract::Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    use tokio::fs;
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    
+    // Decode the file path (can include subdirectories)
+    let decoded_path = urlencoding::decode(&file_path_param)
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .into_owned();
+    
+    // Create path to the file in own_music directory
+    let music_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("own_music");
+    let file_path = music_dir.join(&decoded_path);
+    
+    // Security check: ensure the file is within the own_music directory
+    if !file_path.starts_with(&music_dir) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    
+    // Check if file exists
+    if !file_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    
+    // Get file metadata
+    let file_metadata = fs::metadata(&file_path).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let file_size = file_metadata.len() as usize;
+    
+    // Parse range header if present
+    let range_header = headers.get(header::RANGE)
+        .and_then(|h| h.to_str().ok());
+    
+    let (start, end) = if let Some(range) = range_header {
+        if let Some((start_str, end_str)) = range.strip_prefix("bytes=").and_then(|r| r.split_once('-')) {
+            let start = start_str.parse::<usize>().unwrap_or(0);
+            let end = if end_str.is_empty() {
+                file_size - 1
+            } else {
+                end_str.parse::<usize>().unwrap_or(file_size - 1).min(file_size - 1)
+            };
+            (start, end)
+        } else {
+            (0, file_size - 1)
+        }
+    } else {
+        (0, file_size - 1)
+    };
+    
+    // Open and read the file
+    let mut file = fs::File::open(&file_path).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Seek to start position
+    file.seek(std::io::SeekFrom::Start(start as u64)).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Read the range
+    let mut buffer = vec![0u8; end - start + 1];
+    let bytes_read = file.read_exact(&mut buffer).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let content = buffer[..bytes_read].to_vec();
+    
+    // Determine content type based on file extension
+    let content_type = match file_path.extension().and_then(|ext| ext.to_str()) {
+        Some("mp3") => "audio/mpeg",
+        Some("flac") => "audio/flac",
+        Some("wav") => "audio/wav",
+        Some("m4a") => "audio/mp4",
+        Some("ogg") => "audio/ogg",
+        _ => "application/octet-stream",
+    };
+    
+    // Create response with proper headers
+    let mut response_builder = Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .header(header::CONTENT_LENGTH, content.len());
+    
+    if range_header.is_some() {
+        response_builder = response_builder
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header(header::CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, file_size));
+    } else {
+        response_builder = response_builder.status(StatusCode::OK);
+    }
+    
+    response_builder
+        .body(content.into())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }

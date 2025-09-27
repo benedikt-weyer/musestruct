@@ -20,7 +20,7 @@ use tracing::{info, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token, get_playlist_tracks};
+use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token, get_playlist_tracks, stream_local_file};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, get_playlist as get_new_playlist, update_playlist, delete_playlist, get_playlist_items, add_playlist_item, remove_playlist_item, reorder_playlist_item};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
@@ -135,6 +135,8 @@ async fn main() -> Result<()> {
         .route("/api/auth/login", post(login))
         .route("/api/streaming/spotify/callback", get(spotify_callback))
         .route("/health", get(health_check))
+        // Local file streaming (public for audio streaming)
+        .route("/api/stream/local/{*file_path}", get(stream_local_file))
         // Streaming service routes (public for audio streaming)
         .merge(StreamingService::router(streaming_service))
         // Merge protected routes

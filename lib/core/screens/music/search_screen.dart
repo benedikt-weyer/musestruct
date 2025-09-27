@@ -62,139 +62,158 @@ class _SearchScreenState extends State<SearchScreen> {
                 const ServiceFilter(),
                 
                 // Search type toggle
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    spacing: 8,
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _searchType = SearchType.tracks;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: _searchType == SearchType.tracks
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.music_note,
+                Consumer<MusicProvider>(
+                  builder: (context, musicProvider, child) {
+                    // Check if server is the only selected service (playlists not supported for server)
+                    final isServerOnly = musicProvider.useMultiServiceSearch 
+                        ? (musicProvider.selectedServices.length == 1 && musicProvider.selectedServices.contains('server'))
+                        : musicProvider.selectedService == 'server';
+                    
+                    // If server is selected and we're on playlists tab, switch to tracks
+                    if (isServerOnly && _searchType == SearchType.playlists) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        setState(() {
+                          _searchType = SearchType.tracks;
+                        });
+                      });
+                    }
+                    
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        spacing: 8,
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _searchType = SearchType.tracks;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
                                   color: _searchType == SearchType.tracks
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  size: 20,
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Tracks',
-                                  style: TextStyle(
-                                    color: _searchType == SearchType.tracks
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.music_note,
+                                      color: _searchType == SearchType.tracks
+                                          ? Colors.white
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Tracks',
+                                      style: TextStyle(
+                                        color: _searchType == SearchType.tracks
+                                            ? Colors.white
+                                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _searchType = SearchType.albums;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: _searchType == SearchType.albums
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.album,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _searchType = SearchType.albums;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
                                   color: _searchType == SearchType.albums
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  size: 20,
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Albums',
-                                  style: TextStyle(
-                                    color: _searchType == SearchType.albums
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.album,
+                                      color: _searchType == SearchType.albums
+                                          ? Colors.white
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Albums',
+                                      style: TextStyle(
+                                        color: _searchType == SearchType.albums
+                                            ? Colors.white
+                                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _searchType = SearchType.playlists;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: _searchType == SearchType.playlists
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.queue_music,
-                                  color: _searchType == SearchType.playlists
-                                      ? Colors.white
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Playlists',
-                                  style: TextStyle(
+                          if (!isServerOnly) // Hide playlists tab when server is the only selected service
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _searchType = SearchType.playlists;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
                                     color: _searchType == SearchType.playlists
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.queue_music,
+                                        color: _searchType == SearchType.playlists
+                                            ? Colors.white
+                                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Playlists',
+                                        style: TextStyle(
+                                          color: _searchType == SearchType.playlists
+                                              ? Colors.white
+                                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
                 
                 // Search bar
