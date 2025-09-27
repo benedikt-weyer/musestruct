@@ -445,6 +445,8 @@ class MusicProvider with ChangeNotifier {
         track.id,
         track.source,
         originalResponse.data!,
+        title: track.title,
+        artist: track.artist,
       );
       
       if (backendResponse.success && backendResponse.data != null) {

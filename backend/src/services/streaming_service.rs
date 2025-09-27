@@ -61,9 +61,29 @@ impl StreamingService {
         Ok(())
     }
 
-    pub async fn get_stream_url(&self, track_id: &str, source: &str, original_url: &str) -> anyhow::Result<String> {
-        let cache_key = format!("{}_{}", source, track_id);
-        println!("Getting stream URL for track_id: {}, source: {}, cache_key: {}", track_id, source, cache_key);
+    pub async fn get_stream_url(&self, track_id: &str, source: &str, original_url: &str, title: Option<&str>, artist: Option<&str>) -> anyhow::Result<String> {
+        // Create deterministic cache key based on source, artist, and title
+        let cache_key = if let (Some(title), Some(artist)) = (title, artist) {
+            // Normalize the strings for consistent hashing (only trim, no lowercase)
+            let normalized_title = title.trim();
+            let normalized_artist = artist.trim();
+            use sha2::{Sha256, Digest};
+            
+            // Create input string for hashing
+            let input = format!("{}|{}|{}", source, normalized_artist, normalized_title);
+            let mut hasher = Sha256::new();
+            hasher.update(input.as_bytes());
+            let hash = hasher.finalize();
+            let hash_hex = format!("{:x}", hash);
+            
+            hash_hex
+        } else {
+            // Fallback to original behavior if metadata is missing
+            format!("{}_{}", source, track_id)
+        };
+        
+        println!("Getting stream URL for track_id: {}, source: {}, title: {:?}, artist: {:?}, cache_key: {}", 
+                track_id, source, title, artist, cache_key);
         
         // Check if track is already cached
         {
@@ -83,7 +103,7 @@ impl StreamingService {
 
         // Download and cache the track
         println!("Downloading and caching track...");
-        let cached_track = self.download_and_cache_track(track_id, source, original_url).await?;
+        let cached_track = self.download_and_cache_track(track_id, source, original_url, &cache_key).await?;
         
         // Store in memory cache
         {
@@ -102,8 +122,10 @@ impl StreamingService {
         track_id: &str,
         source: &str,
         original_url: &str,
+        cache_key: &str,
     ) -> anyhow::Result<CachedTrack> {
-        let cache_id = Uuid::new_v4().to_string();
+        // Use deterministic cache ID based on the cache key
+        let cache_id = cache_key.replace("/", "_").replace("\\", "_"); // Sanitize for filename
         let file_path = self.cache_dir.join(format!("{}.mp3", cache_id));
         
         println!("Downloading track {} from {} to {}", track_id, source, file_path.display());

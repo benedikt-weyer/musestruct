@@ -167,13 +167,17 @@ class MusicApiService extends BaseApiService {
   static Future<ApiResponse<BackendStreamUrlResponse>> getBackendStreamUrl(
     String trackId,
     String source,
-    String originalUrl,
-  ) async {
+    String originalUrl, {
+    String? title,
+    String? artist,
+  }) async {
     try {
       final params = {
         'track_id': trackId,
         'source': source,
         'url': originalUrl,
+        if (title != null) 'title': title,
+        if (artist != null) 'artist': artist,
       };
 
       final response = await BaseApiService.get(

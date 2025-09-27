@@ -1495,6 +1495,8 @@ pub struct GetBackendStreamUrlQuery {
     pub track_id: String,
     pub source: String,
     pub url: String,
+    pub title: Option<String>,
+    pub artist: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1511,7 +1513,7 @@ pub async fn get_backend_stream_url(
     debug!("Getting backend stream URL for track {} from {}", query.track_id, query.source);
 
     match state.streaming_service
-        .get_stream_url(&query.track_id, &query.source, &query.url)
+        .get_stream_url(&query.track_id, &query.source, &query.url, query.title.as_deref(), query.artist.as_deref())
         .await
     {
         Ok(stream_url) => {
