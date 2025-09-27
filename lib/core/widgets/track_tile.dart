@@ -62,7 +62,7 @@ class TrackTile extends StatelessWidget {
           child: Text(
             track.formattedDuration,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 11,
             ),
           ),
@@ -120,13 +120,17 @@ class TrackTile extends StatelessWidget {
     
     if (showQueueButton) {
       menuItems.add(
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'queue',
           child: Row(
             children: [
-              Icon(Icons.queue_music, size: 20),
-              SizedBox(width: 8),
-              Text('Add to Queue'),
+              Icon(
+                Icons.queue_music, 
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              const Text('Add to Queue'),
             ],
           ),
         ),
@@ -145,7 +149,7 @@ class TrackTile extends StatelessWidget {
                   Icon(
                     isSaved ? Icons.favorite : Icons.favorite_border,
                     size: 20,
-                    color: isSaved ? Colors.red : null,
+                    color: isSaved ? Colors.red : Theme.of(context).colorScheme.onSurface,
                   ),
                   const SizedBox(width: 8),
                   Text(isSaved ? 'Remove from Saved' : 'Save Track'),
@@ -159,13 +163,17 @@ class TrackTile extends StatelessWidget {
     
     if (showPlaylistButton) {
       menuItems.add(
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'playlist',
           child: Row(
             children: [
-              Icon(Icons.playlist_add, size: 20),
-              SizedBox(width: 8),
-              Text('Add to Playlist'),
+              Icon(
+                Icons.playlist_add, 
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              const Text('Add to Playlist'),
             ],
           ),
         ),
@@ -247,7 +255,7 @@ class TrackTile extends StatelessWidget {
           final isSaved = savedTracksProvider.isTrackSaved(track.id, track.source);
           return Icon(
             isSaved ? Icons.favorite : Icons.favorite_border,
-            color: isSaved ? Colors.red : Colors.grey[600],
+            color: isSaved ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
             size: 20,
           );
         },
@@ -373,16 +381,16 @@ class TrackTile extends StatelessWidget {
                       track.coverUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.music_note,
-                          color: Colors.grey[600],
-                        );
+                      return Icon(
+                        Icons.music_note,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      );
                       },
                     ),
                   )
                 : Icon(
                     Icons.music_note,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
           ),
           if (isLoading)
@@ -423,7 +431,7 @@ class TrackTile extends StatelessWidget {
         track.title,
         style: TextStyle(
           fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
-          color: isPlaying ? Theme.of(context).primaryColor : null,
+          color: isPlaying ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -437,8 +445,8 @@ class TrackTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: isPlaying 
-                  ? Theme.of(context).primaryColor.withOpacity(0.7)
-                  : Colors.grey[600],
+                  ? Theme.of(context).colorScheme.primary.withOpacity(0.7)
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           Text(
@@ -447,7 +455,7 @@ class TrackTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[500],
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
             ),
           ),
           // Source and quality info

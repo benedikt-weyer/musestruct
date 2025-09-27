@@ -83,7 +83,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   Icon(
                     Icons.error_outline,
                     size: 64,
-                    color: Colors.grey[400],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -94,7 +94,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   Text(
                     queueProvider.error!,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -116,7 +116,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   Icon(
                     Icons.queue_music_outlined,
                     size: 64,
-                    color: Colors.grey[400],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -127,7 +127,7 @@ class _QueueScreenState extends State<QueueScreen> {
                   Text(
                     'Add tracks or playlists to your queue to see them here',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -164,14 +164,14 @@ class _QueueScreenState extends State<QueueScreen> {
                           children: [
                             Icon(
                               Icons.play_circle_filled,
-                              color: Theme.of(context).primaryColor,
+                              color: Theme.of(context).colorScheme.primary,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               'Now Playing',
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Theme.of(context).primaryColor,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -238,10 +238,10 @@ class _QueueScreenState extends State<QueueScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
           child: Icon(
             Icons.queue_music,
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
         title: Text(
@@ -254,7 +254,7 @@ class _QueueScreenState extends State<QueueScreen> {
             Text(
               '${playlistItem.trackOrder.length} tracks • ${playlistItem.playMode.name} • ${playlistItem.loopMode.name}',
               style: TextStyle(
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12,
               ),
             ),
@@ -264,7 +264,7 @@ class _QueueScreenState extends State<QueueScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -277,7 +277,7 @@ class _QueueScreenState extends State<QueueScreen> {
             PopupMenuButton<LoopMode>(
               icon: Icon(
                 _getLoopModeIcon(playlistItem.loopMode),
-                color: Theme.of(context).primaryColor,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
               tooltip: 'Change repeat mode',
               onSelected: (LoopMode newLoopMode) async {
@@ -303,7 +303,10 @@ class _QueueScreenState extends State<QueueScreen> {
                   value: LoopMode.once,
                   child: Row(
                     children: [
-                      Icon(_getLoopModeIcon(LoopMode.once)),
+                      Icon(
+                        _getLoopModeIcon(LoopMode.once),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(_getLoopModeText(LoopMode.once)),
                     ],
@@ -313,7 +316,10 @@ class _QueueScreenState extends State<QueueScreen> {
                   value: LoopMode.twice,
                   child: Row(
                     children: [
-                      Icon(_getLoopModeIcon(LoopMode.twice)),
+                      Icon(
+                        _getLoopModeIcon(LoopMode.twice),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(_getLoopModeText(LoopMode.twice)),
                     ],
@@ -323,7 +329,10 @@ class _QueueScreenState extends State<QueueScreen> {
                   value: LoopMode.infinite,
                   child: Row(
                     children: [
-                      Icon(_getLoopModeIcon(LoopMode.infinite)),
+                      Icon(
+                        _getLoopModeIcon(LoopMode.infinite),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(_getLoopModeText(LoopMode.infinite)),
                     ],
@@ -335,7 +344,7 @@ class _QueueScreenState extends State<QueueScreen> {
             PopupMenuButton<PlayMode>(
               icon: Icon(
                 _getPlayModeIcon(playlistItem.playMode),
-                color: Theme.of(context).primaryColor,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
               tooltip: 'Change playback order',
               onSelected: (PlayMode newPlayMode) async {
@@ -361,7 +370,10 @@ class _QueueScreenState extends State<QueueScreen> {
                   value: PlayMode.normal,
                   child: Row(
                     children: [
-                      Icon(_getPlayModeIcon(PlayMode.normal)),
+                      Icon(
+                        _getPlayModeIcon(PlayMode.normal),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(_getPlayModeText(PlayMode.normal)),
                     ],
@@ -371,7 +383,10 @@ class _QueueScreenState extends State<QueueScreen> {
                   value: PlayMode.shuffle,
                   child: Row(
                     children: [
-                      Icon(_getPlayModeIcon(PlayMode.shuffle)),
+                      Icon(
+                        _getPlayModeIcon(PlayMode.shuffle),
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(_getPlayModeText(PlayMode.shuffle)),
                     ],
@@ -385,6 +400,7 @@ class _QueueScreenState extends State<QueueScreen> {
                 return IconButton(
                   icon: Icon(
                     isCurrentPlaylist ? Icons.pause : Icons.play_arrow,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                   onPressed: () async {
                     if (isCurrentPlaylist) {
