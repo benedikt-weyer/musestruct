@@ -169,21 +169,43 @@ class QueueProvider with ChangeNotifier {
     // Check if there's a next track in the playlist first
     final currentPlaylist = getCurrentPlaylistQueueItem();
     if (currentPlaylist != null) {
-      final nextIndex = currentPlaylist.currentTrackIndex + 1;
+      final currentIndex = currentPlaylist.currentTrackIndex;
+      final totalTracks = currentPlaylist.trackOrder.length;
       
-      // Check if there's a next track in the playlist
-      if (nextIndex < currentPlaylist.trackOrder.length) {
-        return true;
-      }
-      
-      // Check loop modes for playlist
-      switch (currentPlaylist.loopMode) {
-        case LoopMode.once:
-          return false;
-        case LoopMode.twice:
-          return currentPlaylist.currentTrackIndex < currentPlaylist.trackOrder.length * 2;
-        case LoopMode.infinite:
+      // For shuffle mode, check the same logic as moveToNextTrack
+      if (currentPlaylist.playMode == PlayMode.shuffle) {
+        // If we haven't reached the end of current shuffle, there's a next track
+        if (currentIndex < totalTracks - 1) {
           return true;
+        }
+        
+        // If we're at the end, check loop modes
+        switch (currentPlaylist.loopMode) {
+          case LoopMode.once:
+            return false;
+          case LoopMode.twice:
+            return currentIndex < (totalTracks * 2) - 1;
+          case LoopMode.infinite:
+            return true;
+        }
+      } else {
+        // Normal mode
+        final nextIndex = currentIndex + 1;
+        
+        // Check if there's a next track in the playlist
+        if (nextIndex < totalTracks) {
+          return true;
+        }
+        
+        // Check loop modes for playlist
+        switch (currentPlaylist.loopMode) {
+          case LoopMode.once:
+            return false;
+          case LoopMode.twice:
+            return currentIndex < totalTracks * 2;
+          case LoopMode.infinite:
+            return true;
+        }
       }
     }
     
@@ -319,39 +341,75 @@ class QueueProvider with ChangeNotifier {
     final currentPlaylist = getCurrentPlaylistQueueItem();
     if (currentPlaylist == null) return false;
 
-    final nextIndex = currentPlaylist.currentTrackIndex + 1;
-    
-    // Check if we've reached the end of the playlist
-    if (nextIndex >= currentPlaylist.trackOrder.length) {
-      // Handle loop modes
-      switch (currentPlaylist.loopMode) {
-        case LoopMode.once:
-          // Remove playlist from queue
-          return await removePlaylistFromQueue(currentPlaylist.id);
-        case LoopMode.twice:
-          // Check if we've played twice
-          if (currentPlaylist.currentTrackIndex >= currentPlaylist.trackOrder.length * 2) {
+    int nextIndex;
+    List<String> updatedTrackOrder = List.from(currentPlaylist.trackOrder);
+
+    // Handle shuffle mode differently
+    if (currentPlaylist.playMode == PlayMode.shuffle) {
+      final currentIndex = currentPlaylist.currentTrackIndex;
+      final totalTracks = currentPlaylist.trackOrder.length;
+      
+      // Check if we've played all tracks in current shuffle
+      if (currentIndex >= totalTracks - 1) {
+        // We've reached the end in shuffle mode
+        switch (currentPlaylist.loopMode) {
+          case LoopMode.once:
             return await removePlaylistFromQueue(currentPlaylist.id);
-          }
-          // Reset to beginning for second play
-          final updatedItem = currentPlaylist.copyWith(
-            currentTrackIndex: 0,
-          );
-          return await updatePlaylistQueueItem(updatedItem);
-        case LoopMode.infinite:
-          // Reset to beginning
-          final updatedItem = currentPlaylist.copyWith(
-            currentTrackIndex: 0,
-          );
-          return await updatePlaylistQueueItem(updatedItem);
+          case LoopMode.twice:
+            // For twice mode, allow playing through twice
+            if (currentIndex >= (totalTracks * 2) - 1) {
+              return await removePlaylistFromQueue(currentPlaylist.id);
+            }
+            // Create a new shuffle for the second round
+            updatedTrackOrder = _createShuffledOrder(updatedTrackOrder);
+            nextIndex = 0;
+            break;
+          case LoopMode.infinite:
+            // Create a new shuffle and start over
+            updatedTrackOrder = _createShuffledOrder(updatedTrackOrder);
+            nextIndex = 0;
+            break;
+        }
+      } else {
+        // Still have unplayed tracks in current shuffle
+        nextIndex = currentIndex + 1;
+      }
+    } else {
+      // Normal mode - just increment index
+      nextIndex = currentPlaylist.currentTrackIndex + 1;
+      
+      // Check if we've reached the end of the playlist
+      if (nextIndex >= currentPlaylist.trackOrder.length) {
+        // Handle loop modes for normal playback
+        switch (currentPlaylist.loopMode) {
+          case LoopMode.once:
+            return await removePlaylistFromQueue(currentPlaylist.id);
+          case LoopMode.twice:
+            // Check if we've played twice
+            if (currentPlaylist.currentTrackIndex >= currentPlaylist.trackOrder.length * 2) {
+              return await removePlaylistFromQueue(currentPlaylist.id);
+            }
+            nextIndex = 0;
+            break;
+          case LoopMode.infinite:
+            nextIndex = 0;
+            break;
+        }
       }
     }
 
     // Move to next track
     final updatedItem = currentPlaylist.copyWith(
       currentTrackIndex: nextIndex,
+      trackOrder: updatedTrackOrder,
     );
     return await updatePlaylistQueueItem(updatedItem);
+  }
+
+  List<String> _createShuffledOrder(List<String> originalOrder) {
+    final shuffled = List<String>.from(originalOrder);
+    shuffled.shuffle();
+    return shuffled;
   }
 
   Future<bool> moveToPreviousTrack() async {
@@ -367,7 +425,7 @@ class QueueProvider with ChangeNotifier {
           return false; // Can't go back from first track
         case LoopMode.twice:
         case LoopMode.infinite:
-          // Go to last track
+          // Go to last track in current shuffle order
           final updatedItem = currentPlaylist.copyWith(
             currentTrackIndex: currentPlaylist.trackOrder.length - 1,
           );
@@ -375,7 +433,8 @@ class QueueProvider with ChangeNotifier {
       }
     }
 
-    // Move to previous track
+    // Move to previous track (works the same for both normal and shuffle mode)
+    // because we maintain the current shuffle order
     final updatedItem = currentPlaylist.copyWith(
       currentTrackIndex: prevIndex,
     );

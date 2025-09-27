@@ -398,8 +398,9 @@ class PlaylistTile extends StatelessWidget {
         trackOrder.shuffle();
       }
 
-      // Get the first track item for current track details
-      final firstTrackItem = trackItems.first;
+      // Get the first track item based on the (possibly shuffled) track order
+      final firstTrackId = trackOrder.first;
+      final firstTrackItem = trackItems.firstWhere((item) => item.itemId == firstTrackId);
       
       // Add playlist to queue with current track details
       final success = await queueProvider.addPlaylistToQueue(
