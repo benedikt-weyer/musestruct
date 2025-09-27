@@ -208,6 +208,11 @@ impl LocalMusicService {
         albums.into_iter()
             .map(|(_, album_tracks)| {
                 let first_track = album_tracks[0];
+                
+                // Sort tracks by filename to get a consistent order
+                let mut sorted_tracks = album_tracks;
+                sorted_tracks.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+                
                 StreamingAlbum {
                     id: format!("server_album_{}_{}", 
                         urlencoding::encode(&first_track.artist),
@@ -217,13 +222,13 @@ impl LocalMusicService {
                     artist: first_track.artist.clone(),
                     release_date: None,
                     cover_url: None,
-                    tracks: album_tracks.iter().map(|track| StreamingTrack {
+                    tracks: sorted_tracks.iter().map(|track| StreamingTrack {
                         id: format!("server_{}", track.file_path.to_string_lossy()),
                         title: track.title.clone(),
                         artist: track.artist.clone(),
                         album: track.album.clone(),
-                            duration: track.duration.map(|d| d as i32),
-                            stream_url: Some(self.get_stream_url_for_track(track)),
+                        duration: track.duration.map(|d| d as i32),
+                        stream_url: Some(self.get_stream_url_for_track(track)),
                         cover_url: None,
                         source: "server".to_string(),
                         quality: Some("Original".to_string()),
@@ -282,9 +287,41 @@ impl StreamingService for LocalMusicService {
         Ok(Vec::new())
     }
 
-    async fn get_album_tracks(&self, _album_id: &str) -> Result<Vec<StreamingTrack>> {
-        // For now, return empty - could be implemented to return tracks from a specific album
-        Ok(Vec::new())
+    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<StreamingTrack>> {
+        // Parse album_id format: "server_album_{artist}_{album}"
+        if let Some(album_part) = album_id.strip_prefix("server_album_") {
+            // Decode the URL-encoded artist and album names
+            let parts: Vec<&str> = album_part.splitn(2, '_').collect();
+            if parts.len() == 2 {
+                let artist = urlencoding::decode(parts[0]).map_err(|e| anyhow!("Failed to decode artist: {}", e))?.into_owned();
+                let album = urlencoding::decode(parts[1]).map_err(|e| anyhow!("Failed to decode album: {}", e))?.into_owned();
+                
+                // Scan all music files and filter by artist and album
+                let all_tracks = self.scan_music_files().await.map_err(|e| anyhow!(e))?;
+                
+                let album_tracks: Vec<StreamingTrack> = all_tracks.iter()
+                    .filter(|track| track.artist == artist && track.album == album)
+                    .map(|track| StreamingTrack {
+                        id: format!("server_{}", track.file_path.to_string_lossy()),
+                        title: track.title.clone(),
+                        artist: track.artist.clone(),
+                        album: track.album.clone(),
+                        duration: track.duration.map(|d| d as i32),
+                        stream_url: Some(self.get_stream_url_for_track(track)),
+                        cover_url: None,
+                        source: "server".to_string(),
+                        quality: Some("Original".to_string()),
+                        bitrate: None,
+                        sample_rate: None,
+                        bit_depth: None,
+                    })
+                    .collect();
+                
+                return Ok(album_tracks);
+            }
+        }
+        
+        Err(anyhow!("Invalid album ID format for server source"))
     }
 
     async fn get_stream_url(&self, track_id: &str, _quality: Option<&str>) -> Result<String> {

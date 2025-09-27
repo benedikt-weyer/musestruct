@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     handlers::auth::{AppState, ApiResponse},
     models::{SavedAlbumEntity, UserResponseDto, StreamingServiceEntity, StreamingServiceColumn},
-    services::streaming::{StreamingTrack, QobuzService, SpotifyService, StreamingService},
+    services::streaming::{StreamingTrack, QobuzService, SpotifyService, LocalMusicService, StreamingService},
 };
 
 #[derive(Deserialize, Debug)]
@@ -116,6 +116,14 @@ async fn get_authenticated_streaming_service(
             } else {
                 Err("Spotify service not connected for this user. Please connect to Spotify first.".to_string())
             }
+        },
+        "server" => {
+            // Server service doesn't require authentication, just return the service
+            let music_dir = std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join("own_music");
+            let service = LocalMusicService::new(music_dir);
+            Ok(Box::new(service))
         },
         _ => Err(format!("Unknown streaming service: {}", service_name)),
     }
