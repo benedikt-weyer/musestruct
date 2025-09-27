@@ -5,6 +5,7 @@ import '../../../music/providers/music_provider.dart';
 import '../../../queue/providers/queue_provider.dart';
 import '../../../music/models/music.dart';
 import '../../widgets/track_tile.dart';
+import '../playlists/select_playlist_for_album_dialog.dart';
 
 class AlbumDetailScreen extends StatefulWidget {
   final SavedAlbum savedAlbum;
@@ -184,6 +185,20 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         title: Text(widget.savedAlbum.title),
         actions: [
           if (_albumTracks != null && _albumTracks!.isNotEmpty) ...[
+            // Add to playlist button
+            IconButton(
+              icon: const Icon(Icons.playlist_add),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => SelectPlaylistForAlbumDialog(
+                    tracks: _albumTracks!,
+                    albumTitle: widget.savedAlbum.title,
+                  ),
+                );
+              },
+              tooltip: 'Add Album to Playlist',
+            ),
             // Add to queue button
             PopupMenuButton<String>(
               icon: const Icon(Icons.add_to_photos),

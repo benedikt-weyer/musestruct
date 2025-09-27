@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../music/models/music.dart';
 import '../../music/providers/saved_albums_provider.dart';
 import '../../music/providers/music_provider.dart';
+import '../screens/playlists/select_playlist_for_album_dialog.dart';
 
 class AlbumTile extends StatelessWidget {
   final Album album;
@@ -135,6 +136,23 @@ class AlbumTile extends StatelessWidget {
           ),
         ),
       );
+      
+      menuItems.add(
+        PopupMenuItem<String>(
+          value: 'add_to_playlist',
+          child: Row(
+            children: [
+              Icon(
+                Icons.playlist_add, 
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              const Text('Add to Playlist'),
+            ],
+          ),
+        ),
+      );
     }
     
     // On narrow screens, include clone/remove in menu
@@ -240,12 +258,83 @@ class AlbumTile extends StatelessWidget {
       case 'play_album':
         _handlePlayAlbumAction(context);
         break;
+      case 'add_to_playlist':
+        _handleAddToPlaylistAction(context);
+        break;
       case 'clone':
         _handleCloneAction(context);
         break;
       case 'remove':
         if (onRemove != null) onRemove!();
         break;
+    }
+  }
+
+  Future<void> _handleAddToPlaylistAction(BuildContext context) async {
+    if (album.tracks.isNotEmpty) {
+      // If tracks are already loaded, show the dialog directly
+      showDialog(
+        context: context,
+        builder: (context) => SelectPlaylistForAlbumDialog(
+          tracks: album.tracks,
+          albumTitle: album.title,
+        ),
+      );
+    } else {
+      // If no tracks are loaded, we need to fetch them first
+      // This case happens for albums from search results that don't have tracks loaded
+      final savedAlbumsProvider = Provider.of<SavedAlbumsProvider>(context, listen: false);
+      final source = album.source ?? 'qobuz'; // Default to qobuz if source is missing
+      
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+        
+        final tracks = await savedAlbumsProvider.getAlbumTracks(album.id, source);
+        
+        // Close loading dialog
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+        
+        if (tracks != null && tracks.isNotEmpty && context.mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => SelectPlaylistForAlbumDialog(
+              tracks: tracks,
+              albumTitle: album.title,
+            ),
+          );
+        } else if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No tracks found in this album'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            ),
+          );
+        }
+      } catch (e) {
+        // Close loading dialog if still open
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load album tracks: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            ),
+          );
+        }
+      }
     }
   }
 
