@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../music/providers/music_provider.dart';
 import '../../music/providers/saved_tracks_provider.dart';
 import '../../queue/providers/queue_provider.dart';
+import '../../playlists/providers/playlist_provider.dart';
 import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 
@@ -594,6 +595,29 @@ class ExpandedMusicPlayer extends StatelessWidget {
                               ),
                             ],
                           ),
+
+                          // Remove from playlist button (only show when playing from playlist)
+                          if (musicProvider.isPlayingFromPlaylist && musicProvider.currentPlaylistQueueItem != null)
+                            Consumer<PlaylistProvider>(
+                              builder: (context, playlistProvider, child) {
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () => _removeFromPlaylist(context, musicProvider, playlistProvider),
+                                      icon: const Icon(Icons.playlist_remove, size: 28),
+                                    ),
+                                    Text(
+                                      'Remove',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                         ],
                       ),
                     ),
@@ -657,6 +681,89 @@ class ExpandedMusicPlayer extends StatelessWidget {
                   : 'Failed to save track',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeFromPlaylist(
+    BuildContext context,
+    MusicProvider musicProvider,
+    PlaylistProvider playlistProvider,
+  ) async {
+    final currentTrack = musicProvider.currentTrack;
+    final playlistQueueItem = musicProvider.currentPlaylistQueueItem;
+    
+    if (currentTrack == null || playlistQueueItem == null) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from Playlist'),
+        content: Text(
+          'Remove "${currentTrack.title}" from "${playlistQueueItem.playlistName}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      // Remove the track from the playlist using track information
+      final success = await playlistProvider.removeTrackFromPlaylist(
+        playlistId: playlistQueueItem.playlistId,
+        trackId: currentTrack.id,
+        trackSource: currentTrack.source,
+        trackTitle: currentTrack.title,
+      );
+
+      if (success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed "${currentTrack.title}" from "${playlistQueueItem.playlistName}"'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+
+        // Skip to next track since the current one was removed
+        await musicProvider.playNextTrack();
+        // Close the expanded player since we're moving to next track
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+      } else if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove "${currentTrack.title}" from playlist'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing track: $e'),
+            backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),

@@ -379,6 +379,68 @@ class PlaylistProvider with ChangeNotifier {
     }
   }
 
+  // Find playlist item UUID by track information
+  String? findPlaylistItemId({
+    required String playlistId,
+    required String trackId,
+    required String trackSource,
+    String? trackTitle,
+  }) {
+    if (_currentPlaylist?.id != playlistId) {
+      return null;
+    }
+
+    // Find the playlist item that matches the track
+    final matchingItem = _currentPlaylistItems.where((item) {
+      if (item.isPlaylist) return false; // Skip playlist items
+      
+      // Match by item_id (track ID) and source
+      bool idMatches = item.itemId == trackId;
+      bool sourceMatches = item.source == trackSource;
+      
+      // If we have title, also match by title for extra safety
+      bool titleMatches = trackTitle == null || item.title == trackTitle;
+      
+      return idMatches && sourceMatches && titleMatches;
+    }).firstOrNull;
+
+    return matchingItem?.id;
+  }
+
+  // Remove track from playlist using track information
+  Future<bool> removeTrackFromPlaylist({
+    required String playlistId,
+    required String trackId,
+    required String trackSource,
+    String? trackTitle,
+  }) async {
+    try {
+      // First ensure playlist items are loaded
+      if (_currentPlaylist?.id != playlistId || _currentPlaylistItems.isEmpty) {
+        await loadPlaylistItems(playlistId);
+      }
+
+      // Find the playlist item UUID
+      final playlistItemId = findPlaylistItemId(
+        playlistId: playlistId,
+        trackId: trackId,
+        trackSource: trackSource,
+        trackTitle: trackTitle,
+      );
+
+      if (playlistItemId == null) {
+        _error = 'Track not found in playlist';
+        return false;
+      }
+
+      // Remove using the playlist item UUID
+      return await removeItemFromPlaylist(playlistId, playlistItemId);
+    } catch (e) {
+      _error = 'Failed to remove track from playlist: $e';
+      return false;
+    }
+  }
+
   // Reorder playlist item
   Future<bool> reorderPlaylistItem({
     required String playlistId,
