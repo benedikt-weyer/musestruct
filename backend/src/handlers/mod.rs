@@ -5,6 +5,7 @@ pub mod saved_tracks;
 pub mod saved_albums;
 pub mod queue;
 pub mod playlist;
+pub mod audio_analysis;
 
 pub use auth::*;
 pub use music::*;
@@ -13,3 +14,4 @@ pub use saved_tracks::*;
 pub use saved_albums::*;
 pub use queue::*;
 pub use playlist::*;
+pub use audio_analysis::*;

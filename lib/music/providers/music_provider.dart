@@ -562,6 +562,7 @@ class MusicProvider with ChangeNotifier {
           bitrate: track.bitrate,
           sampleRate: track.sampleRate,
           bitDepth: track.bitDepth,
+          bpm: track.bpm, // Preserve BPM from original track
         );
         
         print('MusicProvider: Starting audio playback...');
@@ -633,6 +634,63 @@ class MusicProvider with ChangeNotifier {
     _searchResults = null;
     _searchError = null;
     notifyListeners();
+  }
+
+  /// Update the BPM of a track
+  void updateTrackBpm(String trackId, double bpm) {
+    // Update current track if it matches
+    if (_currentTrack != null && _currentTrack!.id == trackId) {
+      _currentTrack = Track(
+        id: _currentTrack!.id,
+        title: _currentTrack!.title,
+        artist: _currentTrack!.artist,
+        album: _currentTrack!.album,
+        duration: _currentTrack!.duration,
+        streamUrl: _currentTrack!.streamUrl,
+        coverUrl: _currentTrack!.coverUrl,
+        source: _currentTrack!.source,
+        quality: _currentTrack!.quality,
+        bitrate: _currentTrack!.bitrate,
+        sampleRate: _currentTrack!.sampleRate,
+        bitDepth: _currentTrack!.bitDepth,
+        bpm: bpm,
+      );
+      notifyListeners();
+    }
+
+    // Update search results if they exist
+    if (_searchResults != null) {
+      final updatedTracks = _searchResults!.tracks.map((track) {
+        if (track.id == trackId) {
+          return Track(
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            streamUrl: track.streamUrl,
+            coverUrl: track.coverUrl,
+            source: track.source,
+            quality: track.quality,
+            bitrate: track.bitrate,
+            sampleRate: track.sampleRate,
+            bitDepth: track.bitDepth,
+            bpm: bpm,
+          );
+        }
+        return track;
+      }).toList();
+
+      _searchResults = SearchResults(
+        tracks: updatedTracks,
+        albums: _searchResults!.albums,
+        playlists: _searchResults!.playlists,
+        total: _searchResults!.total,
+        offset: _searchResults!.offset,
+        limit: _searchResults!.limit,
+      );
+      notifyListeners();
+    }
   }
 
   void pauseUIUpdates() {

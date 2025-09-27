@@ -11,6 +11,7 @@ class Track {
   final int? bitrate;      // in kbps
   final int? sampleRate;   // in Hz
   final int? bitDepth;     // in bits
+  final double? bpm;       // beats per minute
 
   Track({
     required this.id,
@@ -25,6 +26,7 @@ class Track {
     this.bitrate,
     this.sampleRate,
     this.bitDepth,
+    this.bpm,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class Track {
       bitrate: json['bitrate'] as int?,
       sampleRate: json['sample_rate'] as int?,
       bitDepth: json['bit_depth'] as int?,
+      bpm: json['bpm'] as double?,
     );
   }
 
@@ -58,6 +61,7 @@ class Track {
       'bitrate': bitrate,
       'sample_rate': sampleRate,
       'bit_depth': bitDepth,
+      'bpm': bpm,
     };
   }
 
@@ -376,6 +380,7 @@ class SavedTrack {
   final int duration;
   final String source;
   final String? coverUrl;
+  final double? bpm;
   final DateTime createdAt;
 
   SavedTrack({
@@ -387,6 +392,7 @@ class SavedTrack {
     required this.duration,
     required this.source,
     this.coverUrl,
+    this.bpm,
     required this.createdAt,
   });
 
@@ -400,6 +406,7 @@ class SavedTrack {
       duration: json['duration'] as int,
       source: json['source'] as String,
       coverUrl: json['cover_url'] as String?,
+      bpm: json['bpm'] as double?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -414,6 +421,7 @@ class SavedTrack {
       'duration': duration,
       'source': source,
       'cover_url': coverUrl,
+      'bpm': bpm,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -433,6 +441,7 @@ class SavedTrack {
       bitrate: null,
       sampleRate: null,
       bitDepth: null,
+      bpm: bpm,
     );
   }
 

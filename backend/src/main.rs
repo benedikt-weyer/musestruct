@@ -26,6 +26,7 @@ use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, 
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
 use handlers::saved_albums::{save_album, get_saved_albums, remove_saved_album, check_album_saved, get_album_tracks};
 use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
+use handlers::audio_analysis::{analyze_track_bpm, get_track_bpm};
 use services::{AuthService, streaming_service::StreamingService};
 use std::sync::Arc;
 use migrator::Migrator;
@@ -120,6 +121,8 @@ async fn main() -> Result<()> {
         .route("/api/queue", delete(clear_queue))
         .route("/api/queue/{id}", delete(remove_from_queue))
         .route("/api/queue/{id}/reorder", put(reorder_queue))
+        .route("/api/audio/analyze-bpm", post(analyze_track_bpm))
+        .route("/api/audio/bpm", get(get_track_bpm))
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn_with_state(

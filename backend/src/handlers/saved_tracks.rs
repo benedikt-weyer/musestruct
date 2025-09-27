@@ -35,6 +35,7 @@ pub struct SavedTrackResponse {
     pub duration: i32,
     pub source: String,
     pub cover_url: Option<String>,
+    pub bpm: Option<f32>,
     pub created_at: chrono::NaiveDateTime,
 }
 
@@ -89,6 +90,7 @@ pub async fn save_track(
         duration: Set(request.duration),
         source: Set(request.source.clone()),
         cover_url: Set(request.cover_url.clone()),
+        bpm: Set(None), // BPM not available when saving track initially
         created_at: Set(chrono::Utc::now().naive_utc()),
     };
     debug!("SavedTrackActiveModel created successfully");
@@ -110,6 +112,7 @@ pub async fn save_track(
         duration: result.duration,
         source: result.source,
         cover_url: result.cover_url,
+        bpm: result.bpm,
         created_at: result.created_at,
     };
 
@@ -149,6 +152,7 @@ pub async fn get_saved_tracks(
             duration: track.duration,
             source: track.source,
             cover_url: track.cover_url,
+            bpm: track.bpm,
             created_at: track.created_at,
         })
         .collect();

@@ -68,6 +68,11 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], defau
 urlencoding = "2.1"
 url = "2.5"
 
+# Audio analysis
+hound = "3.5"
+rustfft = "6.2"
+symphonia = { version = "0.5", features = ["all"] }
+
 [dev-dependencies]
 # SeaORM CLI for migrations
 sea-orm-cli = "1.1"

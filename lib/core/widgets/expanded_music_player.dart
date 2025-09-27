@@ -6,6 +6,9 @@ import '../../queue/providers/queue_provider.dart';
 import '../../playlists/providers/playlist_provider.dart';
 import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
+import '../services/audio_analysis_service.dart';
+import '../services/api_service.dart';
+import '../../music/models/music.dart';
 
 class ExpandedMusicPlayer extends StatelessWidget {
   final MusicProvider musicProvider;
@@ -199,6 +202,37 @@ class ExpandedMusicPlayer extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          
+                          // BPM display - show when available
+                          if (track.bpm != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.speed,
+                                    size: 16,
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${track.bpm!.toStringAsFixed(0)} BPM',
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Consumer<QueueProvider>(
                             builder: (context, queueProvider, child) {
@@ -596,6 +630,24 @@ class ExpandedMusicPlayer extends StatelessWidget {
                             ],
                           ),
 
+                          // Analyse button
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                onPressed: () => _analyzeBpm(context, track),
+                                icon: const Icon(Icons.analytics, size: 28),
+                              ),
+                              Text(
+                                track.bpm != null ? '${track.bpm!.toStringAsFixed(0)} BPM' : 'Analyze',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+
                           // Remove from playlist button (only show when playing from playlist)
                           if (musicProvider.isPlayingFromPlaylist && musicProvider.currentPlaylistQueueItem != null)
                             Consumer<PlaylistProvider>(
@@ -763,6 +815,75 @@ class ExpandedMusicPlayer extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error removing track: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _analyzeBpm(BuildContext context, Track track) async {
+    try {
+      // Get API service from context
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final analysisService = AudioAnalysisService(apiService);
+      
+      // Trigger BPM analysis asynchronously (fire and forget)
+      analysisService.analyzeBpm(track).then((result) {
+        // Update the track with the new BPM value
+        if (context.mounted) {
+          final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+          musicProvider.updateTrackBpm(track.id, result.bpm);
+          
+          // Show success message when analysis completes
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'BPM analysis complete: ${result.bpm.toStringAsFixed(1)} BPM',
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }).catchError((e) {
+        // Show error message if analysis fails
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('BPM analysis failed: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
+      
+      // Show immediate feedback that analysis has started
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('BPM analysis started for "${track.title}"'),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      
+    } catch (e) {
+      // Show error message for immediate failures
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start BPM analysis: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),

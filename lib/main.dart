@@ -10,6 +10,7 @@ import 'music/providers/saved_albums_provider.dart';
 import 'queue/providers/queue_provider.dart';
 import 'playlists/providers/playlist_provider.dart';
 import 'core/providers/theme_provider.dart';
+import 'core/services/api_service.dart';
 import 'core/themes/app_themes.dart';
 import 'core/screens/auth/login_screen.dart';
 import 'core/screens/home/home_screen.dart';
@@ -45,6 +46,7 @@ class MusestructApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SavedAlbumsProvider()),
         ChangeNotifierProvider(create: (_) => QueueProvider()),
         ChangeNotifierProvider(create: (_) => PlaylistProvider()),
+        Provider(create: (_) => ApiService()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
