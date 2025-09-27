@@ -6,6 +6,7 @@ import 'core/providers/connectivity_provider.dart';
 import 'core/providers/navigation_provider.dart';
 import 'music/providers/streaming_provider.dart';
 import 'music/providers/saved_tracks_provider.dart';
+import 'music/providers/saved_albums_provider.dart';
 import 'queue/providers/queue_provider.dart';
 import 'playlists/providers/playlist_provider.dart';
 import 'core/providers/theme_provider.dart';
@@ -14,10 +15,13 @@ import 'core/screens/auth/login_screen.dart';
 import 'core/screens/home/home_screen.dart';
 import 'core/screens/music/search_screen.dart';
 import 'core/screens/music/my_tracks_screen.dart';
+import 'core/screens/music/my_albums_screen.dart';
+import 'core/screens/music/album_detail_screen.dart';
 import 'core/screens/playlists/playlists_screen.dart';
 import 'core/screens/playlists/playlist_detail_screen.dart';
 import 'core/widgets/base_layout.dart';
 import 'playlists/models/playlist.dart';
+import 'music/models/music.dart';
 // import 'core/widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
 
 void main() {
@@ -38,6 +42,7 @@ class MusestructApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MusicProvider()),
         ChangeNotifierProvider(create: (_) => StreamingProvider()),
         ChangeNotifierProvider(create: (_) => SavedTracksProvider()),
+        ChangeNotifierProvider(create: (_) => SavedAlbumsProvider()),
         ChangeNotifierProvider(create: (_) => QueueProvider()),
         ChangeNotifierProvider(create: (_) => PlaylistProvider()),
       ],
@@ -168,6 +173,7 @@ class AuthenticatedApp extends StatelessWidget {
   final List<Widget> _screens = const [
     SearchScreen(),
     MyTracksScreen(),
+    MyAlbumsScreen(),
     PlaylistsScreen(),
     SettingsScreen(),
   ];
@@ -183,6 +189,19 @@ class AuthenticatedApp extends StatelessWidget {
           final playlist = settings.arguments as Playlist?;
           if (playlist != null) {
             page = PlaylistDetailContent(playlist: playlist);
+          } else {
+            page = Consumer<NavigationProvider>(
+              builder: (context, navigationProvider, child) {
+                return _screens[navigationProvider.currentIndex];
+              },
+            );
+          }
+        }
+        // Handle album detail route with parameters  
+        else if (settings.name?.startsWith('/album/') == true) {
+          final savedAlbum = settings.arguments as SavedAlbum?;
+          if (savedAlbum != null) {
+            page = AlbumDetailContent(savedAlbum: savedAlbum);
           } else {
             page = Consumer<NavigationProvider>(
               builder: (context, navigationProvider, child) {

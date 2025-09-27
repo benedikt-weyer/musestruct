@@ -24,6 +24,7 @@ use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, 
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, get_playlist as get_new_playlist, update_playlist, delete_playlist, get_playlist_items, add_playlist_item, remove_playlist_item, reorder_playlist_item};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
+use handlers::saved_albums::{save_album, get_saved_albums, remove_saved_album, check_album_saved, get_album_tracks};
 use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
 use services::{AuthService, streaming_service::StreamingService};
 use std::sync::Arc;
@@ -109,6 +110,11 @@ async fn main() -> Result<()> {
         .route("/api/saved-tracks", post(save_track))
         .route("/api/saved-tracks/{id}", delete(remove_saved_track))
         .route("/api/saved-tracks/check", get(is_track_saved))
+        .route("/api/albums/saved", get(get_saved_albums))
+        .route("/api/albums/save", post(save_album))
+        .route("/api/albums/saved/{id}", delete(remove_saved_album))
+        .route("/api/albums/saved/check", get(check_album_saved))
+        .route("/api/albums/{album_id}/tracks", get(get_album_tracks))
         .route("/api/queue", get(get_queue))
         .route("/api/queue", post(add_to_queue))
         .route("/api/queue", delete(clear_queue))

@@ -156,6 +156,7 @@ impl StreamingService for QobuzService {
             release_date: album.released_at.map(|d| d.to_string()),
             cover_url: album.image.as_ref().and_then(|i| i.large.clone()),
             tracks: vec![], // Tracks would be fetched separately
+            source: "qobuz".to_string(),
         }).collect();
 
         Ok(SearchResults {
@@ -197,7 +198,6 @@ impl StreamingService for QobuzService {
     async fn get_playlist_tracks(&self, playlist_id: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<super::StreamingTrack>> {
         let mut params = HashMap::new();
         params.insert("playlist_id".to_string(), playlist_id.to_string());
-        params.insert("extra".to_string(), "tracks".to_string());
         params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
         params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
 
@@ -232,6 +232,46 @@ impl StreamingService for QobuzService {
                 sample_rate,
                 bit_depth,
                 // Note: Position tracking would need to be added to StreamingTrack struct if needed
+            })
+        }).collect();
+
+        Ok(tracks)
+    }
+
+    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<super::StreamingTrack>> {
+        let mut params = HashMap::new();
+        params.insert("album_id".to_string(), album_id.to_string());
+
+        let response: QobuzAlbumResponse = self.make_request("album/get", &params).await?;
+
+        let tracks = response.tracks.items.into_iter().enumerate().filter_map(|(index, track)| {
+            // Skip tracks without valid ID
+            if track.id.is_null() {
+                return None;
+            }
+
+            // Qobuz typically provides high-quality audio
+            let (bitrate, sample_rate, bit_depth) = if self.user_auth_token.is_some() {
+                // Authenticated users get access to Hi-Res quality
+                (Some(1411), Some(44100), Some(16)) // CD quality as baseline, Hi-Res can be up to 24bit/192kHz
+            } else {
+                // Non-authenticated users get MP3 quality
+                (Some(320), None, None)
+            };
+
+            Some(super::StreamingTrack {
+                id: Self::json_value_to_string(&track.id),
+                title: track.title,
+                artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+                album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+                duration: track.duration,
+                stream_url: None, // Will be fetched when needed
+                cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
+                quality: Some("lossless".to_string()),
+                source: "qobuz".to_string(),
+                bitrate,
+                sample_rate,
+                bit_depth,
             })
         }).collect();
 
@@ -419,6 +459,19 @@ struct QobuzPlaylistTracksResponse {
 
 #[derive(Debug, Deserialize)]
 struct QobuzPlaylistTracksList {
+    items: Vec<QobuzTrack>,
+    total: u32,
+    limit: u32,
+    offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzAlbumResponse {
+    tracks: QobuzAlbumTracksList,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzAlbumTracksList {
     items: Vec<QobuzTrack>,
     total: u32,
     limit: u32,

@@ -15,6 +15,8 @@ class TrackTile extends StatelessWidget {
   final bool showQueueButton;
   final bool showPlaylistButton;
   final bool showRemoveButton;
+  final bool showTrackNumber;
+  final int? trackNumber;
   final VoidCallback? onRemove;
 
   const TrackTile({
@@ -27,6 +29,8 @@ class TrackTile extends StatelessWidget {
     this.showQueueButton = true,
     this.showPlaylistButton = false,
     this.showRemoveButton = false,
+    this.showTrackNumber = false,
+    this.trackNumber,
     this.onRemove,
   });
 
@@ -478,68 +482,87 @@ class TrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Stack(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey[300],
-            ),
-            child: track.coverUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      track.coverUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.music_note,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      );
-                      },
-                    ),
-                  )
-                : Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-          ),
-          if (isLoading)
-            Container(
+      leading: showTrackNumber && trackNumber != null
+          ? Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: Colors.black54,
+                color: Colors.grey[100],
+                border: Border.all(color: Colors.grey[300]!),
               ),
-              child: const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+              child: Center(
+                child: Text(
+                  trackNumber.toString(),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[700],
                   ),
                 ),
               ),
+            )
+          : Stack(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[300],
+                  ),
+                  child: track.coverUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            track.coverUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.music_note,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          Icons.music_note,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                ),
+                if (isLoading)
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.black54,
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (isPlaying && !isLoading && !showTrackNumber)
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.black54,
+                    ),
+                    child: const Icon(
+                      Icons.volume_up,
+                      color: Colors.white,
+                    ),
+                  ),
+              ],
             ),
-          if (isPlaying && !isLoading)
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.black54,
-              ),
-              child: const Icon(
-                Icons.volume_up,
-                color: Colors.white,
-              ),
-            ),
-        ],
-      ),
       title: Text(
         track.title,
         style: TextStyle(

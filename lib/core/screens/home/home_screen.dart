@@ -9,6 +9,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/backend_status_indicator.dart';
 import '../music/search_screen.dart';
 import '../music/my_tracks_screen.dart';
+import '../music/my_albums_screen.dart';
 import '../playlists/playlists_screen.dart';
 import '../../widgets/music_player_bar.dart';
 import '../../../music/services/music_api_service.dart';
@@ -29,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const SearchScreen(),
     const MyTracksScreen(),
+    const MyAlbumsScreen(),
     const PlaylistsScreen(),
     const SettingsScreen(),
   ];
@@ -70,6 +72,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.favorite),
             label: 'My Tracks',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.album),
+            label: 'Albums',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.playlist_play),

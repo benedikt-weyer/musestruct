@@ -154,6 +154,7 @@ class Album {
   final String? releaseDate;
   final String? coverUrl;
   final List<Track> tracks;
+  final String? source;
 
   Album({
     required this.id,
@@ -162,6 +163,7 @@ class Album {
     this.releaseDate,
     this.coverUrl,
     required this.tracks,
+    this.source,
   });
 
   factory Album.fromJson(Map<String, dynamic> json) {
@@ -174,6 +176,7 @@ class Album {
       tracks: (json['tracks'] as List<dynamic>?)
           ?.map((e) => Track.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
+      source: json['source'] as String?,
     );
   }
 
@@ -185,6 +188,7 @@ class Album {
       'releaseDate': releaseDate,
       'coverUrl': coverUrl,
       'tracks': tracks.map((e) => e.toJson()).toList(),
+      'source': source,
     };
   }
 }
@@ -440,6 +444,89 @@ class SavedTrack {
   }
 }
 
+class SavedAlbum {
+  final String id;
+  final String albumId;
+  final String title;
+  final String artist;
+  final String? releaseDate;
+  final String? coverUrl;
+  final String source;
+  final int trackCount;
+  final DateTime createdAt;
+
+  SavedAlbum({
+    required this.id,
+    required this.albumId,
+    required this.title,
+    required this.artist,
+    this.releaseDate,
+    this.coverUrl,
+    required this.source,
+    required this.trackCount,
+    required this.createdAt,
+  });
+
+  factory SavedAlbum.fromJson(Map<String, dynamic> json) {
+    return SavedAlbum(
+      id: json['id'] as String,
+      albumId: json['album_id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      releaseDate: json['release_date'] as String?,
+      coverUrl: json['cover_url'] as String?,
+      source: json['source'] as String,
+      trackCount: json['track_count'] as int,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'album_id': albumId,
+      'title': title,
+      'artist': artist,
+      'release_date': releaseDate,
+      'cover_url': coverUrl,
+      'source': source,
+      'track_count': trackCount,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  // Convert SavedAlbum to Album for display and playback
+  Album toAlbum() {
+    return Album(
+      id: albumId,
+      title: title,
+      artist: artist,
+      releaseDate: releaseDate,
+      coverUrl: coverUrl,
+      tracks: [], // Tracks will be fetched separately when needed
+    );
+  }
+
+  String get formattedSource {
+    switch (source.toLowerCase()) {
+      case 'qobuz':
+        return 'Qobuz';
+      case 'spotify':
+        return 'Spotify';
+      case 'tidal':
+        return 'Tidal';
+      case 'apple_music':
+        return 'Apple Music';
+      case 'youtube_music':
+        return 'YouTube Music';
+      case 'deezer':
+        return 'Deezer';
+      default:
+        return source.isNotEmpty ? source.toUpperCase() : 'Streaming';
+    }
+  }
+}
+
 class SaveTrackRequest {
   final String trackId;
   final String title;
@@ -484,6 +571,50 @@ class SaveTrackRequest {
   }
 }
 
+class SaveAlbumRequest {
+  final String albumId;
+  final String title;
+  final String artist;
+  final String? releaseDate;
+  final String? coverUrl;
+  final String source;
+  final int trackCount;
+
+  SaveAlbumRequest({
+    required this.albumId,
+    required this.title,
+    required this.artist,
+    this.releaseDate,
+    this.coverUrl,
+    required this.source,
+    required this.trackCount,
+  });
+
+  factory SaveAlbumRequest.fromAlbum(Album album) {
+    return SaveAlbumRequest(
+      albumId: album.id,
+      title: album.title,
+      artist: album.artist,
+      releaseDate: album.releaseDate,
+      coverUrl: album.coverUrl,
+      source: album.source ?? (album.tracks.isNotEmpty ? album.tracks.first.source : 'streaming'),
+      trackCount: album.tracks.length,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'album_id': albumId,
+      'title': title,
+      'artist': artist,
+      'release_date': releaseDate,
+      'cover_url': coverUrl,
+      'source': source,
+      'track_count': trackCount,
+    };
+  }
+}
+
 class BackendStreamUrlResponse {
   final String streamUrl;
   final bool isCached;
@@ -521,6 +652,7 @@ enum LoopMode {
 
 enum SearchType {
   tracks,
+  albums,
   playlists,
 }
 

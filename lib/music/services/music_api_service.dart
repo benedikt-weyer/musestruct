@@ -55,6 +55,74 @@ class MusicApiService extends BaseApiService {
     }
   }
 
+  /// Search for albums across streaming services
+  static Future<ApiResponse<SearchResults>> searchAlbums(
+    String query, {
+    int? limit,
+    int? offset,
+    String? service,
+    List<String>? services,
+  }) async {
+    try {
+      final params = <String, String>{
+        'q': query,
+        'type': 'album',
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
+        if (service != null) 'service': service,
+      };
+
+      // Add services parameter if provided
+      if (services != null && services.isNotEmpty) {
+        for (int i = 0; i < services.length; i++) {
+          params['services[$i]'] = services[i];
+        }
+      }
+
+      final response = await BaseApiService.get(
+        '/streaming/search',
+        queryParams: params,
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        print('MusicApiService: Album search response: $json');
+        print('MusicApiService: Albums field in response: ${json['albums']}');
+        
+        try {
+          return ApiResponse<SearchResults>.fromJson(
+            json,
+            (data) => SearchResults.fromJson(data as Map<String, dynamic>),
+          );
+        } catch (e) {
+          print('MusicApiService: Error parsing SearchResults: $e');
+          // Return a safe empty SearchResults
+          return ApiResponse<SearchResults>.success(
+            SearchResults(
+              tracks: [],
+              albums: [],
+              playlists: [],
+              total: 0,
+              offset: 0,
+              limit: 20,
+            ),
+          );
+        }
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>(
+          success: false,
+          message: json['message'] ?? 'Album search failed',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<SearchResults>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
   /// Search for playlists across streaming services
   static Future<ApiResponse<SearchResults>> searchPlaylists(
     String query, {

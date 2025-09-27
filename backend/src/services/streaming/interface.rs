@@ -13,6 +13,9 @@ pub trait StreamingService: Send + Sync {
     /// Get tracks from a specific playlist
     async fn get_playlist_tracks(&self, playlist_id: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingTrack>>;
     
+    /// Get tracks from a specific album
+    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<StreamingTrack>>;
+    
     /// Get stream URL for a track
     async fn get_stream_url(&self, track_id: &str, quality: Option<&str>) -> Result<String>;
     

@@ -135,6 +135,7 @@ impl StreamingService for SpotifyService {
                 release_date: Some(album.release_date),
                 cover_url,
                 tracks: vec![], // Would need separate API call to get tracks
+                source: "spotify".to_string(),
             }
         }).collect();
 
@@ -197,6 +198,40 @@ impl StreamingService for SpotifyService {
                     bitrate: Some(320),
                     sample_rate: Some(44100),
                     bit_depth: Some(16),
+                }
+            })
+            .collect();
+
+        Ok(tracks)
+    }
+
+    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<super::StreamingTrack>> {
+        let mut params = HashMap::new();
+        params.insert("limit".to_string(), "50".to_string());
+
+        let response: SpotifyAlbumTracksResponse = self.make_request(&format!("albums/{}/tracks", album_id), &params).await?;
+
+        let tracks = response.items.into_iter()
+            .map(|track| {
+                let artist_name = if let Some(artist) = track.artists.first() {
+                    artist.name.clone()
+                } else {
+                    "Unknown Artist".to_string()
+                };
+
+                super::StreamingTrack {
+                    id: track.id,
+                    title: track.name,
+                    artist: artist_name,
+                    album: "Unknown Album".to_string(), // We don't have album info in track response
+                    duration: Some((track.duration_ms / 1000) as i32),
+                    stream_url: track.preview_url,
+                    cover_url: None, // Not available in album tracks response
+                    quality: Some("preview".to_string()),
+                    source: "spotify".to_string(),
+                    bitrate: Some(160), // Spotify previews are typically 160kbps
+                    sample_rate: Some(44100), // Standard CD sample rate
+                    bit_depth: None, // Not specified for MP3 previews
                 }
             })
             .collect();
@@ -357,6 +392,23 @@ struct SpotifyPlaylistTracksResponse {
 #[derive(Debug, Deserialize)]
 struct SpotifyPlaylistTrackItem {
     track: Option<SpotifyTrack>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifyAlbumTracksResponse {
+    items: Vec<SpotifySimpleTrack>,
+    total: u32,
+    limit: u32,
+    offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifySimpleTrack {
+    id: String,
+    name: String,
+    artists: Vec<SpotifyArtist>,
+    duration_ms: u32,
+    preview_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

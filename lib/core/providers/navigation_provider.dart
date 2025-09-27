@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../playlists/models/playlist.dart';
+import '../../music/models/music.dart';
 
 class NavigationProvider extends ChangeNotifier {
   int _currentIndex = 0;
@@ -29,6 +30,15 @@ class NavigationProvider extends ChangeNotifier {
     }
   }
   
+  void navigateToAlbumDetail(String albumId, SavedAlbum savedAlbum) {
+    if (_context != null) {
+      Navigator.of(_context!).pushNamed(
+        '/album/$albumId',
+        arguments: savedAlbum,
+      );
+    }
+  }
+  
   void updateIndexForRoute(String route) {
     int newIndex;
     switch (route) {
@@ -38,16 +48,21 @@ class NavigationProvider extends ChangeNotifier {
       case '/my-tracks':
         newIndex = 1;
         break;
-      case '/playlists':
+      case '/albums':
         newIndex = 2;
         break;
-      case '/settings':
+      case '/playlists':
         newIndex = 3;
+        break;
+      case '/settings':
+        newIndex = 4;
         break;
       default:
         // For sub-routes like playlist detail, keep the current parent tab
         if (route.startsWith('/playlist/')) {
-          newIndex = 2; // Keep playlists tab selected
+          newIndex = 3; // Keep playlists tab selected
+        } else if (route.startsWith('/album/')) {
+          newIndex = 2; // Keep albums tab selected
         } else {
           return;
         }

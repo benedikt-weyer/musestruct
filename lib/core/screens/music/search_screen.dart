@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../music/providers/music_provider.dart';
+import '../../../music/providers/saved_albums_provider.dart';
 import '../../widgets/track_tile.dart';
+import '../../widgets/album_tile.dart';
 import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
@@ -36,7 +38,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return;
       }
       
-      // Search both tracks and playlists simultaneously
+      // Search tracks, albums, and playlists simultaneously
       musicProvider.searchBoth(query);
     }
   }
@@ -66,7 +68,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
-                    spacing: 16,
+                    spacing: 8,
                     children: [
                       Expanded(
                         child: GestureDetector(
@@ -93,7 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       : Theme.of(context).colorScheme.onSurfaceVariant,
                                   size: 20,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Tracks',
                                   style: TextStyle(
@@ -101,6 +103,48 @@ class _SearchScreenState extends State<SearchScreen> {
                                         ? Colors.white
                                         : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _searchType = SearchType.albums;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _searchType == SearchType.albums
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.album,
+                                  color: _searchType == SearchType.albums
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Albums',
+                                  style: TextStyle(
+                                    color: _searchType == SearchType.albums
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
@@ -133,7 +177,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       : Theme.of(context).colorScheme.onSurfaceVariant,
                                   size: 20,
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Playlists',
                                   style: TextStyle(
@@ -141,6 +185,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                         ? Colors.white
                                         : Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
@@ -157,7 +202,9 @@ class _SearchScreenState extends State<SearchScreen> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: _searchType == SearchType.tracks
-                        ? 'Search for songs, artists, albums...'
+                        ? 'Search for songs, artists...'
+                        : _searchType == SearchType.albums
+                        ? 'Search for albums...'
                         : 'Search for playlists...',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchController.text.isNotEmpty
@@ -288,6 +335,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 // Check if we have results based on search type
                 final hasResults = _searchType == SearchType.tracks 
                     ? (searchResults.tracks.isNotEmpty)
+                    : _searchType == SearchType.albums
+                    ? (searchResults.albums.isNotEmpty)
                     : (searchResults.playlists?.isNotEmpty ?? false);
 
                 if (!hasResults) {
@@ -340,6 +389,105 @@ class _SearchScreenState extends State<SearchScreen> {
                                 musicProvider.playTrack(track); // Default clears queue
                               },
                               showPlaylistButton: true,
+                            );
+                          },
+                        ),
+                      ),
+                    ] else if (_searchType == SearchType.albums && searchResults.albums.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'Albums (${searchResults.albums.length})',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: searchResults.albums.length,
+                          itemBuilder: (context, index) {
+                            final album = searchResults.albums[index];
+                            return AlbumTile(
+                              album: album,
+                              showCloneButton: true,
+                              onTap: () async {
+                                // Play the album
+                                final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+                                final savedAlbumsProvider = Provider.of<SavedAlbumsProvider>(context, listen: false);
+                                
+                                if (album.tracks.isNotEmpty) {
+                                  try {
+                                    await musicProvider.playTrack(album.tracks.first, clearQueue: true);
+                                    
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Playing album "${album.title}" (${album.tracks.length} tracks)'),
+                                          backgroundColor: Colors.green,
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to play album: $e'),
+                                          backgroundColor: Colors.red,
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } else {
+                                  // If no tracks are loaded, try to get them from the source
+                                  final source = album.source ?? 'qobuz'; // Default to qobuz if source is missing
+                                  
+                                  try {
+                                    final tracks = await savedAlbumsProvider.getAlbumTracks(album.id, source);
+                                    
+                                    if (tracks != null && tracks.isNotEmpty && context.mounted) {
+                                      // Play the first track and add the rest to queue
+                                      await musicProvider.playTrack(tracks.first, clearQueue: true);
+                                      
+                                      // TODO: Add remaining tracks to queue once queue functionality is implemented
+                                      
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Playing album "${album.title}" (${tracks.length} tracks)'),
+                                          backgroundColor: Colors.green,
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+                                        ),
+                                      );
+                                    } else if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('No tracks found in this album'),
+                                          backgroundColor: Colors.orange,
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: EdgeInsets.only(bottom: 100, left: 16, right: 16),
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to load album tracks: $e'),
+                                          backgroundColor: Colors.red,
+                                          behavior: SnackBarBehavior.floating,
+                                          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
                             );
                           },
                         ),

@@ -58,6 +58,10 @@ class BaseLayout extends StatelessWidget {
                 label: 'My Tracks',
               ),
               BottomNavigationBarItem(
+                icon: Icon(Icons.album),
+                label: 'Albums',
+              ),
+              BottomNavigationBarItem(
                 icon: Icon(Icons.playlist_play),
                 label: 'Playlists',
               ),

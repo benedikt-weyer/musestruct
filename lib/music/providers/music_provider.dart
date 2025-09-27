@@ -319,6 +319,67 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> searchAlbums(String query) async {
+    if (query.trim().isEmpty) return;
+
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      ApiResponse<SearchResults> response;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service search
+        print('MusicProvider: Using multi-service album search with: $_selectedServices');
+        response = await MusicApiService.searchAlbums(
+          query, 
+          limit: 20,
+          services: _selectedServices,
+        );
+      } else {
+        // Single service search
+        print('MusicProvider: Using single-service album search with: $_selectedService');
+        response = await MusicApiService.searchAlbums(
+          query, 
+          limit: 20,
+          service: _selectedService,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        print('MusicProvider: Album search response data: ${response.data}');
+        print('MusicProvider: Albums in response: ${response.data!.albums}');
+        _searchResults = response.data;
+      } else {
+        _searchError = response.message ?? 'Album search failed';
+        // If album search fails, create an empty SearchResults with empty albums
+        _searchResults = SearchResults(
+          tracks: [],
+          albums: [],
+          playlists: [],
+          total: 0,
+          offset: 0,
+          limit: 20,
+        );
+      }
+    } catch (e) {
+      _searchError = 'Album search failed: $e';
+      // If album search fails, create an empty SearchResults with empty albums
+      _searchResults = SearchResults(
+        tracks: [],
+        albums: [],
+        playlists: [],
+        total: 0,
+        offset: 0,
+        limit: 20,
+      );
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> searchBoth(String query) async {
     if (query.trim().isEmpty) return;
 
@@ -327,8 +388,9 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Perform both searches simultaneously
+      // Perform all three searches simultaneously
       late ApiResponse<SearchResults> musicResponse;
+      late ApiResponse<SearchResults> albumResponse;
       late ApiResponse<SearchResults> playlistResponse;
       
       if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
@@ -339,6 +401,11 @@ class MusicProvider with ChangeNotifier {
             limit: 20,
             services: _selectedServices,
           ),
+          MusicApiService.searchAlbums(
+            query, 
+            limit: 20,
+            services: _selectedServices,
+          ),
           MusicApiService.searchPlaylists(
             query, 
             limit: 20,
@@ -346,7 +413,8 @@ class MusicProvider with ChangeNotifier {
           ),
         ]);
         musicResponse = futures[0];
-        playlistResponse = futures[1];
+        albumResponse = futures[1];
+        playlistResponse = futures[2];
       } else {
         // Single service search
         final futures = await Future.wait([
@@ -355,6 +423,11 @@ class MusicProvider with ChangeNotifier {
             limit: 20,
             service: _selectedService,
           ),
+          MusicApiService.searchAlbums(
+            query, 
+            limit: 20,
+            service: _selectedService,
+          ),
           MusicApiService.searchPlaylists(
             query, 
             limit: 20,
@@ -362,15 +435,21 @@ class MusicProvider with ChangeNotifier {
           ),
         ]);
         musicResponse = futures[0];
-        playlistResponse = futures[1];
+        albumResponse = futures[1];
+        playlistResponse = futures[2];
       }
       
       // Combine the results
       List<Track> tracks = [];
+      List<Album> albums = [];
       List<PlaylistSearchResult> playlists = [];
       
       if (musicResponse.success && musicResponse.data != null) {
         tracks = musicResponse.data!.tracks;
+      }
+      
+      if (albumResponse.success && albumResponse.data != null) {
+        albums = albumResponse.data!.albums;
       }
       
       if (playlistResponse.success && playlistResponse.data != null) {
@@ -380,14 +459,14 @@ class MusicProvider with ChangeNotifier {
       // Create combined search results
       _searchResults = SearchResults(
         tracks: tracks,
-        albums: [], // Not used in current implementation
+        albums: albums,
         playlists: playlists,
-        total: tracks.length + playlists.length,
+        total: tracks.length + albums.length + playlists.length,
         offset: 0,
         limit: 20,
       );
       
-      print('MusicProvider: Combined search results - ${tracks.length} tracks, ${playlists.length} playlists');
+      print('MusicProvider: Combined search results - ${tracks.length} tracks, ${albums.length} albums, ${playlists.length} playlists');
       
     } catch (e) {
       _searchError = 'Combined search failed: $e';
