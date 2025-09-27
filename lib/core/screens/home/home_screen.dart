@@ -101,9 +101,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // Load service status when the screen is initialized
+    // Load backend URL when the screen is initialized
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<StreamingProvider>().loadServiceStatus();
       _loadBackendUrl();
     });
   }

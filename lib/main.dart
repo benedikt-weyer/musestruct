@@ -143,8 +143,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final musicProvider = Provider.of<MusicProvider>(context, listen: false);
             final queueProvider = Provider.of<QueueProvider>(context, listen: false);
+            final streamingProvider = Provider.of<StreamingProvider>(context, listen: false);
+            
             musicProvider.setQueueProvider(queueProvider);
             await queueProvider.initialize();
+            
+            // Load service status immediately after authentication
+            streamingProvider.loadServiceStatus();
           });
           
           // Return the authenticated app with proper navigator
