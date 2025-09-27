@@ -37,16 +37,20 @@ class ExpandedMusicPlayer extends StatelessWidget {
         final track = musicProvider.currentTrack;
         if (track == null) return const SizedBox.shrink();
 
-        return Container(
-          // Use flexible height that respects the constraints from the modal sheet
-          constraints: BoxConstraints(
-            maxHeight:
-                MediaQuery.of(context).size.height -
-                MediaQuery.of(context).padding.top -
-                MediaQuery.of(context).padding.bottom -
-                kBottomNavigationBarHeight -
-                40, // Reduced from 80 to 40 to make it taller
-          ),
+        return SizedBox(
+          // Force full width
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.height -
+              MediaQuery.of(context).padding.top -
+              MediaQuery.of(context).padding.bottom -
+              kBottomNavigationBarHeight -
+              40,
+          child: Container(
+            // Use full width and flexible height
+            width: double.infinity,
+            constraints: const BoxConstraints(
+              maxWidth: double.infinity,
+            ),
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
             borderRadius: const BorderRadius.only(
@@ -71,7 +75,9 @@ class ExpandedMusicPlayer extends StatelessWidget {
 
               // Header with close button
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width > 600 ? 20 : 16,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -91,21 +97,38 @@ class ExpandedMusicPlayer extends StatelessWidget {
               ),
 
               // Content with responsive cover art
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                    const SizedBox(height: 10),
 
                     // Responsive album art
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        // Calculate appropriate size based on available space
+                        // Calculate appropriate size based on available space and screen width
+                        final screenWidth = MediaQuery.of(context).size.width;
                         final availableHeight = constraints.maxHeight;
-                        final maxCoverSize = (availableHeight * 0.4).clamp(
-                          150.0,
-                          280.0,
-                        );
+                        final availableWidth = constraints.maxWidth;
+                        
+                        // Calculate maximum cover size to prevent overflow
+                        // Reserve space for song info (~100px), progress bar (~60px), controls (~80px), and padding (~60px)
+                        final reservedSpace = 300.0;
+                        final maxHeightForCover = (availableHeight - reservedSpace).clamp(120.0, double.infinity);
+                        
+                        double maxCoverSize;
+                        if (screenWidth > 600) {
+                          // For large screens, use up to 50% of width but constrain by available height
+                          final widthBasedSize = (availableWidth * 0.5).clamp(200.0, 400.0);
+                          final heightBasedSize = maxHeightForCover.clamp(150.0, 400.0);
+                          maxCoverSize = widthBasedSize < heightBasedSize ? widthBasedSize : heightBasedSize;
+                        } else {
+                          // For small screens, prioritize height constraint to prevent overflow
+                          final widthBasedSize = (availableWidth * 0.7).clamp(150.0, 300.0);
+                          final heightBasedSize = maxHeightForCover.clamp(120.0, 280.0);
+                          maxCoverSize = widthBasedSize < heightBasedSize ? widthBasedSize : heightBasedSize;
+                        }
 
                         return Container(
                           width: maxCoverSize,
@@ -145,9 +168,13 @@ class ExpandedMusicPlayer extends StatelessWidget {
                       },
                     ),
 
+                    const SizedBox(height: 20),
+
                     // Song info
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 20,
+                      ),
                       child: Column(
                         children: [
                           Text(
@@ -249,9 +276,13 @@ class ExpandedMusicPlayer extends StatelessWidget {
                       ),
                     ),
 
+                    const SizedBox(height: 15),
+
                     // Progress bar and time
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 20,
+                      ),
                       child: Column(
                         children: [
                           GestureDetector(
@@ -353,9 +384,13 @@ class ExpandedMusicPlayer extends StatelessWidget {
                       ),
                     ),
 
+                    const SizedBox(height: 20),
+
                     // Main controls
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 20,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
@@ -562,11 +597,15 @@ class ExpandedMusicPlayer extends StatelessWidget {
                         ],
                       ),
                     ),
+
+                    const SizedBox(height: 20),
                   ],
+                ),
                 ),
               ),
             ],
             ),
+          ),
           ),
         );
       },

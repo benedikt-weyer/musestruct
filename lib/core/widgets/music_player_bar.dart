@@ -393,8 +393,8 @@ class MusicPlayerBar extends StatelessWidget {
                                       },
                                 ),
 
-                                // More actions menu
-                                _buildMoreActionsMenu(context, musicProvider),
+                                // More actions - show individual buttons on large screens
+                                ..._buildActionButtons(context, musicProvider),
                               ],
                             ),
                           ),
@@ -411,130 +411,114 @@ class MusicPlayerBar extends StatelessWidget {
     );
   }
 
-  Widget _buildMoreActionsMenu(
+  List<Widget> _buildActionButtons(
     BuildContext context,
     MusicProvider musicProvider,
   ) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth >= 600;
 
-    // Only show menu on large screens, small screens use the expandable player
     if (!isLargeScreen) {
-      return const SizedBox.shrink();
+      // On small screens, show an expand button
+      return [
+        IconButton(
+          onPressed: () => _handleTrackInfoTap(context, musicProvider),
+          icon: const Icon(Icons.expand_less, size: 20),
+          tooltip: 'Expand player',
+        ),
+      ];
     }
 
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 20),
-      onSelected: (value) => _handleMenuAction(context, value, musicProvider),
-      itemBuilder: (context) => [
-        const PopupMenuItem<String>(
-          value: 'stop',
-          child: Row(
-            children: [
-              Icon(Icons.stop, size: 20),
-              SizedBox(width: 8),
-              Text('Stop'),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'queue',
-          child: Consumer<QueueProvider>(
-            builder: (context, queueProvider, child) {
-              return Row(
-                children: [
-                  Stack(
-                    children: [
-                      const Icon(Icons.queue_music, size: 20),
-                      if (queueProvider.queueLength > 0)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).primaryColor,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 12,
-                              minHeight: 12,
-                            ),
-                            child: Text(
-                              '${queueProvider.queueLength}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
+    // On large screens, show individual action buttons
+    return [
+      // Stop button
+      IconButton(
+        onPressed: () => musicProvider.stopPlayback(),
+        icon: const Icon(Icons.stop, size: 20),
+        tooltip: 'Stop playback',
+      ),
+      
+      // Queue button
+      Consumer<QueueProvider>(
+        builder: (context, queueProvider, child) {
+          return IconButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const QueueScreen()),
+            ),
+            icon: Stack(
+              children: [
+                const Icon(Icons.queue_music, size: 20),
+                if (queueProvider.queueLength > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        '${queueProvider.queueLength}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
                         ),
-                    ],
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'View Queue${queueProvider.queueLength > 0 ? ' (${queueProvider.queueLength})' : ''}',
-                  ),
-                ],
-              );
-            },
-          ),
+              ],
+            ),
+            tooltip: queueProvider.queueLength > 0 
+              ? 'View Queue (${queueProvider.queueLength})'
+              : 'View Queue',
+          );
+        },
+      ),
+      
+      // Add to playlist button
+      IconButton(
+        onPressed: () => showDialog(
+          context: context,
+          builder: (context) => SelectPlaylistDialog(track: musicProvider.currentTrack!),
         ),
-        const PopupMenuItem<String>(
-          value: 'playlist',
-          child: Row(
-            children: [
-              Icon(Icons.playlist_add, size: 20),
-              SizedBox(width: 8),
-              Text('Add to Playlist'),
-            ],
-          ),
-        ),
-      ],
-      tooltip: 'More actions',
+        icon: const Icon(Icons.playlist_add, size: 20),
+        tooltip: 'Add to playlist',
+      ),
+      
+      // Expand button
+      IconButton(
+        onPressed: () => _handleTrackInfoTap(context, musicProvider),
+        icon: const Icon(Icons.expand_less, size: 20),
+        tooltip: 'Expand player',
+      ),
+    ];
+  }
+
+
+  void _handleTrackInfoTap(BuildContext context, MusicProvider musicProvider) {
+    // Allow expansion on all screen sizes with full width
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: false,
+      enableDrag: true,
+      showDragHandle: false,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width,
+        minWidth: MediaQuery.of(context).size.width,
+      ),
+      builder: (context) => ExpandedMusicPlayer(musicProvider: musicProvider),
     );
   }
 
-  void _handleTrackInfoTap(BuildContext context, MusicProvider musicProvider) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
-
-    // Only expand on small screens
-    if (isSmallScreen) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => ExpandedMusicPlayer(musicProvider: musicProvider),
-      );
-    }
-  }
-
-  void _handleMenuAction(
-    BuildContext context,
-    String action,
-    MusicProvider musicProvider,
-  ) {
-    switch (action) {
-      case 'stop':
-        musicProvider.stopPlayback();
-        break;
-      case 'queue':
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (context) => const QueueScreen()));
-        break;
-      case 'playlist':
-        showDialog(
-          context: context,
-          builder: (context) =>
-              SelectPlaylistDialog(track: musicProvider.currentTrack!),
-        );
-        break;
-    }
-  }
 
   Future<void> _handleSaveAction(
     BuildContext context,
