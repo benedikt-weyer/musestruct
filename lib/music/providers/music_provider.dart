@@ -6,6 +6,7 @@ import '../services/music_api_service.dart';
 import '../../core/services/audio_service.dart';
 import '../../core/services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
+import '../../playlists/services/playlist_api_service.dart';
 // import '../../core/services/spotify_webview_player.dart'; // Disabled
 // import '../../core/widgets/spotify_webview_widget.dart'; // Disabled
 
@@ -139,11 +140,6 @@ class MusicProvider with ChangeNotifier {
       if (!_isUIUpdatesPaused) {
         notifyListeners();
       }
-      
-      // Check if track finished and we should play next from queue
-      if (!isPlaying && _currentTrack != null && _queueProvider != null) {
-        _checkAndPlayNextTrack();
-      }
     });
 
     // Listen to position changes
@@ -152,6 +148,9 @@ class MusicProvider with ChangeNotifier {
       if (!_isUIUpdatesPaused) {
         notifyListeners();
       }
+      
+      // Fallback completion detection based on position
+      _checkForTrackCompletion();
     });
 
     // Listen to duration changes
@@ -159,6 +158,14 @@ class MusicProvider with ChangeNotifier {
       _duration = duration;
       if (!_isUIUpdatesPaused) {
         notifyListeners();
+      }
+    });
+    
+    // Listen to track completion events
+    _audioService.completionStream.listen((isCompleted) {
+      if (isCompleted && _currentTrack != null && _queueProvider != null) {
+        print('Track completed via PlayerState.completed, playing next track...');
+        _playNextTrackAfterCompletion();
       }
     });
   }
@@ -628,7 +635,8 @@ class MusicProvider with ChangeNotifier {
       // Get updated playlist queue item
       final updatedItem = _queueProvider!.getCurrentPlaylistQueueItem();
       if (updatedItem != null) {
-        await playPlaylistQueueItem(updatedItem);
+        // Fetch the actual track details for the new track
+        await _playTrackFromPlaylistAtIndex(updatedItem, updatedItem.currentTrackIndex);
       } else {
         // Playlist finished, check regular queue
         await _checkAndPlayNextTrack();
@@ -645,7 +653,8 @@ class MusicProvider with ChangeNotifier {
       // Get updated playlist queue item
       final updatedItem = _queueProvider!.getCurrentPlaylistQueueItem();
       if (updatedItem != null) {
-        await playPlaylistQueueItem(updatedItem);
+        // Fetch the actual track details for the new track
+        await _playTrackFromPlaylistAtIndex(updatedItem, updatedItem.currentTrackIndex);
       }
     }
   }
@@ -659,6 +668,120 @@ class MusicProvider with ChangeNotifier {
     // Check if current track is at the end (within 1 second of duration)
     if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 1) {
       await playNextTrackFromPlaylist();
+    }
+  }
+
+  void _checkForTrackCompletion() {
+    // Fallback completion detection based on position being very close to duration
+    // and the track not being actively playing
+    if (_duration.inSeconds > 0 && 
+        _position.inSeconds >= _duration.inSeconds - 1 &&
+        !_isPlaying &&
+        _currentTrack != null &&
+        _queueProvider != null) {
+      
+      // Use a small delay to ensure the position has truly reached the end
+      Timer(const Duration(milliseconds: 500), () {
+        if (_position.inSeconds >= _duration.inSeconds - 1 && !_isPlaying) {
+          print('Track completed via position detection, playing next track...');
+          _playNextTrackAfterCompletion();
+        }
+      });
+    }
+  }
+
+  Future<void> _playTrackFromPlaylistAtIndex(PlaylistQueueItem playlistItem, int trackIndex) async {
+    if (trackIndex >= playlistItem.trackOrder.length) return;
+    
+    try {
+      _isLoading = true;
+      notifyListeners();
+      
+      final trackId = playlistItem.trackOrder[trackIndex];
+      
+      // Fetch track details from the backend
+      final response = await PlaylistApiService.getPlaylistItems(playlistItem.playlistId);
+      
+      if (response.success && response.data != null) {
+        final playlistItems = response.data!;
+        
+        // Find the track in the playlist items
+        final trackItem = playlistItems.firstWhere(
+          (item) => item.itemId == trackId,
+          orElse: () => throw Exception('Track not found in playlist'),
+        );
+        
+        // Create track from the fetched details
+        final track = Track(
+          id: trackItem.itemId,
+          title: trackItem.title ?? 'Unknown Title',
+          artist: trackItem.artist ?? 'Unknown Artist',
+          album: trackItem.album ?? 'Unknown Album',
+          duration: trackItem.duration,
+          coverUrl: trackItem.coverUrl,
+          source: trackItem.source ?? 'qobuz',
+        );
+        
+        // Update the current playlist queue item
+        _currentPlaylistQueueItem = playlistItem;
+        _isPlayingFromPlaylist = true;
+        
+        await playTrack(track);
+      } else {
+        throw Exception('Failed to fetch playlist details');
+      }
+    } catch (e) {
+      print('Error playing track from playlist at index $trackIndex: $e');
+      // Fallback to using the track ID directly if we can't fetch details
+      final trackId = playlistItem.trackOrder[trackIndex];
+      final track = Track(
+        id: trackId,
+        title: 'Track ${trackIndex + 1}',
+        artist: 'From ${playlistItem.playlistName}',
+        album: playlistItem.playlistName,
+        duration: null,
+        coverUrl: null,
+        source: 'qobuz',
+      );
+      
+      _currentPlaylistQueueItem = playlistItem;
+      _isPlayingFromPlaylist = true;
+      
+      await playTrack(track);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _playNextTrackAfterCompletion() async {
+    if (_queueProvider == null) return;
+    
+    try {
+      // Check if we're playing from a playlist queue
+      if (_isPlayingFromPlaylist) {
+        await playNextTrackFromPlaylist();
+        return;
+      }
+
+      // Check if there are playlist queue items available
+      final currentPlaylist = _queueProvider!.getCurrentPlaylistQueueItem();
+      if (currentPlaylist != null) {
+        await playPlaylistQueueItem(currentPlaylist);
+        return;
+      }
+
+      // Get the next track from the regular queue
+      final nextTrack = _queueProvider!.getNextTrack();
+      if (nextTrack != null) {
+        // Remove current track from queue and play next
+        await _queueProvider!.moveToNext();
+        await playTrack(nextTrack.toTrack());
+      } else {
+        print('No next track available in queue');
+      }
+    } catch (e) {
+      print('Error playing next track after completion: $e');
     }
   }
 

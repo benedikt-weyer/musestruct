@@ -409,8 +409,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                           // Next button
                           Consumer<QueueProvider>(
                             builder: (context, queueProvider, child) {
-                              final hasNextTrack =
-                                  queueProvider.getNextTrack() != null;
+                              final hasNextTrack = queueProvider.hasNextTrack();
                               return IconButton(
                                 onPressed:
                                     hasNextTrack && !musicProvider.isLoading

@@ -165,6 +165,32 @@ class QueueProvider with ChangeNotifier {
     return _queue.first;
   }
 
+  bool hasNextTrack() {
+    // Check if there's a next track in the playlist first
+    final currentPlaylist = getCurrentPlaylistQueueItem();
+    if (currentPlaylist != null) {
+      final nextIndex = currentPlaylist.currentTrackIndex + 1;
+      
+      // Check if there's a next track in the playlist
+      if (nextIndex < currentPlaylist.trackOrder.length) {
+        return true;
+      }
+      
+      // Check loop modes for playlist
+      switch (currentPlaylist.loopMode) {
+        case LoopMode.once:
+          return false;
+        case LoopMode.twice:
+          return currentPlaylist.currentTrackIndex < currentPlaylist.trackOrder.length * 2;
+        case LoopMode.infinite:
+          return true;
+      }
+    }
+    
+    // Fall back to checking regular queue
+    return _queue.isNotEmpty;
+  }
+
   Future<void> moveToNext() async {
     if (_queue.isNotEmpty) {
       await removeFromQueue(_queue.first.id);

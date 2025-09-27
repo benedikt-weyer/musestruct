@@ -28,6 +28,9 @@ class AudioService {
   Stream<bool> get playingStream => _player.onPlayerStateChanged.map((state) => state == PlayerState.playing);
   Stream<Duration> get positionStream => _player.onPositionChanged;
   Stream<Duration> get durationStream => _player.onDurationChanged;
+  
+  // Stream for completion detection
+  Stream<bool> get completionStream => _player.onPlayerStateChanged.map((state) => state == PlayerState.completed);
 
   Future<void> initialize() async {
     if (!_isInitialized) {
