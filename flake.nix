@@ -200,12 +200,6 @@
             echo "  - Web: Chrome support included"
             echo "  - Rust: Full toolchain with cargo, rustfmt, clippy, and rust-analyzer"
             echo ""
-            
-            # Run flutter doctor to show setup status
-            if command -v flutter &> /dev/null; then
-              echo "Flutter doctor output:"
-              flutter doctor || true
-            fi
           '';
 
           
