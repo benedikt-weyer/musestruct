@@ -495,7 +495,7 @@ class PlaylistTile extends StatelessWidget {
           source: firstTrackItem.source ?? 'qobuz',
         );
         
-        await musicProvider.playTrack(track);
+        await musicProvider.playTrack(track, clearQueue: false);
       }
 
       if (context.mounted) {

@@ -116,7 +116,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           source: firstTrackItem.source ?? 'qobuz',
         );
         
-        await musicProvider.playTrack(track);
+        await musicProvider.playTrack(track, clearQueue: false);
       }
 
       if (context.mounted) {

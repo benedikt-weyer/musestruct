@@ -86,7 +86,7 @@ class MusicProvider with ChangeNotifier {
     if (nextTrack != null) {
       // Remove current track from queue and play next
       await _queueProvider!.moveToNext();
-      await playTrack(nextTrack.toTrack());
+      await playTrack(nextTrack.toTrack(), clearQueue: false);
     }
   }
 
@@ -687,7 +687,7 @@ class MusicProvider with ChangeNotifier {
       if (nextTrack != null) {
         // Remove current track from queue and play next
         await _queueProvider!.moveToNext();
-        await playTrack(nextTrack.toTrack());
+        await playTrack(nextTrack.toTrack(), clearQueue: false);
       }
     }
   }
@@ -708,7 +708,7 @@ class MusicProvider with ChangeNotifier {
       source: playlistQueueItem.currentTrackSource ?? 'qobuz',
     );
     
-    await playTrack(track);
+    await playTrack(track, clearQueue: false);
   }
 
   Future<void> playNextTrackFromPlaylist() async {
@@ -811,7 +811,7 @@ class MusicProvider with ChangeNotifier {
         _currentPlaylistQueueItem = playlistItem;
         _isPlayingFromPlaylist = true;
         
-        await playTrack(track);
+        await playTrack(track, clearQueue: false);
       } else {
         throw Exception('Failed to fetch playlist details');
       }
@@ -832,7 +832,7 @@ class MusicProvider with ChangeNotifier {
       _currentPlaylistQueueItem = playlistItem;
       _isPlayingFromPlaylist = true;
       
-      await playTrack(track);
+      await playTrack(track, clearQueue: false);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -861,7 +861,7 @@ class MusicProvider with ChangeNotifier {
       if (nextTrack != null) {
         // Remove current track from queue and play next
         await _queueProvider!.moveToNext();
-        await playTrack(nextTrack.toTrack());
+        await playTrack(nextTrack.toTrack(), clearQueue: false);
       } else {
         print('No next track available in queue');
       }
