@@ -20,8 +20,8 @@ class MusicProvider with ChangeNotifier {
   String? _searchError;
   
   List<ServiceInfo> _availableServices = [];
-  String _selectedService = 'qobuz';
-  List<String> _selectedServices = ['qobuz']; // For multi-service search
+  String _selectedService = 'server'; // Default to server since it's always available
+  List<String> _selectedServices = ['server']; // For multi-service search
   bool _useMultiServiceSearch = false;
   
   Track? _currentTrack;
@@ -175,6 +175,18 @@ class MusicProvider with ChangeNotifier {
       final response = await MusicApiService.getAvailableServices();
       if (response.success && response.data != null) {
         _availableServices = response.data!;
+        
+        // Update selected services to include server if available
+        if (_availableServices.any((s) => s.name == 'server')) {
+          if (!_selectedServices.contains('server')) {
+            _selectedServices.add('server');
+          }
+          // If current selected service is not available, default to server
+          if (!_availableServices.any((s) => s.name == _selectedService)) {
+            _selectedService = 'server';
+          }
+        }
+        
         notifyListeners();
       }
     } catch (e) {

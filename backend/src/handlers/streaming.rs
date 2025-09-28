@@ -1706,3 +1706,59 @@ pub async fn stream_local_file(
         .body(content.into())
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
+
+// Stream local cover images
+pub async fn stream_local_cover(
+    axum::extract::Path(file_path_param): axum::extract::Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    use tokio::fs;
+    use tokio::io::AsyncReadExt;
+    
+    // Decode the file path (can include subdirectories)
+    let decoded_path = urlencoding::decode(&file_path_param)
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .into_owned();
+    
+    // Create path to the file in own_music directory
+    let music_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join("own_music");
+    let file_path = music_dir.join(&decoded_path);
+    
+    // Security check: ensure the file is within the own_music directory
+    if !file_path.starts_with(&music_dir) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    
+    // Check if file exists and is an image
+    if !file_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    
+    let extension = file_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let content_type = match extension.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        _ => return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE),
+    };
+    
+    // Read the entire image file
+    let content = fs::read(&file_path).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Create response with proper headers
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=86400") // Cache for 24 hours
+        .header(header::CONTENT_LENGTH, content.len())
+        .body(content.into())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}

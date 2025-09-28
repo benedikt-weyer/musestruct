@@ -48,6 +48,8 @@ class TrackTile extends StatelessWidget {
         return const Color(0xFFFF0000); // YouTube red
       case 'deezer':
         return const Color(0xFF00C7B7); // Deezer cyan
+      case 'server':
+        return const Color(0xFF6B46C1); // Purple for server/local files
       default:
         return Colors.grey[600]!;
     }

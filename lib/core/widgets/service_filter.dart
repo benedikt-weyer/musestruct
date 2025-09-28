@@ -57,10 +57,17 @@ class ServiceFilter extends StatelessWidget {
             .where((service) => service.isConnected)
             .map((service) => service.name)
             .toList();
+        
+        // Always ensure server is available if not already in the list
+        // Server should always be available as it's local
+        if (!connectedServices.contains('server')) {
+          connectedServices.add('server');
+        }
 
         // Debug logging removed to prevent console spam
 
-        if (connectedServices.isEmpty) {
+        // Only show "no services" if we're not loading and truly have no services
+        if (connectedServices.isEmpty && !streamingProvider.isLoading) {
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),

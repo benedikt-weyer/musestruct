@@ -64,19 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 // Search type toggle
                 Consumer<MusicProvider>(
                   builder: (context, musicProvider, child) {
-                    // Check if server is the only selected service (playlists not supported for server)
-                    final isServerOnly = musicProvider.useMultiServiceSearch 
-                        ? (musicProvider.selectedServices.length == 1 && musicProvider.selectedServices.contains('server'))
-                        : musicProvider.selectedService == 'server';
-                    
-                    // If server is selected and we're on playlists tab, switch to tracks
-                    if (isServerOnly && _searchType == SearchType.playlists) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        setState(() {
-                          _searchType = SearchType.tracks;
-                        });
-                      });
-                    }
+                    // Server now supports playlists, so no need to hide playlist functionality
                     
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
@@ -168,8 +156,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               ),
                             ),
                           ),
-                          if (!isServerOnly) // Hide playlists tab when server is the only selected service
-                            Expanded(
+                          Expanded(
                               child: GestureDetector(
                                 onTap: () {
                                   setState(() {
