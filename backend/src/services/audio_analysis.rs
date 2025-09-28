@@ -2,8 +2,6 @@ use anyhow::{Result, anyhow};
 use std::path::Path;
 use tokio::task;
 use hound::Error as HoundError;
-use rustfft::FftPlanner;
-use rustfft::num_complex::Complex;
 use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error as SymphoniaError;
@@ -12,13 +10,33 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use std::fs::File;
+use spectrum_analyzer::{samples_fft_to_spectrum, FrequencyLimit};
+use spectrum_analyzer::windows::hann_window;
+use spectrum_analyzer::scaling::divide_by_N_sqrt;
 
-// The size of the analysis window.
-const WINDOW_SIZE: usize = 1024;
-// The step size between consecutive windows.
-const HOP_SIZE: usize = WINDOW_SIZE / 2;
-// The threshold for peak detection.
-const THRESHOLD: f32 = 0.3; // Increased threshold to be more selective
+// Analysis configuration
+const WINDOW_SIZE: usize = 2048; // Power of 2 for efficient FFT
+const HOP_SIZE: usize = WINDOW_SIZE / 4; // 75% overlap for better temporal resolution
+const SAMPLE_RATE: u32 = 44100; // Standard sample rate
+const LOW_FREQ_CUTOFF: f32 = 200.0; // Hz - focus on bass frequencies for beat detection
+const BEAT_THRESHOLD: f32 = 0.25; // Energy threshold for beat detection (increased for more selectivity)
+
+/// Represents a detected beat with timestamp
+#[derive(Debug, Clone)]
+struct Beat {
+    timestamp: f32, // Time in seconds
+    energy: f32,    // Beat energy/confidence
+}
+
+/// Audio analysis configuration
+#[derive(Debug, Clone)]
+struct AnalysisConfig {
+    window_size: usize,
+    hop_size: usize,
+    sample_rate: u32,
+    low_freq_cutoff: f32,
+    beat_threshold: f32,
+}
 
 struct AudioTrack {
     pub samples: Vec<f32>,
@@ -51,7 +69,7 @@ impl AudioAnalysisService {
         Ok(bpm)
     }
 
-    /// Blocking BPM analysis using FFT
+    /// Blocking BPM analysis using improved windowed approach
     fn analyze_bpm_blocking(file_path: &str) -> Result<f32> {
         tracing::debug!("Checking if file exists: {}", file_path);
         
@@ -62,37 +80,43 @@ impl AudioAnalysisService {
         }
 
         tracing::debug!("Reading audio file: {}", file_path);
-        // Read the audio file
+        // Step 1: Read and prepare audio data
         let track = Self::read_audio_file(file_path)?;
         tracing::info!("Audio file loaded - Sample rate: {} Hz, Samples: {}, Duration: {:.2}s", 
                        track.sample_rate, track.samples.len(), 
                        track.samples.len() as f32 / track.sample_rate as f32);
         
-        tracing::debug!("Calculating spectrogram...");
-        // Calculate spectrogram
-        let spectrogram = Self::calculate_spectrogram(&track.samples);
-        tracing::debug!("Spectrogram calculated - Windows: {}, Frequency bins: {}", 
-                        spectrogram.len(), 
-                        spectrogram.first().map(|w| w.len()).unwrap_or(0));
+        // Create analysis configuration
+        let config = AnalysisConfig {
+            window_size: WINDOW_SIZE,
+            hop_size: HOP_SIZE,
+            sample_rate: track.sample_rate,
+            low_freq_cutoff: LOW_FREQ_CUTOFF,
+            beat_threshold: BEAT_THRESHOLD,
+        };
         
-        tracing::debug!("Detecting peaks...");
-        // Detect peaks
-        let peaks = Self::detect_peaks(&spectrogram);
-        tracing::debug!("Peaks detected: {}", peaks.len());
+        tracing::debug!("Starting windowed beat detection...");
+        // Step 2: Detect beats using windowed analysis
+        let beats = Self::detect_beats_windowed(&track.samples, &config)?;
+        tracing::info!("Beat detection completed - Found {} beats", beats.len());
         
-        tracing::debug!("Calculating BPM from peaks...");
-        // Calculate BPM
-        let bpm = Self::calculate_bpm(&peaks, track.sample_rate);
-        tracing::debug!("Raw BPM calculation result: {}", bpm);
+        if beats.len() < 2 {
+            tracing::warn!("Not enough beats detected for BPM calculation, using default");
+            return Ok(120.0);
+        }
+        
+        tracing::debug!("Calculating BPM from detected beats...");
+        // Step 3: Calculate BPM from beat timestamps
+        let bpm = Self::calculate_bpm_from_beats(&beats)?;
+        tracing::debug!("Raw BPM calculation result: {:.1}", bpm);
         
         // Validate BPM range
-        if bpm > 0.0 && bpm < 300.0 {
-            tracing::info!("BPM analysis successful: {} BPM", bpm);
+        if bpm >= 50.0 && bpm <= 250.0 {
+            tracing::info!("BPM analysis successful: {:.1} BPM", bpm);
             Ok(bpm)
         } else {
-            // Fallback to a reasonable default if analysis fails
-            tracing::warn!("BPM analysis resulted in unrealistic value: {}, using fallback (120 BPM)", bpm);
-            Ok(120.0) // Default BPM
+            tracing::warn!("BPM analysis resulted in unrealistic value: {:.1}, using fallback (120 BPM)", bpm);
+            Ok(120.0)
         }
     }
 
@@ -384,190 +408,173 @@ impl AudioAnalysisService {
         })
     }
 
-    /// Calculates the spectrogram of an audio signal using FFT and a Hamming window.
-    fn calculate_spectrogram(samples: &[f32]) -> Vec<Vec<f32>> {
-        let fft_size = WINDOW_SIZE.next_power_of_two();
-        let fft = FftPlanner::new().plan_fft_forward(fft_size);
-
-        let mut spectrogram = Vec::new();
-
-        for window_start in (0..samples.len()).step_by(HOP_SIZE) {
-            let window_end = window_start + WINDOW_SIZE;
-            if window_end > samples.len() {
-                break;
-            }
-
-            let mut windowed_samples: Vec<f32> = samples[window_start..window_end].to_vec();
-            Self::apply_hamming_window(&mut windowed_samples);
-
-            let mut complex_samples: Vec<Complex<f32>> = windowed_samples
-                .iter()
-                .map(|&x| Complex::new(x, 0.0))
-                .collect();
-            
-            // Pad with zeros to reach fft_size
-            complex_samples.resize(fft_size, Complex::new(0.0, 0.0));
-            
-            fft.process(&mut complex_samples);
-
-            let magnitude_spectrum: Vec<f32> = complex_samples
-                .iter()
-                .map(|c| c.norm())
-                .collect();
-            spectrogram.push(magnitude_spectrum);
-        }
-
-        spectrogram
-    }
-
-    /// Applies the Hamming window to a vector of audio samples.
-    fn apply_hamming_window(samples: &mut Vec<f32>) {
-        let window: Vec<f32> = (0..samples.len())
-            .map(|i| {
-                0.54 - 0.46 * f32::cos(2.0 * std::f32::consts::PI * i as f32 / (samples.len() - 1) as f32)
-            })
-            .collect();
-
-        for i in 0..samples.len() {
-            samples[i] *= window[i];
-        }
-    }
-
-    /// Detects peaks in a spectrogram using a simple thresholding approach.
-    /// Focuses on lower frequency ranges where beats are more likely to occur.
-    fn detect_peaks(spectrogram: &[Vec<f32>]) -> Vec<(usize, usize)> {
-        let mut peaks = Vec::new();
-
-        for (i, row) in spectrogram.iter().enumerate() {
-            // Focus on lower frequency bins (roughly 20Hz to 200Hz range)
-            // This corresponds to typical bass/kick drum frequencies
-            let max_freq_bin = (row.len() / 8).min(row.len()); // Focus on lower 1/8 of frequency spectrum
-            
-            for (j, &magnitude) in row.iter().enumerate().take(max_freq_bin) {
-                if magnitude > THRESHOLD && Self::is_local_maximum(spectrogram, i, j) {
-                    peaks.push((i, j));
-                }
-            }
-        }
-
-        tracing::debug!("Peak detection focused on frequency bins 0-{} (out of {})", 
-                       spectrogram.first().map(|r| r.len() / 8).unwrap_or(0),
-                       spectrogram.first().map(|r| r.len()).unwrap_or(0));
-
-        peaks
-    }
-
-    /// Checks if a point in a spectrogram is a local maximum.
-    fn is_local_maximum(spectrogram: &[Vec<f32>], i: usize, j: usize) -> bool {
-        let magnitude = spectrogram[i][j];
-
-        // Check neighbors for lower magnitude
-        let neighbors = [
-            (i.wrapping_sub(1), j),
-            (i.wrapping_add(1), j),
-            (i, j.wrapping_sub(1)),
-            (i, j.wrapping_add(1)),
-        ];
-
-        // Check if the magnitude of the current point is greater than the magnitudes of all its neighbors
-        neighbors.iter().all(|&(ni, nj)| {
-            ni >= spectrogram.len() || 
-            nj >= spectrogram[ni].len() || 
-            spectrogram[ni][nj] < magnitude
-        })
-    }
-
-    /// Creates a histogram of time intervals.
-    fn create_histogram(intervals: &[f32], bins: usize) -> Vec<usize> {
-        if intervals.is_empty() {
-            return vec![0; bins];
-        }
-
-        let min_interval = *intervals.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-        let max_interval = *intervals.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-
-        if min_interval >= max_interval {
-            return vec![0; bins];
-        }
-
-        let bin_width = (max_interval - min_interval) / bins as f32;
-        let mut histogram = vec![0; bins];
-
-        for &interval in intervals {
-            let bin_index = ((interval - min_interval) / bin_width).floor() as usize;
-            let bin_index = bin_index.min(bins - 1);
-            histogram[bin_index] += 1;
-        }
-
-        histogram
-    }
-
-    /// Calculates the Beats Per Minute (BPM) from detected peaks.
-    fn calculate_bpm(peaks: &[(usize, usize)], sample_rate: u32) -> f32 {
-        if peaks.len() < 2 {
-            tracing::debug!("Not enough peaks for BPM calculation: {}", peaks.len());
-            return 120.0; // Default BPM if not enough peaks
-        }
-
-        // Calculate time intervals between peaks
-        let intervals: Vec<f32> = peaks
-            .windows(2)
-            .map(|w| {
-                let time_diff = (w[1].0 - w[0].0) as f32 * HOP_SIZE as f32 / sample_rate as f32;
-                time_diff
-            })
-            .filter(|&interval| interval > 0.2 && interval < 2.0) // More restrictive: 30-300 BPM range
-            .collect();
-
-        tracing::debug!("Filtered intervals count: {} (from {} peaks)", intervals.len(), peaks.len());
-
-        if intervals.is_empty() {
-            tracing::debug!("No valid intervals found after filtering");
-            return 120.0; // Default BPM
-        }
-
-        // Log some statistics about intervals
-        let min_interval = *intervals.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-        let max_interval = *intervals.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-        let avg_interval = intervals.iter().sum::<f32>() / intervals.len() as f32;
+    /// Detects beats using windowed analysis with spectrum analyzer
+    fn detect_beats_windowed(samples: &[f32], config: &AnalysisConfig) -> Result<Vec<Beat>> {
+        let mut beats = Vec::new();
+        let mut previous_energy = 0.0f32;
+        let mut energy_history = Vec::new();
         
-        tracing::debug!("Interval stats - Min: {:.3}s, Max: {:.3}s, Avg: {:.3}s", 
-                       min_interval, max_interval, avg_interval);
-
-        // Use a histogram to find the most common time interval
-        let histogram_bins = 50; // Reduced bins for better grouping
-        let histogram = Self::create_histogram(&intervals, histogram_bins);
-
-        // Find the bin with the maximum count
-        if let Some((bin_index, max_count)) = histogram
-            .iter()
-            .enumerate()
-            .max_by(|(_, count1), (_, count2)| count1.cmp(count2))
-        {
-            tracing::debug!("Most common bin: {} with {} occurrences", bin_index, max_count);
+        // Process audio in overlapping windows
+        for (window_idx, window_start) in (0..samples.len()).step_by(config.hop_size).enumerate() {
+            let window_end = (window_start + config.window_size).min(samples.len());
+            if window_end - window_start < config.window_size / 2 {
+                break; // Skip incomplete windows at the end
+            }
             
-            let bin_width = (max_interval - min_interval) / histogram_bins as f32;
-            let bin_center = min_interval + (bin_index as f32 + 0.5) * bin_width;
-
-            tracing::debug!("Bin center interval: {:.3}s", bin_center);
-
-            // Convert average interval to BPM
-            if bin_center > 0.0 {
-                let raw_bpm = 60.0 / bin_center;
-                tracing::debug!("Raw calculated BPM: {:.1}", raw_bpm);
-                
-                // More reasonable BPM range - don't clamp as aggressively
-                let bpm = raw_bpm.clamp(60.0, 300.0);
-                tracing::debug!("Clamped BPM: {:.1}", bpm);
-                
-                return bpm;
+            // Extract window samples and pad to power of 2 if needed
+            let mut window_samples = samples[window_start..window_end].to_vec();
+            
+            // Pad with zeros to reach window_size (power of 2)
+            window_samples.resize(config.window_size, 0.0);
+            
+            // Apply Hann window for better frequency resolution
+            let windowed_samples = hann_window(&window_samples);
+            
+            // Calculate spectrum using spectrum-analyzer
+            let spectrum_result = samples_fft_to_spectrum(
+                &windowed_samples,
+                config.sample_rate,
+                FrequencyLimit::Range(20.0, config.low_freq_cutoff),
+                Some(&divide_by_N_sqrt),
+            );
+            
+            let spectrum = match spectrum_result {
+                Ok(spectrum) => spectrum,
+                Err(e) => {
+                    tracing::debug!("FFT failed for window {}: {}", window_idx, e);
+                    continue;
+                }
+            };
+            
+            // Calculate energy in low frequency range (bass frequencies where beats occur)
+            let low_freq_energy: f32 = spectrum
+                .data()
+                .iter()
+                .map(|(freq, magnitude)| {
+                    if freq.val() <= config.low_freq_cutoff {
+                        magnitude.val() * magnitude.val() // Energy = magnitude^2
+                    } else {
+                        0.0
+                    }
+                })
+                .sum();
+            
+            // Store energy for adaptive thresholding
+            energy_history.push(low_freq_energy);
+            
+            // Keep only recent history for adaptive threshold
+            if energy_history.len() > 20 {
+                energy_history.remove(0);
+            }
+            
+            // Calculate adaptive threshold based on recent energy history
+            let avg_energy = energy_history.iter().sum::<f32>() / energy_history.len() as f32;
+            let adaptive_threshold = avg_energy * (1.0 + config.beat_threshold);
+            
+            // Beat detection: current energy significantly higher than recent average
+            // and higher than previous window (onset detection) with stronger requirements
+            if low_freq_energy > adaptive_threshold && low_freq_energy > previous_energy * 1.3 {
+                let timestamp = window_start as f32 / config.sample_rate as f32;
+                beats.push(Beat {
+                    timestamp,
+                    energy: low_freq_energy,
+                });
+            }
+            
+            previous_energy = low_freq_energy;
+        }
+        
+        // Post-process beats to remove too-close detections (debouncing)
+        let raw_beats_count = beats.len();
+        let debounced_beats = Self::debounce_beats(beats, 0.15); // Minimum 150ms between beats (max 400 BPM)
+        
+        tracing::info!("Beat detection: {} raw beats -> {} debounced beats", 
+                      raw_beats_count, debounced_beats.len());
+        
+        Ok(debounced_beats)
+    }
+    
+    /// Remove beats that are too close together (debouncing)
+    fn debounce_beats(beats: Vec<Beat>, min_interval: f32) -> Vec<Beat> {
+        if beats.is_empty() {
+            return beats;
+        }
+        
+        let mut debounced = Vec::new();
+        let mut last_timestamp = -1.0f32;
+        
+        for beat in beats {
+            if beat.timestamp - last_timestamp >= min_interval {
+                debounced.push(beat.clone());
+                last_timestamp = beat.timestamp;
             }
         }
-
-        // Default return value if calculation fails
-        tracing::debug!("BPM calculation failed, using default");
-        120.0
+        
+        debounced
     }
+    
+    /// Calculate BPM from detected beats using interval analysis
+    fn calculate_bpm_from_beats(beats: &[Beat]) -> Result<f32> {
+        if beats.len() < 2 {
+            return Err(anyhow!("Not enough beats for BPM calculation"));
+        }
+        
+        // Calculate intervals between consecutive beats
+        let intervals: Vec<f32> = beats
+            .windows(2)
+            .map(|pair| pair[1].timestamp - pair[0].timestamp)
+            .collect();
+        
+        tracing::debug!("Calculated {} intervals from {} beats", intervals.len(), beats.len());
+        
+        if intervals.is_empty() {
+            return Err(anyhow!("No intervals calculated"));
+        }
+        
+        // Filter out unrealistic intervals (too fast or too slow)
+        let filtered_intervals: Vec<f32> = intervals
+            .into_iter()
+            .filter(|&interval| interval >= 0.2 && interval <= 2.0) // 30-300 BPM range
+            .collect();
+        
+        if filtered_intervals.is_empty() {
+            return Err(anyhow!("No valid intervals after filtering"));
+        }
+        
+        tracing::debug!("Filtered to {} valid intervals", filtered_intervals.len());
+        
+        // Use median interval for robustness against outliers
+        let mut sorted_intervals = filtered_intervals.clone();
+        sorted_intervals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        
+        let median_interval = sorted_intervals[sorted_intervals.len() / 2];
+        let bpm = 60.0 / median_interval;
+        
+        tracing::debug!("Median interval: {:.3}s -> BPM: {:.1}", median_interval, bpm);
+        
+        // Additional validation: check if we might be detecting sub-beats
+        // This is common when the algorithm picks up on both beats and off-beats
+        if bpm > 160.0 {
+            // Try different subdivisions to find the most musical result
+            let half_time_bpm = bpm / 2.0;
+            let third_time_bpm = bpm / 3.0;
+            
+            tracing::debug!("High BPM detected ({:.1}), trying subdivisions - Half: {:.1}, Third: {:.1}", 
+                           bpm, half_time_bpm, third_time_bpm);
+            
+            // Prefer subdivisions that fall in typical musical BPM ranges
+            if half_time_bpm >= 80.0 && half_time_bpm <= 160.0 {
+                tracing::info!("Using half-time subdivision: {:.1} BPM (from {:.1})", half_time_bpm, bpm);
+                return Ok(half_time_bpm);
+            } else if third_time_bpm >= 80.0 && third_time_bpm <= 160.0 {
+                tracing::info!("Using third-time subdivision: {:.1} BPM (from {:.1})", third_time_bpm, bpm);
+                return Ok(third_time_bpm);
+            }
+        }
+        
+        Ok(bpm)
+    }
+
 
     /// Download and analyze a remote audio file
     pub async fn analyze_remote_file(&self, url: &str) -> Result<f32> {
