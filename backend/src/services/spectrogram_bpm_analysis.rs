@@ -27,6 +27,10 @@ const LOW_FREQ_CUTOFF: f32 = 10.0; // Slightly higher for beat detection
 const HIGH_FREQ_CUTOFF: f32 = 2000.0; // Upper limit for beat-relevant frequencies
 const ADAPTIVE_THRESHOLD_PERCENTAGE: f32 = 0.8; // 80% of energy range: min + (max-min) * 80%
 
+// BPM calculation configuration
+const SCORE_DEVIATION_PERCENTAGE: f32 = 0.1; // 10% deviation from max score for averaging candidates
+const USE_WEIGHTED_AVERAGING: bool = true; // If true, average weighted by score; if false, unweighted average
+
 /// Represents the full spectrogram of a song
 #[derive(Debug)]
 struct Spectrogram {
@@ -755,22 +759,65 @@ impl SpectrogramBpmAnalysisService {
         // Sort by score to find most common interval
         peak_scores.sort_by(|a, b| b.0.cmp(&a.0));
         
-        if let Some((best_score, best_interval)) = peak_scores.first() {
-            let bpm = 60.0 / best_interval;
+        if let Some((best_score, _)) = peak_scores.first() {
+            // Calculate score threshold for averaging candidates
+            let score_threshold = (*best_score as f32 * (1.0 - SCORE_DEVIATION_PERCENTAGE)) as usize;
             
-            tracing::debug!("Histogram analysis - Most common interval: {:.3}s (score: {}) -> BPM: {:.1}", 
-                           best_interval, best_score, bpm);
+            // Find all candidates within the score threshold
+            let candidates_within_threshold: Vec<(usize, f32)> = peak_scores
+                .iter()
+                .filter(|(score, _)| *score >= score_threshold)
+                .cloned()
+                .collect();
+            
+            tracing::debug!("Found {} candidates within {}% of max score (threshold: {})", 
+                           candidates_within_threshold.len(), 
+                           SCORE_DEVIATION_PERCENTAGE * 100.0, 
+                           score_threshold);
+            
+            // Calculate averaged BPM
+            let averaged_bpm = if USE_WEIGHTED_AVERAGING {
+                // Weighted average by score
+                let total_weighted_bpm: f32 = candidates_within_threshold
+                    .iter()
+                    .map(|(score, interval)| (*score as f32) * (60.0 / interval))
+                    .sum();
+                let total_weight: f32 = candidates_within_threshold
+                    .iter()
+                    .map(|(score, _)| *score as f32)
+                    .sum();
+                
+                if total_weight > 0.0 {
+                    total_weighted_bpm / total_weight
+                } else {
+                    60.0 / candidates_within_threshold[0].1
+                }
+            } else {
+                // Unweighted average
+                let total_bpm: f32 = candidates_within_threshold
+                    .iter()
+                    .map(|(_, interval)| 60.0 / interval)
+                    .sum();
+                total_bpm / candidates_within_threshold.len() as f32
+            };
+            
+            tracing::debug!("Histogram analysis - {} averaging of {} candidates -> BPM: {:.1}", 
+                           if USE_WEIGHTED_AVERAGING { "Weighted" } else { "Unweighted" },
+                           candidates_within_threshold.len(), 
+                           averaged_bpm);
             
             // Log top candidates
-            for (i, (score, interval)) in peak_scores.iter().take(5).enumerate() {
-                tracing::debug!("Candidate {}: {:.3}s (score: {}) -> BPM: {:.1}", 
-                               i + 1, interval, score, 60.0 / interval);
+            for (i, (score, interval)) in peak_scores.iter().take(10).enumerate() {
+                let included = *score >= score_threshold;
+                tracing::debug!("Candidate {}: {:.3}s (score: {}) -> BPM: {:.1} {}", 
+                               i + 1, interval, score, 60.0 / interval,
+                               if included { "[INCLUDED]" } else { "" });
             }
             
             // Check for subdivision patterns
-            if bpm > 160.0 {
-                let half_bpm = bpm / 2.0;
-                let third_bpm = bpm / 3.0;
+            if averaged_bpm > 160.0 {
+                let half_bpm = averaged_bpm / 2.0;
+                let third_bpm = averaged_bpm / 3.0;
                 
                 if half_bpm >= 80.0 && half_bpm <= 160.0 {
                     tracing::info!("Using half-time subdivision: {:.1} BPM", half_bpm);
@@ -781,7 +828,7 @@ impl SpectrogramBpmAnalysisService {
                 }
             }
             
-            Ok(bpm)
+            Ok(averaged_bpm)
         } else {
             Err(anyhow!("No peaks found in histogram analysis"))
         }
