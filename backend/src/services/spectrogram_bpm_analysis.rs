@@ -31,6 +31,11 @@ const ADAPTIVE_THRESHOLD_PERCENTAGE: f32 = 0.8; // 80% of energy range: min + (m
 const SCORE_DEVIATION_PERCENTAGE: f32 = 0.1; // 10% deviation from max score for averaging candidates
 const USE_WEIGHTED_AVERAGING: bool = true; // If true, average weighted by score; if false, unweighted average
 
+// Image generation configuration
+const GENERATE_SPECTROGRAM_IMAGE: bool = true; // If true, generate spectrogram image files
+const GENERATE_ANALYSIS_VISUALIZATION: bool = true; // If true, generate analysis visualization image
+const OVERRIDE_EXISTING_IMAGES: bool = true; // If true, overwrite existing image files; if false, skip if exists
+
 /// Represents the full spectrogram of a song
 #[derive(Debug)]
 struct Spectrogram {
@@ -118,7 +123,11 @@ impl SpectrogramBpmAnalysisService {
         
         // Step 3: Save spectrogram as image
         let spectrogram_path = Self::save_spectrogram_image(&spectrogram, file_path)?;
-        tracing::info!("Spectrogram image saved to: {}", spectrogram_path);
+        if GENERATE_SPECTROGRAM_IMAGE {
+            tracing::info!("Spectrogram image saved to: {}", spectrogram_path);
+        } else {
+            tracing::debug!("Spectrogram image generation disabled, placeholder path: {}", spectrogram_path);
+        }
         
         // Step 4: Detect beats from spectrogram
         tracing::debug!("Detecting beats from spectrogram...");
@@ -140,7 +149,11 @@ impl SpectrogramBpmAnalysisService {
         // Step 6: Create analysis visualization
         tracing::debug!("Creating analysis visualization...");
         let visualization_path = Self::create_analysis_visualization(&beats, &spectrogram, &analysis_cache, file_path, bpm)?;
-        tracing::info!("Analysis visualization saved to: {}", visualization_path);
+        if GENERATE_ANALYSIS_VISUALIZATION {
+            tracing::info!("Analysis visualization saved to: {}", visualization_path);
+        } else {
+            tracing::debug!("Analysis visualization generation disabled, placeholder path: {}", visualization_path);
+        }
         
         // Validate BPM range
         let final_bpm = if bpm >= 50.0 && bpm <= 250.0 {
@@ -270,6 +283,25 @@ impl SpectrogramBpmAnalysisService {
 
     /// Save spectrogram as an image file
     fn save_spectrogram_image(spectrogram: &Spectrogram, original_file_path: &str) -> Result<String> {
+        // Generate output path first
+        let original_path = Path::new(original_file_path);
+        let file_stem = original_path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        
+        let output_path = format!("./cache/spectrograms/spectrogram_{}.png", file_stem);
+        
+        // Check if we should skip generation
+        if !GENERATE_SPECTROGRAM_IMAGE {
+            tracing::debug!("Spectrogram image generation disabled, returning placeholder path");
+            return Ok(output_path);
+        }
+        
+        // Check if file exists and we shouldn't override
+        if !OVERRIDE_EXISTING_IMAGES && Path::new(&output_path).exists() {
+            tracing::info!("Spectrogram image already exists and override disabled: {}", output_path);
+            return Ok(output_path);
+        }
         let width = spectrogram.data.len();
         let height = spectrogram.data.first().map_or(0, |f| f.len());
         
@@ -321,14 +353,6 @@ impl SpectrogramBpmAnalysisService {
             }
         }
         
-        // Generate output path
-        let original_path = Path::new(original_file_path);
-        let file_stem = original_path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        
-        let output_path = format!("./cache/spectrograms/spectrogram_{}.png", file_stem);
-        
         // Create directory if it doesn't exist
         if let Some(parent) = Path::new(&output_path).parent() {
             std::fs::create_dir_all(parent)?;
@@ -350,6 +374,25 @@ impl SpectrogramBpmAnalysisService {
         original_file_path: &str, 
         detected_bpm: f32
     ) -> Result<String> {
+        // Generate output path first
+        let original_path = Path::new(original_file_path);
+        let file_stem = original_path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        
+        let output_path = format!("./cache/spectrograms/analysis_{}_{}bpm.png", file_stem, detected_bpm as u32);
+        
+        // Check if we should skip generation
+        if !GENERATE_ANALYSIS_VISUALIZATION {
+            tracing::debug!("Analysis visualization generation disabled, returning placeholder path");
+            return Ok(output_path);
+        }
+        
+        // Check if file exists and we shouldn't override
+        if !OVERRIDE_EXISTING_IMAGES && Path::new(&output_path).exists() {
+            tracing::info!("Analysis visualization already exists and override disabled: {}", output_path);
+            return Ok(output_path);
+        }
         // Use actual spectrogram dimensions (same as normal spectrogram)
         let img_width = spectrogram.data.len() as u32;
         let img_height = spectrogram.data.first().map_or(0, |f| f.len()) as u32;
@@ -507,14 +550,6 @@ impl SpectrogramBpmAnalysisService {
                 }
             }
         }
-        
-        // Generate output path
-        let original_path = Path::new(original_file_path);
-        let file_stem = original_path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown");
-        
-        let output_path = format!("./cache/spectrograms/analysis_{}_{}bpm.png", file_stem, detected_bpm as u32);
         
         // Create directory if it doesn't exist
         if let Some(parent) = Path::new(&output_path).parent() {
