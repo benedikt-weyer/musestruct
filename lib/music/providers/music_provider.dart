@@ -7,6 +7,7 @@ import '../../core/services/audio_service.dart';
 import '../../core/services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../../playlists/services/playlist_api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // import '../../core/services/spotify_webview_player.dart'; // Disabled
 // import '../../core/widgets/spotify_webview_widget.dart'; // Disabled
 
@@ -18,6 +19,15 @@ class MusicProvider with ChangeNotifier {
   SearchResults? _searchResults;
   bool _isSearching = false;
   String? _searchError;
+  
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 20;
+  String _lastSearchQuery = '';
+  SearchType _lastSearchType = SearchType.tracks;
+  
+  // Available page sizes
+  static const List<int> _availablePageSizes = [10, 20, 50, 100];
   
   List<ServiceInfo> _availableServices = [];
   String _selectedService = 'server'; // Default to server since it's always available
@@ -42,6 +52,16 @@ class MusicProvider with ChangeNotifier {
   SearchResults? get searchResults => _searchResults;
   bool get isSearching => _isSearching;
   String? get searchError => _searchError;
+  
+  // Pagination getters
+  int get currentPage => _currentPage;
+  int get itemsPerPage => _itemsPerPage;
+  List<int> get availablePageSizes => MusicProvider._availablePageSizes;
+  int get totalPages => _searchResults != null 
+      ? ((_searchResults!.total / _itemsPerPage).ceil()).clamp(1, double.infinity).toInt()
+      : 1;
+  bool get hasNextPage => _currentPage < totalPages;
+  bool get hasPreviousPage => _currentPage > 1;
   
   List<ServiceInfo> get availableServices => _availableServices;
   String get selectedService => _selectedService;
@@ -129,6 +149,7 @@ class MusicProvider with ChangeNotifier {
   MusicProvider() {
     _initializeAudioService();
     _loadAvailableServices();
+    _loadPageSizePreference();
   }
 
   void _initializeAudioService() async {
@@ -394,26 +415,36 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> searchAll() async {
     // Search all music from server with empty query
+    // Reset pagination for new search
+    _currentPage = 1;
+    _lastSearchQuery = '';
+    _lastSearchType = SearchType.tracks;
+
     _isSearching = true;
     _searchError = null;
     notifyListeners();
 
     try {
       // Use empty query to get all results from server
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      
       final futures = await Future.wait([
         MusicApiService.searchMusic(
           '', // Empty query for all results
-          limit: 100, // Higher limit for search all
+          limit: _itemsPerPage,
+          offset: offset,
           service: 'server',
         ),
         MusicApiService.searchAlbums(
           '', // Empty query for all results
-          limit: 100, // Higher limit for search all
+          limit: _itemsPerPage,
+          offset: offset,
           service: 'server',
         ),
         MusicApiService.searchPlaylists(
           '', // Empty query for all results
-          limit: 100, // Higher limit for search all
+          limit: _itemsPerPage,
+          offset: offset,
           service: 'server',
         ),
       ]);
@@ -439,13 +470,25 @@ class MusicProvider with ChangeNotifier {
         playlists = playlistResponse.data!.playlists ?? [];
       }
       
+      // Use the total from the first successful response, or calculate from results
+      int total = 0;
+      if (musicResponse.success && musicResponse.data != null) {
+        total = musicResponse.data!.total;
+      } else if (albumResponse.success && albumResponse.data != null) {
+        total = albumResponse.data!.total;
+      } else if (playlistResponse.success && playlistResponse.data != null) {
+        total = playlistResponse.data!.total;
+      } else {
+        total = tracks.length + albums.length + playlists.length;
+      }
+
       _searchResults = SearchResults(
         tracks: tracks,
         albums: albums,
         playlists: playlists,
-        total: (tracks.length + albums.length + playlists.length),
-        offset: 0,
-        limit: 100,
+        total: total,
+        offset: offset,
+        limit: _itemsPerPage,
       );
       
       _searchError = null;
@@ -460,6 +503,11 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> searchBoth(String query) async {
     if (query.trim().isEmpty) return;
+
+    // Reset pagination for new search
+    _currentPage = 1;
+    _lastSearchQuery = query;
+    _lastSearchType = SearchType.tracks; // Default to tracks for combined search
 
     _isSearching = true;
     _searchError = null;
@@ -711,7 +759,162 @@ class MusicProvider with ChangeNotifier {
   void clearSearch() {
     _searchResults = null;
     _searchError = null;
+    _currentPage = 1;
+    _lastSearchQuery = '';
     notifyListeners();
+  }
+
+  // Pagination methods
+  void nextPage() {
+    if (hasNextPage) {
+      _currentPage++;
+      _performPaginatedSearch();
+    }
+  }
+
+  void previousPage() {
+    if (hasPreviousPage) {
+      _currentPage--;
+      _performPaginatedSearch();
+    }
+  }
+
+  void goToPage(int page) {
+    if (page >= 1 && page <= totalPages && page != _currentPage) {
+      _currentPage = page;
+      _performPaginatedSearch();
+    }
+  }
+
+  void changePageSize(int newPageSize) {
+    if (availablePageSizes.contains(newPageSize) && newPageSize != _itemsPerPage) {
+      _itemsPerPage = newPageSize;
+      _currentPage = 1; // Reset to first page when changing page size
+      
+      // Save preference
+      _savePageSizePreference(newPageSize);
+      
+      // Refresh search results with new page size
+      _performPaginatedSearch();
+    }
+  }
+
+  Future<void> _loadPageSizePreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPageSize = prefs.getInt('search_page_size') ?? 20;
+      
+      if (_availablePageSizes.contains(savedPageSize)) {
+        _itemsPerPage = savedPageSize;
+      }
+    } catch (e) {
+      print('Failed to load page size preference: $e');
+    }
+  }
+
+  Future<void> _savePageSizePreference(int pageSize) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('search_page_size', pageSize);
+    } catch (e) {
+      print('Failed to save page size preference: $e');
+    }
+  }
+
+  void _performPaginatedSearch() {
+    if (_lastSearchQuery.isEmpty) {
+      if (_lastSearchType == SearchType.tracks) {
+        searchAll();
+      }
+      return;
+    }
+
+    // Perform search with current pagination
+    switch (_lastSearchType) {
+      case SearchType.tracks:
+        _searchWithPagination(_lastSearchQuery, 'track');
+        break;
+      case SearchType.albums:
+        _searchWithPagination(_lastSearchQuery, 'album');
+        break;
+      case SearchType.playlists:
+        _searchWithPagination(_lastSearchQuery, 'playlist');
+        break;
+    }
+  }
+
+  Future<void> _searchWithPagination(String query, String type) async {
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      
+      ApiResponse<SearchResults> response;
+      
+      if (type == 'track') {
+        if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+          response = await MusicApiService.searchMusic(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            services: _selectedServices,
+          );
+        } else {
+          response = await MusicApiService.searchMusic(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            service: _selectedService,
+          );
+        }
+      } else if (type == 'album') {
+        if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+          response = await MusicApiService.searchAlbums(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            services: _selectedServices,
+          );
+        } else {
+          response = await MusicApiService.searchAlbums(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            service: _selectedService,
+          );
+        }
+      } else {
+        if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+          response = await MusicApiService.searchPlaylists(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            services: _selectedServices,
+          );
+        } else {
+          response = await MusicApiService.searchPlaylists(
+            query,
+            limit: _itemsPerPage,
+            offset: offset,
+            service: _selectedService,
+          );
+        }
+      }
+      
+      if (response.success && response.data != null) {
+        _searchResults = response.data;
+        _searchError = null;
+      } else {
+        _searchError = response.message ?? 'Search failed';
+      }
+    } catch (e) {
+      _searchError = 'Search failed: $e';
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
   }
 
   /// Update the BPM of a track

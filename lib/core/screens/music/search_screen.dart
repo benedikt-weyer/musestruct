@@ -66,6 +66,47 @@ class _SearchScreenState extends State<SearchScreen> {
     musicProvider.searchAll();
   }
 
+  List<int> _getVisiblePageNumbers(int currentPage, int totalPages) {
+    const int maxVisible = 7; // Maximum number of page buttons to show
+    
+    if (totalPages <= maxVisible) {
+      return List.generate(totalPages, (index) => index + 1);
+    }
+    
+    List<int> pages = [];
+    
+    // Always show first page
+    pages.add(1);
+    
+    // Calculate range around current page
+    int start = (currentPage - 2).clamp(2, totalPages - 1);
+    int end = (currentPage + 2).clamp(2, totalPages - 1);
+    
+    // Add ellipsis if needed before range
+    if (start > 2) {
+      pages.add(-1); // -1 represents ellipsis
+    }
+    
+    // Add pages around current page
+    for (int i = start; i <= end; i++) {
+      if (i != 1 && i != totalPages) {
+        pages.add(i);
+      }
+    }
+    
+    // Add ellipsis if needed after range
+    if (end < totalPages - 1) {
+      pages.add(-1); // -1 represents ellipsis
+    }
+    
+    // Always show last page
+    if (totalPages > 1) {
+      pages.add(totalPages);
+    }
+    
+    return pages;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -427,11 +468,37 @@ class _SearchScreenState extends State<SearchScreen> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Pagination info
+                    if (musicProvider.totalPages > 1) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        child: Row(
+                          children: [
+                            Text(
+                              'Page ${musicProvider.currentPage} of ${musicProvider.totalPages}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${searchResults.total} total results',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    
                     if (_searchType == SearchType.tracks && searchResults.tracks.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
-                          'Tracks (${searchResults.tracks.length})',
+                          'Tracks (${searchResults.tracks.length}${musicProvider.totalPages > 1 ? ' on this page' : ''})',
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -457,7 +524,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
-                          'Albums (${searchResults.albums.length})',
+                          'Albums (${searchResults.albums.length}${musicProvider.totalPages > 1 ? ' on this page' : ''})',
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -556,7 +623,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
-                          'Playlists (${searchResults.playlists?.length ?? 0})',
+                          'Playlists (${searchResults.playlists?.length ?? 0}${musicProvider.totalPages > 1 ? ' on this page' : ''})',
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -597,6 +664,107 @@ class _SearchScreenState extends State<SearchScreen> {
                               );
                             }
                           },
+                        ),
+                      ),
+                    ],
+                    
+                    // Pagination controls
+                    if (musicProvider.totalPages > 1 || searchResults.total > musicProvider.itemsPerPage) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            // Page size selector
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Results per page:',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                DropdownButton<int>(
+                                  value: musicProvider.itemsPerPage,
+                                  items: musicProvider.availablePageSizes.map((size) {
+                                    return DropdownMenuItem<int>(
+                                      value: size,
+                                      child: Text('$size'),
+                                    );
+                                  }).toList(),
+                                  onChanged: (newSize) {
+                                    if (newSize != null) {
+                                      musicProvider.changePageSize(newSize);
+                                    }
+                                  },
+                                  underline: Container(),
+                                  isDense: true,
+                                ),
+                              ],
+                            ),
+                            
+                            if (musicProvider.totalPages > 1) ...[
+                              const SizedBox(height: 16),
+                              // Navigation controls
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  // Previous button
+                                  IconButton(
+                                    onPressed: musicProvider.hasPreviousPage 
+                                        ? () => musicProvider.previousPage()
+                                        : null,
+                                    icon: const Icon(Icons.chevron_left),
+                                    tooltip: 'Previous page',
+                                  ),
+                                  
+                                  // Page numbers
+                                  ...List.generate(
+                                    _getVisiblePageNumbers(musicProvider.currentPage, musicProvider.totalPages).length,
+                                    (index) {
+                                      final pageNumber = _getVisiblePageNumbers(musicProvider.currentPage, musicProvider.totalPages)[index];
+                                      final isCurrentPage = pageNumber == musicProvider.currentPage;
+                                      
+                                      return Container(
+                                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                                        child: pageNumber == -1
+                                            ? const Padding(
+                                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                                child: Text('...'),
+                                              )
+                                            : TextButton(
+                                                onPressed: isCurrentPage 
+                                                    ? null 
+                                                    : () => musicProvider.goToPage(pageNumber),
+                                                style: TextButton.styleFrom(
+                                                  backgroundColor: isCurrentPage 
+                                                      ? Theme.of(context).primaryColor 
+                                                      : null,
+                                                  foregroundColor: isCurrentPage 
+                                                      ? Colors.white 
+                                                      : null,
+                                                  minimumSize: const Size(40, 40),
+                                                ),
+                                                child: Text('$pageNumber'),
+                                              ),
+                                      );
+                                    },
+                                  ),
+                                  
+                                  // Next button
+                                  IconButton(
+                                    onPressed: musicProvider.hasNextPage 
+                                        ? () => musicProvider.nextPage()
+                                        : null,
+                                    icon: const Icon(Icons.chevron_right),
+                                    tooltip: 'Next page',
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
