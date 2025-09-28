@@ -392,6 +392,72 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> searchAll() async {
+    // Search all music from server with empty query
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      // Use empty query to get all results from server
+      final futures = await Future.wait([
+        MusicApiService.searchMusic(
+          '', // Empty query for all results
+          limit: 100, // Higher limit for search all
+          service: 'server',
+        ),
+        MusicApiService.searchAlbums(
+          '', // Empty query for all results
+          limit: 100, // Higher limit for search all
+          service: 'server',
+        ),
+        MusicApiService.searchPlaylists(
+          '', // Empty query for all results
+          limit: 100, // Higher limit for search all
+          service: 'server',
+        ),
+      ]);
+      
+      final musicResponse = futures[0];
+      final albumResponse = futures[1];
+      final playlistResponse = futures[2];
+      
+      // Combine the results
+      List<Track> tracks = [];
+      List<Album> albums = [];
+      List<PlaylistSearchResult> playlists = [];
+      
+      if (musicResponse.success && musicResponse.data != null) {
+        tracks = musicResponse.data!.tracks;
+      }
+      
+      if (albumResponse.success && albumResponse.data != null) {
+        albums = albumResponse.data!.albums;
+      }
+      
+      if (playlistResponse.success && playlistResponse.data != null) {
+        playlists = playlistResponse.data!.playlists ?? [];
+      }
+      
+      _searchResults = SearchResults(
+        tracks: tracks,
+        albums: albums,
+        playlists: playlists,
+        total: (tracks.length + albums.length + playlists.length),
+        offset: 0,
+        limit: 100,
+      );
+      
+      _searchError = null;
+    } catch (e) {
+      _searchError = 'Failed to search all music: $e';
+      _searchResults = null;
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> searchBoth(String query) async {
     if (query.trim().isEmpty) return;
 

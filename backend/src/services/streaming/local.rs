@@ -326,10 +326,15 @@ impl LocalMusicService {
         
         tracks.iter()
             .filter(|track| {
-                track.title.to_lowercase().contains(&query_lower) ||
-                track.artist.to_lowercase().contains(&query_lower) ||
-                track.album.to_lowercase().contains(&query_lower) ||
-                track.file_name.to_lowercase().contains(&query_lower)
+                // If query is empty, return all tracks
+                if query.trim().is_empty() {
+                    true
+                } else {
+                    track.title.to_lowercase().contains(&query_lower) ||
+                    track.artist.to_lowercase().contains(&query_lower) ||
+                    track.album.to_lowercase().contains(&query_lower) ||
+                    track.file_name.to_lowercase().contains(&query_lower)
+                }
             })
             .map(|track| StreamingTrack {
                 id: format!("server_{}", track.file_path.to_string_lossy()),
@@ -354,8 +359,15 @@ impl LocalMusicService {
         
         // Group tracks by album using metadata
         for track in tracks {
-            if track.album.to_lowercase().contains(&query_lower) ||
-               track.artist.to_lowercase().contains(&query_lower) {
+            // If query is empty, include all albums
+            let matches = if query.trim().is_empty() {
+                true
+            } else {
+                track.album.to_lowercase().contains(&query_lower) ||
+                track.artist.to_lowercase().contains(&query_lower)
+            };
+            
+            if matches {
                 let album_key = format!("{}_{}", track.artist, track.album);
                 albums.entry(album_key).or_insert_with(Vec::new).push(track);
             }
@@ -530,8 +542,13 @@ impl LocalMusicService {
         
         playlists.iter()
             .filter(|playlist| {
-                playlist.name.to_lowercase().contains(&query_lower) ||
-                playlist.description.as_ref().map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
+                // If query is empty, return all playlists
+                if query.trim().is_empty() {
+                    true
+                } else {
+                    playlist.name.to_lowercase().contains(&query_lower) ||
+                    playlist.description.as_ref().map_or(false, |desc| desc.to_lowercase().contains(&query_lower))
+                }
             })
             .cloned()
             .collect()

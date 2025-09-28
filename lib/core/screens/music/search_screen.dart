@@ -43,6 +43,29 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  bool _shouldShowSearchAllButton(MusicProvider musicProvider) {
+    // Show Search All button only when server is the selected source
+    if (musicProvider.useMultiServiceSearch) {
+      // In multi-service mode, show if only server is selected
+      return musicProvider.selectedServices.length == 1 && 
+             musicProvider.selectedServices.contains('server');
+    } else {
+      // In single service mode, show if server is selected
+      return musicProvider.selectedService == 'server';
+    }
+  }
+
+  void _performSearchAll() {
+    final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+    
+    // Clear the search input
+    _searchController.clear();
+    _lastQuery = '';
+    
+    // Perform search with empty query to get all results from server
+    musicProvider.searchAll();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -203,35 +226,66 @@ class _SearchScreenState extends State<SearchScreen> {
                   },
                 ),
                 
-                // Search bar
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: _searchType == SearchType.tracks
-                        ? 'Search for songs, artists...'
-                        : _searchType == SearchType.albums
-                        ? 'Search for albums...'
-                        : 'Search for playlists...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              _lastQuery = '';
-                              Provider.of<MusicProvider>(context, listen: false)
-                                  .clearSearch();
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Search bar with optional Search All button
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: _searchType == SearchType.tracks
+                              ? 'Search for songs, artists...'
+                              : _searchType == SearchType.albums
+                              ? 'Search for albums...'
+                              : 'Search for playlists...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    _lastQuery = '';
+                                    Provider.of<MusicProvider>(context, listen: false)
+                                        .clearSearch();
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onSubmitted: _performSearch,
+                        onChanged: (value) {
+                          setState(() {}); // Update UI to show/hide clear button
+                        },
+                      ),
                     ),
-                  ),
-                  onSubmitted: _performSearch,
-                  onChanged: (value) {
-                    setState(() {}); // Update UI to show/hide clear button
-                  },
+                    // Show Search All button only when server is selected as source
+                    Consumer<MusicProvider>(
+                      builder: (context, musicProvider, child) {
+                        final showSearchAllButton = _shouldShowSearchAllButton(musicProvider);
+                        
+                        if (!showSearchAllButton) {
+                          return const SizedBox.shrink();
+                        }
+                        
+                        return Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _performSearchAll(),
+                            icon: const Icon(Icons.library_music, size: 18),
+                            label: const Text('Search All'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
