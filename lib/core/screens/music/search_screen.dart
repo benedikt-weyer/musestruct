@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../music/providers/music_provider.dart';
 import '../../../music/providers/saved_albums_provider.dart';
+import '../../../music/providers/saved_tracks_provider.dart';
+import '../../../playlists/providers/playlist_provider.dart';
 import '../../widgets/track_tile.dart';
 import '../../widgets/album_tile.dart';
 import '../../widgets/playlist_search_tile.dart';
 import '../../widgets/copyable_error.dart';
 import '../../widgets/service_filter.dart';
 import '../../../music/models/music.dart';
+import '../../../music/services/music_api_service.dart';
+import '../../../core/models/api_response.dart';
+import '../playlists/bulk_select_playlist_dialog.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -605,11 +610,53 @@ class _SearchScreenState extends State<SearchScreen> {
                     if (_searchType == SearchType.tracks && searchResults.tracks.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Text(
-                          'Tracks (${searchResults.tracks.length}${musicProvider.totalPages > 1 ? ' on this page' : ''})',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Tracks (${searchResults.tracks.length}${musicProvider.totalPages > 1 ? ' on this page' : ''})',
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            // Show bulk action buttons only for library search
+                            if (_isLibrarySearch) ...[
+                              PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert),
+                                tooltip: 'Bulk Actions',
+                                onSelected: (value) async {
+                                  if (value == 'add_all_to_my_tracks') {
+                                    await _addAllTracksToMyTracks(context, musicProvider);
+                                  } else if (value == 'add_all_to_playlist') {
+                                    await _addAllTracksToPlaylist(context, musicProvider);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem<String>(
+                                    value: 'add_all_to_my_tracks',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.favorite),
+                                        SizedBox(width: 8),
+                                        Text('Add All to My Tracks'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem<String>(
+                                    value: 'add_all_to_playlist',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.playlist_add),
+                                        SizedBox(width: 8),
+                                        Text('Add All to Playlist'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -884,5 +931,394 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
+  }
+
+  /// Get all library tracks without pagination
+  Future<List<Track>> _getAllLibraryTracks(MusicProvider musicProvider) async {
+    List<Track> allTracks = [];
+    int offset = 0;
+    const int batchSize = 100; // Fetch in batches to avoid memory issues
+    
+    print('DEBUG: Starting to fetch all library tracks');
+    print('DEBUG: useMultiServiceSearch: ${musicProvider.useMultiServiceSearch}');
+    print('DEBUG: selectedServices: ${musicProvider.selectedServices}');
+    print('DEBUG: selectedService: ${musicProvider.selectedService}');
+    
+    while (true) {
+      print('DEBUG: Fetching batch at offset $offset with batch size $batchSize');
+      
+      ApiResponse<SearchResults> response;
+      
+      try {
+        if (musicProvider.useMultiServiceSearch && musicProvider.selectedServices.isNotEmpty) {
+          print('DEBUG: Using multi-service search with services: ${musicProvider.selectedServices}');
+          response = await MusicApiService.searchAllLibrary(
+            limit: batchSize,
+            offset: offset,
+            services: musicProvider.selectedServices,
+            type: 'track',
+          );
+        } else {
+          print('DEBUG: Using single service search with service: ${musicProvider.selectedService}');
+          response = await MusicApiService.searchAllLibrary(
+            limit: batchSize,
+            offset: offset,
+            service: musicProvider.selectedService,
+            type: 'track',
+          );
+        }
+        
+        print('DEBUG: API response - success: ${response.success}, message: ${response.message}');
+        
+        if (response.data != null) {
+          print('DEBUG: Response data - tracks: ${response.data!.tracks.length}, total: ${response.data!.total}');
+        } else {
+          print('DEBUG: Response data is null');
+        }
+        
+      } catch (e) {
+        print('DEBUG: Exception during API call: $e');
+        throw Exception('Failed to fetch library tracks: $e');
+      }
+      
+      if (!response.success) {
+        print('DEBUG: API call failed with message: ${response.message}');
+        throw Exception('API call failed: ${response.message ?? "Unknown error"}');
+      }
+      
+      if (response.data == null) {
+        print('DEBUG: No data in response, breaking');
+        break;
+      }
+      
+      if (response.data!.tracks.isEmpty) {
+        print('DEBUG: No tracks in response, breaking');
+        break;
+      }
+      
+      print('DEBUG: Adding ${response.data!.tracks.length} tracks to collection');
+      allTracks.addAll(response.data!.tracks);
+      
+      // If we got fewer tracks than requested, we've reached the end
+      if (response.data!.tracks.length < batchSize) {
+        print('DEBUG: Got fewer tracks than requested (${response.data!.tracks.length} < $batchSize), reached end');
+        break;
+      }
+      
+      offset += batchSize;
+      print('DEBUG: Moving to next batch, new offset: $offset');
+    }
+    
+    print('DEBUG: Finished fetching, total tracks: ${allTracks.length}');
+    return allTracks;
+  }
+
+  /// Add all library tracks to My Tracks
+  Future<void> _addAllTracksToMyTracks(BuildContext context, MusicProvider musicProvider) async {
+    // Use a completer to handle the dialog properly
+    bool isDialogOpen = false;
+    
+    try {
+      print('DEBUG: Starting _addAllTracksToMyTracks');
+      
+      // Show loading dialog
+      if (context.mounted) {
+        print('DEBUG: Showing loading dialog');
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => WillPopScope(
+            onWillPop: () async => false,
+            child: const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text('Fetching all tracks...'),
+                ],
+              ),
+            ),
+          ),
+        );
+        isDialogOpen = true;
+      }
+
+      print('DEBUG: About to call _getAllLibraryTracks');
+      
+      // Get all library tracks with timeout
+      final allTracks = await _getAllLibraryTracks(musicProvider).timeout(
+        const Duration(minutes: 2),
+        onTimeout: () {
+          print('DEBUG: Timeout occurred');
+          throw Exception('Timeout: Failed to fetch all tracks within 2 minutes');
+        },
+      );
+      
+      print('DEBUG: Finished fetching tracks, got ${allTracks.length} tracks');
+      
+      // ALWAYS close the loading dialog first
+      if (context.mounted && isDialogOpen) {
+        print('DEBUG: Closing loading dialog');
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogOpen = false;
+        print('DEBUG: Loading dialog closed');
+      }
+
+      if (!context.mounted) {
+        print('DEBUG: Context not mounted, returning');
+        return;
+      }
+
+      if (allTracks.isEmpty) {
+        print('DEBUG: No tracks found');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No tracks found in library'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      print('DEBUG: Proceeding to confirmation dialog');
+
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add All Tracks to My Tracks'),
+          content: Text('Add ${allTracks.length} tracks to My Tracks? Duplicates will be skipped.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Add All'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !context.mounted) return;
+
+      // Show progress dialog
+      int processed = 0;
+      int added = 0;
+      int skipped = 0;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Adding Tracks'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(
+                  value: processed / allTracks.length,
+                ),
+                const SizedBox(height: 16),
+                Text('Progress: $processed / ${allTracks.length}'),
+                Text('Added: $added'),
+                Text('Skipped: $skipped'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
+
+      // Process tracks in batches to avoid overwhelming the server
+      const batchSize = 10;
+      for (int i = 0; i < allTracks.length; i += batchSize) {
+        final batch = allTracks.skip(i).take(batchSize).toList();
+        
+        await Future.wait(batch.map((track) async {
+          final success = await savedTracksProvider.saveTrack(track);
+          if (success) {
+            added++;
+          } else {
+            skipped++;
+          }
+          processed++;
+        }));
+
+        // Update progress dialog
+        if (context.mounted) {
+          // The StatefulBuilder will automatically rebuild
+        }
+      }
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // Close progress dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added $added tracks to My Tracks. Skipped $skipped duplicates.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+    } catch (e) {
+      print('DEBUG: Exception occurred: $e');
+      
+      // Close loading dialog if there's an error
+      if (context.mounted && isDialogOpen) {
+        print('DEBUG: Closing loading dialog due to error');
+        Navigator.of(context, rootNavigator: true).pop();
+        isDialogOpen = false;
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add tracks: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Add all library tracks to a playlist
+  Future<void> _addAllTracksToPlaylist(BuildContext context, MusicProvider musicProvider) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Fetching all tracks...'),
+            ],
+          ),
+        ),
+      );
+
+      // Get all library tracks
+      final allTracks = await _getAllLibraryTracks(musicProvider);
+      
+      // ALWAYS close the loading dialog first
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (!context.mounted) return;
+
+      if (allTracks.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No tracks found in library'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Show playlist selection dialog
+      final selectedPlaylistId = await showDialog<String>(
+        context: context,
+        builder: (context) => BulkSelectPlaylistDialog(
+          title: 'Add ${allTracks.length} Tracks to Playlist',
+          allowCreateNew: true,
+        ),
+      );
+
+      if (selectedPlaylistId == null || !context.mounted) return;
+
+      // Show progress dialog
+      int processed = 0;
+      int added = 0;
+      int failed = 0;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Adding Tracks to Playlist'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(
+                  value: processed / allTracks.length,
+                ),
+                const SizedBox(height: 16),
+                Text('Progress: $processed / ${allTracks.length}'),
+                Text('Added: $added'),
+                Text('Failed: $failed'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+
+      // Process tracks in batches to avoid overwhelming the server
+      const batchSize = 10;
+      for (int i = 0; i < allTracks.length; i += batchSize) {
+        final batch = allTracks.skip(i).take(batchSize).toList();
+        
+        await Future.wait(batch.map((track) async {
+          final success = await playlistProvider.addItemToPlaylist(
+            playlistId: selectedPlaylistId,
+            itemType: 'track',
+            itemId: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            source: track.source,
+            coverUrl: track.coverUrl,
+          );
+          
+          if (success) {
+            added++;
+          } else {
+            failed++;
+          }
+          processed++;
+        }));
+
+        // Update progress dialog
+        if (context.mounted) {
+          // The StatefulBuilder will automatically rebuild
+        }
+      }
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // Close progress dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added $added tracks to playlist. Failed: $failed.'),
+          backgroundColor: added > 0 ? Colors.green : Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+    } catch (e) {
+      // Close loading dialog if there's an error
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add tracks to playlist: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }

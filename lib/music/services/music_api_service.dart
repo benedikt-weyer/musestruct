@@ -503,10 +503,15 @@ class MusicApiService extends BaseApiService {
         }
       }
 
+      print('DEBUG API: searchAllLibrary called with params: $params');
+
       final response = await BaseApiService.get(
         '/streaming/search',
         queryParams: params,
       );
+
+      print('DEBUG API: Response status: ${response.statusCode}');
+      print('DEBUG API: Response body length: ${response.body.length}');
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
