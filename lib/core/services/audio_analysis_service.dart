@@ -66,6 +66,35 @@ class AudioAnalysisService {
     }
   }
 
+  /// Analyze key of a track
+  Future<KeyAnalysisResult> analyzeKey(Track track) async {
+    try {
+      final response = await _apiService.post(
+        '/audio/analyze-key',
+        queryParameters: {
+          'track_id': track.id,
+          'source': track.source,
+          if (track.streamUrl != null) 'stream_url': track.streamUrl!,
+        },
+        timeout: BaseApiService.analysisTimeout, // Use longer timeout for analysis
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return KeyAnalysisResult.fromJson(data['data']);
+        } else {
+          throw Exception(data['message'] ?? 'Key analysis failed');
+        }
+      } else {
+        final data = json.decode(response.body);
+        throw Exception(data['message'] ?? 'Key analysis request failed');
+      }
+    } catch (e) {
+      throw Exception('Failed to analyze key: $e');
+    }
+  }
+
   /// Get BPM for a track if it has been analyzed
   Future<double?> getBpm(Track track) async {
     try {
@@ -89,6 +118,38 @@ class AudioAnalysisService {
       print('Failed to get BPM: $e');
       return null;
     }
+  }
+}
+
+class KeyAnalysisResult {
+  final String trackId;
+  final String source;
+  final String keyName;
+  final String camelot;
+  final double confidence;
+  final bool isMajor;
+  final int analysisTimeMs;
+
+  KeyAnalysisResult({
+    required this.trackId,
+    required this.source,
+    required this.keyName,
+    required this.camelot,
+    required this.confidence,
+    required this.isMajor,
+    required this.analysisTimeMs,
+  });
+
+  factory KeyAnalysisResult.fromJson(Map<String, dynamic> json) {
+    return KeyAnalysisResult(
+      trackId: json['track_id'] as String,
+      source: json['source'] as String,
+      keyName: json['key_name'] as String,
+      camelot: json['camelot'] as String,
+      confidence: (json['confidence'] as num).toDouble(),
+      isMajor: json['is_major'] as bool,
+      analysisTimeMs: json['analysis_time_ms'] as int,
+    );
   }
 }
 

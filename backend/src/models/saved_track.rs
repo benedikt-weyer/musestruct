@@ -16,6 +16,9 @@ pub struct Model {
     pub source: String, // "spotify", "qobuz", etc.
     pub cover_url: Option<String>,
     pub bpm: Option<f32>, // Beats per minute
+    pub key_name: Option<String>, // Musical key in standard notation (e.g., "C#", "Am")
+    pub camelot: Option<String>, // Camelot notation (e.g., "8A", "9B")
+    pub key_confidence: Option<f32>, // Key detection confidence (0.0 to 1.0)
     pub created_at: chrono::NaiveDateTime,
 }
 

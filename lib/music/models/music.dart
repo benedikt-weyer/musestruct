@@ -12,6 +12,9 @@ class Track {
   final int? sampleRate;   // in Hz
   final int? bitDepth;     // in bits
   final double? bpm;       // beats per minute
+  final String? keyName;   // Musical key in standard notation (e.g., "C#", "Am")
+  final String? camelot;   // Camelot notation (e.g., "8A", "9B")
+  final double? keyConfidence; // Key detection confidence (0.0 to 1.0)
 
   Track({
     required this.id,
@@ -27,6 +30,9 @@ class Track {
     this.sampleRate,
     this.bitDepth,
     this.bpm,
+    this.keyName,
+    this.camelot,
+    this.keyConfidence,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -44,6 +50,9 @@ class Track {
       sampleRate: json['sample_rate'] as int?,
       bitDepth: json['bit_depth'] as int?,
       bpm: json['bpm'] as double?,
+      keyName: json['key_name'] as String?,
+      camelot: json['camelot'] as String?,
+      keyConfidence: json['key_confidence'] as double?,
     );
   }
 
@@ -62,6 +71,9 @@ class Track {
       'sample_rate': sampleRate,
       'bit_depth': bitDepth,
       'bpm': bpm,
+      'key_name': keyName,
+      'camelot': camelot,
+      'key_confidence': keyConfidence,
     };
   }
 
@@ -381,6 +393,9 @@ class SavedTrack {
   final String source;
   final String? coverUrl;
   final double? bpm;
+  final String? keyName;   // Musical key in standard notation (e.g., "C#", "Am")
+  final String? camelot;   // Camelot notation (e.g., "8A", "9B")
+  final double? keyConfidence; // Key detection confidence (0.0 to 1.0)
   final DateTime createdAt;
 
   SavedTrack({
@@ -393,6 +408,9 @@ class SavedTrack {
     required this.source,
     this.coverUrl,
     this.bpm,
+    this.keyName,
+    this.camelot,
+    this.keyConfidence,
     required this.createdAt,
   });
 
@@ -407,6 +425,9 @@ class SavedTrack {
       source: json['source'] as String,
       coverUrl: json['cover_url'] as String?,
       bpm: json['bpm'] as double?,
+      keyName: json['key_name'] as String?,
+      camelot: json['camelot'] as String?,
+      keyConfidence: json['key_confidence'] as double?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -422,6 +443,9 @@ class SavedTrack {
       'source': source,
       'cover_url': coverUrl,
       'bpm': bpm,
+      'key_name': keyName,
+      'camelot': camelot,
+      'key_confidence': keyConfidence,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -442,6 +466,9 @@ class SavedTrack {
       sampleRate: null,
       bitDepth: null,
       bpm: bpm,
+      keyName: keyName,
+      camelot: camelot,
+      keyConfidence: keyConfidence,
     );
   }
 

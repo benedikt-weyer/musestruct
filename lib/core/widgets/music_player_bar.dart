@@ -339,6 +339,26 @@ class MusicPlayerBar extends StatelessWidget {
                                 if (musicProvider.currentTrack?.bpm != null)
                                   const SizedBox(width: 8),
 
+                                // Key display - show when available
+                                if (musicProvider.currentTrack?.keyName != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.tertiaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${musicProvider.currentTrack!.keyName!} / ${musicProvider.currentTrack!.camelot ?? ''}',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                if (musicProvider.currentTrack?.keyName != null)
+                                  const SizedBox(width: 8),
+
                                 // Play/Pause button
                                 IconButton(
                                   onPressed: musicProvider.isLoading
@@ -525,6 +545,15 @@ class MusicPlayerBar extends StatelessWidget {
           : 'Analyze BPM',
       ),
 
+      // Analyze Key button
+      IconButton(
+        onPressed: () => _analyzeKey(context, musicProvider.currentTrack!),
+        icon: const Icon(Icons.music_note, size: 20),
+        tooltip: musicProvider.currentTrack!.keyName != null 
+          ? '${musicProvider.currentTrack!.keyName!} (${musicProvider.currentTrack!.camelot ?? ''})'
+          : 'Analyze Key',
+      ),
+
       // Remove from playlist button (only show when playing from playlist)
       if (musicProvider.isPlayingFromPlaylist && musicProvider.currentPlaylistQueueItem != null)
         Consumer<PlaylistProvider>(
@@ -686,6 +715,79 @@ class MusicPlayerBar extends StatelessWidget {
                   : 'Failed to save track',
             ),
             backgroundColor: success ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _analyzeKey(BuildContext context, Track track) async {
+    try {
+      // Get API service from context
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final analysisService = AudioAnalysisService(apiService);
+      
+      // Trigger key analysis asynchronously (fire and forget)
+      analysisService.analyzeKey(track).then((result) {
+        // Update the track with the new key value
+        if (context.mounted) {
+          final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+          musicProvider.updateTrackKey(track.id, result.keyName, result.camelot, result.confidence);
+          
+          // Also update saved tracks if this track is saved
+          final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
+          savedTracksProvider.updateTrackKey(track.id, track.source, result.keyName, result.camelot, result.confidence);
+          
+          // Show success message when analysis completes
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Key analysis complete: ${result.keyName} (${result.camelot})\nConfidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }).catchError((e) {
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Key analysis failed: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
+      
+      // Show immediate feedback that analysis has started
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Key analysis started for "${track.title}"'),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      
+    } catch (e) {
+      // Show error message for immediate failures
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start key analysis: $e'),
+            backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),

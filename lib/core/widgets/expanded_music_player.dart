@@ -203,34 +203,74 @@ class ExpandedMusicPlayer extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           
-                          // BPM display - show when available
-                          if (track.bpm != null) ...[
+                          // BPM and Key display - show when available
+                          if (track.bpm != null || track.keyName != null) ...[
                             const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.speed,
-                                    size: 16,
-                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${track.bpm!.toStringAsFixed(0)} BPM',
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // BPM display
+                                if (track.bpm != null) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.speed,
+                                          size: 16,
+                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${track.bpm!.toStringAsFixed(0)} BPM',
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
-                              ),
+                                // Spacing between BPM and Key
+                                if (track.bpm != null && track.keyName != null)
+                                  const SizedBox(width: 12),
+                                // Key display
+                                if (track.keyName != null) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.tertiaryContainer,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.music_note,
+                                          size: 16,
+                                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${track.keyName!} / ${track.camelot ?? ''}',
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onTertiaryContainer,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                           const SizedBox(height: 8),
@@ -630,7 +670,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
                             ],
                           ),
 
-                          // Analyse button
+                          // BPM Analyse button
                           Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -639,11 +679,32 @@ class ExpandedMusicPlayer extends StatelessWidget {
                                 icon: const Icon(Icons.analytics, size: 28),
                               ),
                               Text(
-                                track.bpm != null ? '${track.bpm!.toStringAsFixed(0)} BPM' : 'Analyze',
+                                track.bpm != null ? '${track.bpm!.toStringAsFixed(0)} BPM' : 'BPM',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
+                              ),
+                            ],
+                          ),
+
+                          // Key Analyse button
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                onPressed: () => _analyzeKey(context, track),
+                                icon: const Icon(Icons.music_note, size: 28),
+                              ),
+                              Text(
+                                track.keyName != null 
+                                  ? '${track.keyName!} / ${track.camelot ?? ''}'
+                                  : 'Key',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ],
                           ),
@@ -815,6 +876,79 @@ class ExpandedMusicPlayer extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error removing track: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _analyzeKey(BuildContext context, Track track) async {
+    try {
+      // Get API service from context
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final analysisService = AudioAnalysisService(apiService);
+      
+      // Trigger key analysis asynchronously (fire and forget)
+      analysisService.analyzeKey(track).then((result) {
+        // Update the track with the new key value
+        if (context.mounted) {
+          final musicProvider = Provider.of<MusicProvider>(context, listen: false);
+          musicProvider.updateTrackKey(track.id, result.keyName, result.camelot, result.confidence);
+          
+          // Also update saved tracks if this track is saved
+          final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
+          savedTracksProvider.updateTrackKey(track.id, track.source, result.keyName, result.camelot, result.confidence);
+          
+          // Show success message when analysis completes
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Key analysis complete: ${result.keyName} (${result.camelot})\nConfidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }).catchError((e) {
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Key analysis failed: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      });
+      
+      // Show immediate feedback that analysis has started
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Key analysis started for "${track.title}"'),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      
+    } catch (e) {
+      // Show error message for immediate failures
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start key analysis: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),

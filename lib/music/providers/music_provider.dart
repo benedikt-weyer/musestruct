@@ -654,6 +654,9 @@ class MusicProvider with ChangeNotifier {
         sampleRate: _currentTrack!.sampleRate,
         bitDepth: _currentTrack!.bitDepth,
         bpm: bpm,
+        keyName: _currentTrack!.keyName,
+        camelot: _currentTrack!.camelot,
+        keyConfidence: _currentTrack!.keyConfidence,
       );
       notifyListeners();
     }
@@ -676,6 +679,72 @@ class MusicProvider with ChangeNotifier {
             sampleRate: track.sampleRate,
             bitDepth: track.bitDepth,
             bpm: bpm,
+            keyName: track.keyName,
+            camelot: track.camelot,
+            keyConfidence: track.keyConfidence,
+          );
+        }
+        return track;
+      }).toList();
+
+      _searchResults = SearchResults(
+        tracks: updatedTracks,
+        albums: _searchResults!.albums,
+        playlists: _searchResults!.playlists,
+        total: _searchResults!.total,
+        offset: _searchResults!.offset,
+        limit: _searchResults!.limit,
+      );
+      notifyListeners();
+    }
+  }
+
+  /// Update the key of a track
+  void updateTrackKey(String trackId, String keyName, String camelot, double confidence) {
+    // Update current track if it matches
+    if (_currentTrack != null && _currentTrack!.id == trackId) {
+      _currentTrack = Track(
+        id: _currentTrack!.id,
+        title: _currentTrack!.title,
+        artist: _currentTrack!.artist,
+        album: _currentTrack!.album,
+        duration: _currentTrack!.duration,
+        streamUrl: _currentTrack!.streamUrl,
+        coverUrl: _currentTrack!.coverUrl,
+        source: _currentTrack!.source,
+        quality: _currentTrack!.quality,
+        bitrate: _currentTrack!.bitrate,
+        sampleRate: _currentTrack!.sampleRate,
+        bitDepth: _currentTrack!.bitDepth,
+        bpm: _currentTrack!.bpm,
+        keyName: keyName,
+        camelot: camelot,
+        keyConfidence: confidence,
+      );
+      notifyListeners();
+    }
+
+    // Update search results if they exist
+    if (_searchResults != null) {
+      final updatedTracks = _searchResults!.tracks.map((track) {
+        if (track.id == trackId) {
+          return Track(
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration,
+            streamUrl: track.streamUrl,
+            coverUrl: track.coverUrl,
+            source: track.source,
+            quality: track.quality,
+            bitrate: track.bitrate,
+            sampleRate: track.sampleRate,
+            bitDepth: track.bitDepth,
+            bpm: track.bpm,
+            keyName: keyName,
+            camelot: camelot,
+            keyConfidence: confidence,
           );
         }
         return track;

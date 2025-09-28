@@ -91,6 +91,9 @@ pub async fn save_track(
         source: Set(request.source.clone()),
         cover_url: Set(request.cover_url.clone()),
         bpm: Set(None), // BPM not available when saving track initially
+        key_name: Set(None), // Key not available when saving track initially
+        camelot: Set(None), // Camelot not available when saving track initially
+        key_confidence: Set(None), // Key confidence not available when saving track initially
         created_at: Set(chrono::Utc::now().naive_utc()),
     };
     debug!("SavedTrackActiveModel created successfully");

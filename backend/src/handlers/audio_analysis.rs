@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sea_orm::{EntityTrait, ColumnTrait, QueryFilter, Set, ActiveModelTrait};
 
 use crate::handlers::auth::{AppState, ApiResponse};
-use crate::services::SpectrogramBpmAnalysisService;
+use crate::services::{SpectrogramBpmAnalysisService, KeyAnalysisService};
 use crate::models::saved_track::{Entity as SavedTrack, ActiveModel as SavedTrackActiveModel};
 
 #[derive(Deserialize)]
@@ -33,6 +33,24 @@ pub struct SpectrogramBpmAnalysisResponse {
     pub analysis_time_ms: u64,
     pub spectrogram_path: String,
     pub analysis_visualization_path: String,
+}
+
+#[derive(Deserialize)]
+pub struct AnalyzeKeyQuery {
+    pub track_id: String,
+    pub source: String,
+    pub stream_url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct KeyAnalysisResponse {
+    pub track_id: String,
+    pub source: String,
+    pub key_name: String,
+    pub camelot: String,
+    pub confidence: f32,
+    pub is_major: bool,
+    pub analysis_time_ms: u64,
 }
 
 /// Analyze BPM of a track and save it to the database
@@ -437,6 +455,124 @@ pub async fn analyze_track_bpm_spectrogram(
 
     tracing::info!("Spectrogram BPM analysis completed successfully: {} BPM in {}ms", 
                    bpm, analysis_duration.as_millis());
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Analyze key of a track and save it to the database
+pub async fn analyze_track_key(
+    State(state): State<AppState>,
+    Query(query): Query<AnalyzeKeyQuery>,
+) -> Result<Json<ApiResponse<KeyAnalysisResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let start_time = std::time::Instant::now();
+    
+    tracing::info!("Starting key analysis for track: {} ({})", query.track_id, query.source);
+    
+    // Get stream URL from query or fetch it
+    let stream_url = match query.stream_url {
+        Some(url) => url,
+        None => {
+            tracing::error!("No stream URL provided for key analysis");
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("Stream URL is required for key analysis".to_string())),
+            ));
+        }
+    };
+
+    // Create key analysis service
+    let analysis_service = KeyAnalysisService::new();
+    
+    let track_id = query.track_id.clone();
+    let source = query.source.clone();
+    
+    tracing::info!("Starting key analysis task for track: {} ({})", track_id, source);
+    
+    let key_result = if stream_url.starts_with("http://") || stream_url.starts_with("https://") {
+        tracing::debug!("Analyzing remote file for key: {}", stream_url);
+        match analysis_service.analyze_remote_file_key(&stream_url).await {
+            Ok(key) => {
+                tracing::info!("Remote key analysis successful: {} ({}), confidence: {:.3}", 
+                              key.key_name, key.camelot, key.confidence);
+                key
+            },
+            Err(e) => {
+                tracing::error!("Remote key analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Remote key analysis failed: {}", e))),
+                ));
+            }
+        }
+    } else {
+        tracing::debug!("Analyzing local file for key: {}", stream_url);
+        match analysis_service.analyze_key(&stream_url).await {
+            Ok(key) => {
+                tracing::info!("Key analysis successful: {} ({}), confidence: {:.3}", 
+                              key.key_name, key.camelot, key.confidence);
+                key
+            },
+            Err(e) => {
+                tracing::error!("Key analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Key analysis failed: {}", e))),
+                ));
+            }
+        }
+    };
+
+    let analysis_duration = start_time.elapsed();
+    
+    // Save key to database (update existing saved track if it exists)
+    let db = state.db();
+    
+    // Find existing saved track
+    let existing_track = SavedTrack::find()
+        .filter(crate::models::saved_track::Column::TrackId.eq(&track_id))
+        .filter(crate::models::saved_track::Column::Source.eq(&source))
+        .one(db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error when finding saved track: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error("Database error".to_string())),
+            )
+        })?;
+
+    if let Some(track) = existing_track {
+        // Update existing track with key information
+        let mut track_update: SavedTrackActiveModel = track.into();
+        track_update.key_name = Set(Some(key_result.key_name.clone()));
+        track_update.camelot = Set(Some(key_result.camelot.clone()));
+        track_update.key_confidence = Set(Some(key_result.confidence));
+        
+        match track_update.update(db).await {
+            Ok(_) => {
+                tracing::info!("Updated existing saved track {} with key: {} ({})", 
+                              track_id, key_result.key_name, key_result.camelot);
+            }
+            Err(e) => {
+                tracing::error!("Failed to update saved track with key: {}", e);
+            }
+        }
+    } else {
+        tracing::debug!("No existing saved track found for key update: {} ({})", track_id, source);
+    }
+
+    let response = KeyAnalysisResponse {
+        track_id,
+        source,
+        key_name: key_result.key_name,
+        camelot: key_result.camelot,
+        confidence: key_result.confidence,
+        is_major: key_result.is_major,
+        analysis_time_ms: analysis_duration.as_millis() as u64,
+    };
+
+    tracing::info!("Key analysis completed successfully: {} ({}) with confidence {:.3} in {}ms", 
+                   response.key_name, response.camelot, response.confidence, analysis_duration.as_millis());
 
     Ok(Json(ApiResponse::success(response)))
 }
