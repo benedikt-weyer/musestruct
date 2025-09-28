@@ -43,7 +43,7 @@ class SavedTracksApiService extends BaseApiService {
   }
 
   /// Get user's saved tracks with pagination
-  static Future<ApiResponse<List<SavedTrack>>> getSavedTracks({int page = 1, int limit = 50}) async {
+  static Future<ApiResponse<SavedTracksListResponse>> getSavedTracks({int page = 1, int limit = 50}) async {
     try {
       final headers = await BaseApiService.getAuthHeaders();
       print('Headers: $headers');
@@ -61,28 +61,28 @@ class SavedTracksApiService extends BaseApiService {
 
       if (response.statusCode == 200) {
         if (response.body.isEmpty) {
-          return ApiResponse<List<SavedTrack>>.error('Empty response from server');
+          return ApiResponse<SavedTracksListResponse>.error('Empty response from server');
         }
         
         final json = jsonDecode(response.body);
-        return ApiResponse<List<SavedTrack>>.fromJson(
+        return ApiResponse<SavedTracksListResponse>.fromJson(
           json, 
-          (data) => (data as List).map((item) => SavedTrack.fromJson(item as Map<String, dynamic>)).toList()
+          (data) => SavedTracksListResponse.fromJson(data as Map<String, dynamic>)
         );
       } else {
         if (response.body.isEmpty) {
-          return ApiResponse<List<SavedTrack>>.error('Server error: ${response.statusCode} - Empty response');
+          return ApiResponse<SavedTracksListResponse>.error('Server error: ${response.statusCode} - Empty response');
         }
         
         final json = jsonDecode(response.body);
-        return ApiResponse<List<SavedTrack>>.fromJson(
+        return ApiResponse<SavedTracksListResponse>.fromJson(
           json, 
-          (data) => (data as List).map((item) => SavedTrack.fromJson(item as Map<String, dynamic>)).toList()
+          (data) => SavedTracksListResponse.fromJson(data as Map<String, dynamic>)
         );
       }
     } catch (e) {
       print('Error in getSavedTracks: $e');
-      return ApiResponse<List<SavedTrack>>.error('Network error: $e');
+      return ApiResponse<SavedTracksListResponse>.error('Network error: $e');
     }
   }
 

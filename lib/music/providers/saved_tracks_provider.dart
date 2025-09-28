@@ -5,20 +5,39 @@ import '../services/saved_tracks_api_service.dart';
 class SavedTracksProvider with ChangeNotifier {
   List<SavedTrack> _savedTracks = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   String? _error;
   Map<String, bool> _trackSavedStatus = {};
+  
+  // Pagination state
+  int _currentPage = 1;
+  int _itemsPerPage = 50;
+  bool _hasMoreTracks = true;
+  int? _totalTracks;
 
   List<SavedTrack> get savedTracks => _savedTracks;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
   String? get error => _error;
+  bool get hasMoreTracks => _hasMoreTracks;
+  int? get totalTracks => _totalTracks;
+  int get currentTrackCount => _savedTracks.length;
 
   bool isTrackSaved(String trackId, String source) {
     final key = '${trackId}_$source';
     return _trackSavedStatus[key] ?? false;
   }
 
-  Future<void> loadSavedTracks({int page = 1, int limit = 50}) async {
-    _isLoading = true;
+  Future<void> loadSavedTracks({int page = 1, int limit = 50, bool reset = false}) async {
+    if (reset || page == 1) {
+      _isLoading = true;
+      _currentPage = 1;
+      _hasMoreTracks = true;
+      _savedTracks.clear();
+    } else {
+      _isLoadingMore = true;
+    }
+    
     _error = null;
     notifyListeners();
 
@@ -26,11 +45,20 @@ class SavedTracksProvider with ChangeNotifier {
       final response = await SavedTracksApiService.getSavedTracks(page: page, limit: limit);
       
       if (response.success && response.data != null) {
+        final responseData = response.data!;
+        final newTracks = responseData.tracks;
+        
         if (page == 1) {
-          _savedTracks = response.data!;
+          _savedTracks = newTracks;
         } else {
-          _savedTracks.addAll(response.data!);
+          _savedTracks.addAll(newTracks);
         }
+        
+        // Update pagination state
+        _currentPage = page;
+        _hasMoreTracks = newTracks.length == limit;
+        _totalTracks = responseData.totalCount;
+        
         _updateTrackSavedStatus();
       } else {
         _error = response.message ?? 'Failed to load saved tracks';
@@ -40,6 +68,7 @@ class SavedTracksProvider with ChangeNotifier {
     }
 
     _isLoading = false;
+    _isLoadingMore = false;
     notifyListeners();
   }
 
@@ -114,7 +143,14 @@ class SavedTracksProvider with ChangeNotifier {
   }
 
   void refresh() {
-    loadSavedTracks();
+    loadSavedTracks(reset: true);
+  }
+
+  /// Load more tracks for lazy loading
+  Future<void> loadMoreTracks() async {
+    if (_isLoadingMore || !_hasMoreTracks) return;
+    
+    await loadSavedTracks(page: _currentPage + 1, limit: _itemsPerPage);
   }
 
   /// Update the BPM of a saved track

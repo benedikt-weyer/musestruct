@@ -12,19 +12,57 @@ class MyTracksScreen extends StatefulWidget {
 }
 
 class _MyTracksScreenState extends State<MyTracksScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SavedTracksProvider>().loadSavedTracks();
     });
   }
 
   @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      // Load more when we're 200 pixels from the bottom
+      context.read<SavedTracksProvider>().loadMoreTracks();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Tracks'),
+        title: Consumer<SavedTracksProvider>(
+          builder: (context, provider, child) {
+            final totalTracks = provider.totalTracks ?? 0;
+            final loadedTracks = provider.currentTrackCount;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('My Tracks'),
+                if (totalTracks > 0)
+                  Text(
+                    totalTracks == loadedTracks 
+                        ? '$totalTracks track${totalTracks != 1 ? 's' : ''}'
+                        : '$loadedTracks of $totalTracks tracks',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[300],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -108,18 +146,31 @@ class _MyTracksScreenState extends State<MyTracksScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await provider.loadSavedTracks();
+              await provider.loadSavedTracks(reset: true);
             },
             child: ListView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount: provider.savedTracks.length,
+              itemCount: provider.savedTracks.length + (provider.isLoadingMore ? 1 : 0),
               itemBuilder: (context, index) {
+                // Show loading indicator at the end
+                if (index >= provider.savedTracks.length) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
                 final savedTrack = provider.savedTracks[index];
                 final track = savedTrack.toTrack();
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: TrackTile(
                     track: track,
+                    showTrackNumber: true,
+                    trackNumber: index + 1,
                     onTap: () async {
                       try {
                         await context.read<MusicProvider>().playTrack(track); // Default clears queue

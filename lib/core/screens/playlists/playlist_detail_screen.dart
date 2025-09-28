@@ -241,7 +241,30 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.playlist.name),
+        title: Consumer<PlaylistProvider>(
+          builder: (context, playlistProvider, child) {
+            final itemCount = playlistProvider.currentPlaylistItems.length;
+            final trackCount = playlistProvider.currentPlaylistItems
+                .where((item) => !item.isPlaylist)
+                .length;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(widget.playlist.name),
+                if (itemCount > 0)
+                  Text(
+                    trackCount > 0 
+                        ? '$trackCount track${trackCount != 1 ? 's' : ''}${itemCount != trackCount ? ' • ${itemCount - trackCount} playlist${itemCount - trackCount != 1 ? 's' : ''}' : ''}'
+                        : '$itemCount playlist${itemCount != 1 ? 's' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[300],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
           // Play button
           IconButton(
@@ -518,6 +541,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       return PlaylistItemTile(
                         key: ValueKey(item.id),
                         item: item,
+                        trackNumber: item.isPlaylist ? null : index + 1,
                         onRemove: () => _removeItem(item),
                       );
                     },
@@ -632,11 +656,13 @@ class PlaylistDetailContent extends StatelessWidget {
 class PlaylistItemTile extends StatelessWidget {
   final PlaylistItem item;
   final VoidCallback onRemove;
+  final int? trackNumber;
 
   const PlaylistItemTile({
     super.key,
     required this.item,
     required this.onRemove,
+    this.trackNumber,
   });
 
   @override
@@ -674,6 +700,8 @@ class PlaylistItemTile extends StatelessWidget {
           showQueueButton: true,
           showPlaylistButton: false,
           showRemoveButton: true,
+          showTrackNumber: trackNumber != null,
+          trackNumber: trackNumber,
           onRemove: onRemove,
         ),
       );

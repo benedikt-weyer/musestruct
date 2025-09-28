@@ -4,7 +4,7 @@ use axum::{
     response::Json,
     Extension,
 };
-use sea_orm::{EntityTrait, ColumnTrait, ActiveModelTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{EntityTrait, ColumnTrait, ActiveModelTrait, QueryFilter, QueryOrder, QuerySelect, Set, PaginatorTrait};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use uuid::Uuid;
@@ -37,6 +37,14 @@ pub struct SavedTrackResponse {
     pub cover_url: Option<String>,
     pub bpm: Option<f32>,
     pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Serialize)]
+pub struct SavedTracksListResponse {
+    pub tracks: Vec<SavedTrackResponse>,
+    pub total_count: u64,
+    pub page: u64,
+    pub limit: u64,
 }
 
 #[derive(Deserialize)]
@@ -130,11 +138,19 @@ pub async fn get_saved_tracks(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
     Query(params): Query<GetSavedTracksQuery>,
-) -> Result<Json<ApiResponse<Vec<SavedTrackResponse>>>, StatusCode> {
+) -> Result<Json<ApiResponse<SavedTracksListResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(50).min(100); // Max 100 per page
     let offset = (page - 1) * limit;
 
+    // Get total count
+    let total_count = SavedTrackEntity::find()
+        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
+        .count(state.db())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get paginated tracks
     let saved_tracks = SavedTrackEntity::find()
         .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
         .order_by_desc(crate::models::SavedTrackColumn::CreatedAt)
@@ -144,7 +160,7 @@ pub async fn get_saved_tracks(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let response: Vec<SavedTrackResponse> = saved_tracks
+    let tracks: Vec<SavedTrackResponse> = saved_tracks
         .into_iter()
         .map(|track| SavedTrackResponse {
             id: track.id,
@@ -159,6 +175,13 @@ pub async fn get_saved_tracks(
             created_at: track.created_at,
         })
         .collect();
+
+    let response = SavedTracksListResponse {
+        tracks,
+        total_count,
+        page,
+        limit,
+    };
 
     Ok(Json(ApiResponse {
         success: true,

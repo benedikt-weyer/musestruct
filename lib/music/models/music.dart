@@ -486,6 +486,31 @@ class SavedTrack {
   }
 }
 
+class SavedTracksListResponse {
+  final List<SavedTrack> tracks;
+  final int totalCount;
+  final int page;
+  final int limit;
+
+  SavedTracksListResponse({
+    required this.tracks,
+    required this.totalCount,
+    required this.page,
+    required this.limit,
+  });
+
+  factory SavedTracksListResponse.fromJson(Map<String, dynamic> json) {
+    return SavedTracksListResponse(
+      tracks: (json['tracks'] as List<dynamic>)
+          .map((trackJson) => SavedTrack.fromJson(trackJson as Map<String, dynamic>))
+          .toList(),
+      totalCount: json['total_count'] as int,
+      page: json['page'] as int,
+      limit: json['limit'] as int,
+    );
+  }
+}
+
 class SavedAlbum {
   final String id;
   final String albumId;
