@@ -19,6 +19,26 @@ services:
       timeout: 10s
       retries: 3
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: musestruct_backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-musestruct}:${POSTGRES_PASSWORD:-musestruct123}@postgres:5432/${POSTGRES_DB:-musestruct}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - backend_cache:/app/cache
+      - ./backend/own_music:/app/own_music
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+    driver: local
+  backend_cache:
     driver: local
