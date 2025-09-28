@@ -294,6 +294,19 @@ impl StreamingService for SpotifyService {
     fn service_name(&self) -> &str {
         "spotify"
     }
+
+    async fn search_library(&self, query: &str, search_type: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults> {
+        // Spotify library search would require additional API calls to get saved tracks, albums, and playlists
+        // For now, return empty results as Spotify library access requires more complex implementation
+        Ok(SearchResults {
+            tracks: vec![],
+            albums: vec![],
+            playlists: vec![],
+            total: 0,
+            offset: offset.unwrap_or(0),
+            limit: limit.unwrap_or(20),
+        })
+    }
 }
 
 // Spotify API response structures

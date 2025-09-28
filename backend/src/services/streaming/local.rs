@@ -851,4 +851,9 @@ impl StreamingService for LocalMusicService {
     fn service_name(&self) -> &str {
         "server"
     }
+
+    async fn search_library(&self, query: &str, search_type: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults> {
+        // For local server, library search is the same as regular search since all files are "in the library"
+        self.search(query, limit, offset).await
+    }
 }

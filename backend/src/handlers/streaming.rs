@@ -22,6 +22,7 @@ pub struct StreamingSearchQuery {
     pub service: Option<String>,
     pub services: Option<Vec<String>>, // For multi-service search
     pub r#type: Option<String>, // "track" or "playlist"
+    pub library: Option<String>, // "true" for library search
 }
 
 #[derive(Deserialize)]
@@ -157,16 +158,32 @@ pub async fn search_music(
     let mut total_results = 0;
     let mut search_errors = Vec::new();
 
-    // Determine search type
+    // Determine search type and mode
     let search_type = params.r#type.as_deref().unwrap_or("track");
-    println!("Backend: Search type: {}", search_type);
+    let is_library_search = params.library.as_deref() == Some("true");
+    println!("Backend: Search type: {}, Library search: {}", search_type, is_library_search);
     println!("Backend: Services to search: {:?}", services_to_search);
 
     // Search each service
     for service_name in &services_to_search {
         match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
             Ok(service) => {
-                if search_type == "playlist" {
+                if is_library_search {
+                    // Library search
+                    println!("Backend: Searching library on {} for query: {} with type: {}", service_name, params.q, search_type);
+                    match service.search_library(&params.q, Some(search_type), params.limit, params.offset).await {
+                        Ok(results) => {
+                            all_tracks.extend(results.tracks);
+                            all_albums.extend(results.albums);
+                            all_playlists.extend(results.playlists);
+                            total_results += results.total;
+                        },
+                        Err(err) => {
+                            println!("Backend: Error searching library on {}: {}", service_name, err);
+                            search_errors.push(format!("{}: {}", service_name, err));
+                        }
+                    }
+                } else if search_type == "playlist" {
                     // Search for playlists
                     println!("Backend: Searching playlists on {} for query: {}", service_name, params.q);
                     match service.search_playlists(&params.q, params.limit, params.offset).await {
@@ -225,11 +242,19 @@ pub async fn search_music(
     let combined_results = SearchResults {
         tracks: all_tracks,
         albums: all_albums,
-        playlists: all_playlists,
+        playlists: all_playlists.clone(),
         total: total_results,
         offset: params.offset.unwrap_or(0),
         limit: params.limit.unwrap_or(20),
     };
+
+    println!("Backend: Returning search results - {} tracks, {} albums, {} playlists", 
+             combined_results.tracks.len(), combined_results.albums.len(), combined_results.playlists.len());
+    
+    // Debug: Print first playlist if any
+    if !all_playlists.is_empty() {
+        println!("Backend: First playlist: {:?}", &all_playlists[0]);
+    }
 
     Ok(Json(ApiResponse::success(combined_results)))
 }

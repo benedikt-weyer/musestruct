@@ -185,38 +185,57 @@ class PlaylistSearchTile extends StatelessWidget {
   Future<void> _clonePlaylist(BuildContext context) async {
     final playlistProvider = context.read<PlaylistProvider>();
     
+    // Store a reference to the navigator to ensure we can always dismiss the dialog
+    final navigator = Navigator.of(context);
+    bool dialogShown = false;
+    
     try {
       // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Cloning playlist...'),
-            ],
+        builder: (dialogContext) => PopScope(
+          canPop: false, // Prevent back button from dismissing
+          child: const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Expanded(child: Text('Cloning playlist...')),
+              ],
+            ),
           ),
         ),
       );
+      dialogShown = true;
 
       // Clone the playlist with timeout
       bool success = false;
       try {
         success = await playlistProvider.clonePlaylistFromSearch(playlist).timeout(
           const Duration(minutes: 2),
-          onTimeout: () => false,
+          onTimeout: () {
+            print('Playlist cloning timed out');
+            return false;
+          },
         );
       } catch (e) {
+        print('Error during playlist cloning: $e');
         success = false;
       }
       
-      // Close loading dialog
+      // Always close loading dialog first
+      if (dialogShown) {
+        try {
+          navigator.pop();
+          dialogShown = false;
+        } catch (e) {
+          print('Error dismissing dialog: $e');
+        }
+      }
+      
+      // Show result
       if (context.mounted) {
-        Navigator.of(context).pop();
-        
-        // Show result
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -230,11 +249,20 @@ class PlaylistSearchTile extends StatelessWidget {
         );
       }
     } catch (e) {
-      // Close loading dialog
+      print('Outer catch: Error cloning playlist: $e');
+      
+      // Always close loading dialog first
+      if (dialogShown) {
+        try {
+          navigator.pop();
+          dialogShown = false;
+        } catch (dismissError) {
+          print('Error dismissing dialog in catch: $dismissError');
+        }
+      }
+      
+      // Show error
       if (context.mounted) {
-        Navigator.of(context).pop();
-        
-        // Show error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error cloning playlist: $e'),

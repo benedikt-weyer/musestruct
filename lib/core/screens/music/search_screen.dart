@@ -20,6 +20,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
   String _lastQuery = '';
   SearchType _searchType = SearchType.tracks;
+  bool _isLibrarySearch = false; // New field for library search toggle
 
   @override
   void dispose() {
@@ -39,12 +40,20 @@ class _SearchScreenState extends State<SearchScreen> {
       }
       
       // Search tracks, albums, and playlists simultaneously
-      musicProvider.searchBoth(query);
+      if (_isLibrarySearch) {
+        musicProvider.searchLibrary(query, searchType: _searchType);
+      } else {
+        musicProvider.searchBoth(query);
+      }
     }
   }
 
   bool _shouldShowSearchAllButton(MusicProvider musicProvider) {
-    // Show Search All button only when server is the selected source
+    // Show Search All button when library search is active OR when server is the selected source
+    if (_isLibrarySearch) {
+      return true;
+    }
+    
     if (musicProvider.useMultiServiceSearch) {
       // In multi-service mode, show if only server is selected
       return musicProvider.selectedServices.length == 1 && 
@@ -62,8 +71,12 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchController.clear();
     _lastQuery = '';
     
-    // Perform search with empty query to get all results from server
-    musicProvider.searchAll();
+    // Perform search with empty query to get all results
+    if (_isLibrarySearch) {
+      musicProvider.searchAllLibrary(searchType: _searchType);
+    } else {
+      musicProvider.searchAll();
+    }
   }
 
   List<int> _getVisiblePageNumbers(int currentPage, int totalPages) {
@@ -124,6 +137,101 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 // Service filter
                 const ServiceFilter(),
+                
+                // Library search toggle (only show when not "Server" is selected)
+                Consumer<MusicProvider>(
+                  builder: (context, musicProvider, child) {
+                    // Only show library toggle when streaming services (not server) are selected
+                    bool showLibraryToggle = false;
+                    if (musicProvider.useMultiServiceSearch) {
+                      showLibraryToggle = musicProvider.selectedServices.any((service) => service != 'server');
+                    } else {
+                      showLibraryToggle = musicProvider.selectedService != 'server';
+                    }
+                    
+                    if (!showLibraryToggle) {
+                      return const SizedBox.shrink();
+                    }
+                    
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isLibrarySearch = false;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: !_isLibrarySearch
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.transparent,
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(12),
+                                    bottomLeft: Radius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  'All',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: !_isLibrarySearch
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isLibrarySearch = true;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _isLibrarySearch
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.transparent,
+                                  borderRadius: const BorderRadius.only(
+                                    topRight: Radius.circular(12),
+                                    bottomRight: Radius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  'My Library',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _isLibrarySearch
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
                 
                 // Search type toggle
                 Consumer<MusicProvider>(

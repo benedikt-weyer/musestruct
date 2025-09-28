@@ -25,6 +25,7 @@ class MusicProvider with ChangeNotifier {
   int _itemsPerPage = 20;
   String _lastSearchQuery = '';
   SearchType _lastSearchType = SearchType.tracks;
+  bool _lastSearchWasLibrary = false; // Track if last search was library search
   
   // Available page sizes
   static const List<int> _availablePageSizes = [10, 20, 50, 100];
@@ -419,6 +420,7 @@ class MusicProvider with ChangeNotifier {
     _currentPage = 1;
     _lastSearchQuery = '';
     _lastSearchType = SearchType.tracks;
+    _lastSearchWasLibrary = false;
 
     _isSearching = true;
     _searchError = null;
@@ -501,6 +503,110 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
+  Future<void> searchLibrary(String query, {SearchType? searchType}) async {
+    if (query.trim().isEmpty) return;
+
+    // Reset pagination for new search
+    _currentPage = 1;
+    _lastSearchQuery = query;
+    _lastSearchType = searchType ?? SearchType.tracks;
+    _lastSearchWasLibrary = true;
+
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      ApiResponse<SearchResults> response;
+      
+      // Convert SearchType to string
+      String typeString = _lastSearchType == SearchType.tracks ? 'track' 
+                        : _lastSearchType == SearchType.albums ? 'album' 
+                        : 'playlist';
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service library search
+        response = await MusicApiService.searchLibrary(
+          query, 
+          limit: _itemsPerPage,
+          services: _selectedServices,
+          type: typeString,
+        );
+      } else {
+        // Single service library search
+        response = await MusicApiService.searchLibrary(
+          query, 
+          limit: _itemsPerPage,
+          service: _selectedService,
+          type: typeString,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        _searchResults = response.data;
+      } else {
+        _searchError = response.message ?? 'Library search failed';
+      }
+    } catch (e) {
+      _searchError = 'Library search failed: $e';
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> searchAllLibrary({SearchType? searchType}) async {
+    // Search all library items with empty query
+    // Reset pagination for new search
+    _currentPage = 1;
+    _lastSearchQuery = '';
+    _lastSearchType = searchType ?? SearchType.tracks;
+    _lastSearchWasLibrary = true;
+
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      ApiResponse<SearchResults> response;
+      
+      // Convert SearchType to string
+      String typeString = _lastSearchType == SearchType.tracks ? 'track' 
+                        : _lastSearchType == SearchType.albums ? 'album' 
+                        : 'playlist';
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service library search all
+        response = await MusicApiService.searchAllLibrary(
+          limit: _itemsPerPage,
+          offset: offset,
+          services: _selectedServices,
+          type: typeString,
+        );
+      } else {
+        // Single service library search all
+        response = await MusicApiService.searchAllLibrary(
+          limit: _itemsPerPage,
+          offset: offset,
+          service: _selectedService,
+          type: typeString,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        _searchResults = response.data;
+      } else {
+        _searchError = response.message ?? 'Library search all failed';
+      }
+    } catch (e) {
+      _searchError = 'Library search all failed: $e';
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> searchBoth(String query) async {
     if (query.trim().isEmpty) return;
 
@@ -508,6 +614,7 @@ class MusicProvider with ChangeNotifier {
     _currentPage = 1;
     _lastSearchQuery = query;
     _lastSearchType = SearchType.tracks; // Default to tracks for combined search
+    _lastSearchWasLibrary = false;
 
     _isSearching = true;
     _searchError = null;
@@ -761,6 +868,7 @@ class MusicProvider with ChangeNotifier {
     _searchError = null;
     _currentPage = 1;
     _lastSearchQuery = '';
+    _lastSearchWasLibrary = false;
     notifyListeners();
   }
 
@@ -768,6 +876,7 @@ class MusicProvider with ChangeNotifier {
   void nextPage() {
     if (hasNextPage) {
       _currentPage++;
+      notifyListeners(); // Notify immediately to update UI
       _performPaginatedSearch();
     }
   }
@@ -775,6 +884,7 @@ class MusicProvider with ChangeNotifier {
   void previousPage() {
     if (hasPreviousPage) {
       _currentPage--;
+      notifyListeners(); // Notify immediately to update UI
       _performPaginatedSearch();
     }
   }
@@ -782,6 +892,7 @@ class MusicProvider with ChangeNotifier {
   void goToPage(int page) {
     if (page >= 1 && page <= totalPages && page != _currentPage) {
       _currentPage = page;
+      notifyListeners(); // Notify immediately to update UI
       _performPaginatedSearch();
     }
   }
@@ -823,23 +934,30 @@ class MusicProvider with ChangeNotifier {
 
   void _performPaginatedSearch() {
     if (_lastSearchQuery.isEmpty) {
-      if (_lastSearchType == SearchType.tracks) {
-        searchAll();
+      // For "search all" with pagination, we need to call the search methods with current pagination
+      if (_lastSearchWasLibrary) {
+        _searchAllLibraryWithPagination();
+      } else {
+        _searchAllWithPagination();
       }
       return;
     }
 
     // Perform search with current pagination
-    switch (_lastSearchType) {
-      case SearchType.tracks:
-        _searchWithPagination(_lastSearchQuery, 'track');
-        break;
-      case SearchType.albums:
-        _searchWithPagination(_lastSearchQuery, 'album');
-        break;
-      case SearchType.playlists:
-        _searchWithPagination(_lastSearchQuery, 'playlist');
-        break;
+    if (_lastSearchWasLibrary) {
+      _searchLibraryWithPagination(_lastSearchQuery);
+    } else {
+      switch (_lastSearchType) {
+        case SearchType.tracks:
+          _searchWithPagination(_lastSearchQuery, 'track');
+          break;
+        case SearchType.albums:
+          _searchWithPagination(_lastSearchQuery, 'album');
+          break;
+        case SearchType.playlists:
+          _searchWithPagination(_lastSearchQuery, 'playlist');
+          break;
+      }
     }
   }
 
@@ -1278,7 +1396,183 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  @override
+  Future<void> _searchAllWithPagination() async {
+    // Search all music from server with current pagination (don't reset page)
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      // Use empty query to get all results from server
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      
+      final futures = await Future.wait([
+        MusicApiService.searchMusic(
+          '', // Empty query for all results
+          limit: _itemsPerPage,
+          offset: offset,
+          service: 'server',
+        ),
+        MusicApiService.searchAlbums(
+          '', // Empty query for all results
+          limit: _itemsPerPage,
+          offset: offset,
+          service: 'server',
+        ),
+        MusicApiService.searchPlaylists(
+          '', // Empty query for all results
+          limit: _itemsPerPage,
+          offset: offset,
+          service: 'server',
+        ),
+      ]);
+      
+      final musicResponse = futures[0];
+      final albumResponse = futures[1];
+      final playlistResponse = futures[2];
+      
+      // Combine the results
+      List<Track> tracks = [];
+      List<Album> albums = [];
+      List<PlaylistSearchResult> playlists = [];
+      
+      if (musicResponse.success && musicResponse.data != null) {
+        tracks = musicResponse.data!.tracks;
+      }
+      
+      if (albumResponse.success && albumResponse.data != null) {
+        albums = albumResponse.data!.albums;
+      }
+      
+      if (playlistResponse.success && playlistResponse.data != null) {
+        playlists = playlistResponse.data!.playlists ?? [];
+      }
+      
+      // Use the total from the first successful response, or calculate from results
+      int total = 0;
+      if (musicResponse.success && musicResponse.data != null) {
+        total = musicResponse.data!.total;
+      } else if (albumResponse.success && albumResponse.data != null) {
+        total = albumResponse.data!.total;
+      } else if (playlistResponse.success && playlistResponse.data != null) {
+        total = playlistResponse.data!.total;
+      } else {
+        total = tracks.length + albums.length + playlists.length;
+      }
+
+      _searchResults = SearchResults(
+        tracks: tracks,
+        albums: albums,
+        playlists: playlists,
+        total: total,
+        offset: offset,
+        limit: _itemsPerPage,
+      );
+      
+      _searchError = null;
+    } catch (e) {
+      _searchError = 'Failed to search all music: $e';
+      _searchResults = null;
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _searchAllLibraryWithPagination() async {
+    // Search all library items with current pagination (don't reset page)
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      
+      // Convert SearchType to string
+      String typeString = _lastSearchType == SearchType.tracks ? 'track' 
+                        : _lastSearchType == SearchType.albums ? 'album' 
+                        : 'playlist';
+      
+      ApiResponse<SearchResults> response;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        // Multi-service library search all
+        response = await MusicApiService.searchAllLibrary(
+          limit: _itemsPerPage,
+          offset: offset,
+          services: _selectedServices,
+          type: typeString,
+        );
+      } else {
+        // Single service library search all
+        response = await MusicApiService.searchAllLibrary(
+          limit: _itemsPerPage,
+          offset: offset,
+          service: _selectedService,
+          type: typeString,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        _searchResults = response.data;
+      } else {
+        _searchError = response.message ?? 'Library search all failed';
+      }
+    } catch (e) {
+      _searchError = 'Library search all failed: $e';
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _searchLibraryWithPagination(String query) async {
+    _isSearching = true;
+    _searchError = null;
+    notifyListeners();
+
+    try {
+      final offset = (_currentPage - 1) * _itemsPerPage;
+      
+      // Convert SearchType to string
+      String typeString = _lastSearchType == SearchType.tracks ? 'track' 
+                        : _lastSearchType == SearchType.albums ? 'album' 
+                        : 'playlist';
+      
+      ApiResponse<SearchResults> response;
+      
+      if (_useMultiServiceSearch && _selectedServices.isNotEmpty) {
+        response = await MusicApiService.searchLibrary(
+          query,
+          limit: _itemsPerPage,
+          offset: offset,
+          services: _selectedServices,
+          type: typeString,
+        );
+      } else {
+        response = await MusicApiService.searchLibrary(
+          query,
+          limit: _itemsPerPage,
+          offset: offset,
+          service: _selectedService,
+          type: typeString,
+        );
+      }
+      
+      if (response.success && response.data != null) {
+        _searchResults = response.data;
+        _searchError = null;
+      } else {
+        _searchError = response.message ?? 'Library search failed';
+      }
+    } catch (e) {
+      _searchError = 'Library search failed: $e';
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
   void dispose() {
     _audioInfoTimer?.cancel();
     _stopBackgroundUpdates();

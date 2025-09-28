@@ -200,10 +200,17 @@ impl StreamingService for QobuzService {
         params.insert("playlist_id".to_string(), playlist_id.to_string());
         params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
         params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+        // Add extra parameter to request tracks
+        params.insert("extra".to_string(), "tracks".to_string());
 
         let response: QobuzPlaylistTracksResponse = self.make_request("playlist/get", &params).await?;
 
-        let tracks = response.tracks.items.into_iter().enumerate().filter_map(|(index, track)| {
+        let tracks = response.tracks
+            .map(|track_list| track_list.items)
+            .unwrap_or_default()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(_index, track)| {
             // Skip tracks without valid ID (similar to Python code)
             if track.id.is_null() {
                 return None;
@@ -350,6 +357,271 @@ impl StreamingService for QobuzService {
     fn service_name(&self) -> &str {
         "qobuz"
     }
+
+    async fn search_library(&self, query: &str, search_type: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults> {
+        let limit = limit.unwrap_or(20);
+        let offset = offset.unwrap_or(0);
+        let search_type = search_type.unwrap_or("track");
+        
+        tracing::info!("Qobuz library search - query: '{}', type: '{}', limit: {}, offset: {}", 
+                      query, search_type, limit, offset);
+        
+        // Simple approach: search only the requested type
+        let mut all_tracks = Vec::new();
+        let mut all_albums = Vec::new();
+        let mut all_playlists = Vec::new();
+        let mut total_count = 0u32;
+        
+        match search_type {
+            "track" => {
+                // Search tracks only - get all first, then paginate
+                match self.get_library_tracks_impl(query, Some(1000), Some(0)).await {
+                    Ok(all_tracks_data) => {
+                        let total_tracks = all_tracks_data.len() as u32;
+                        let start = offset as usize;
+                        let end = (start + limit as usize).min(all_tracks_data.len());
+                        
+                        if start < all_tracks_data.len() {
+                            all_tracks = all_tracks_data[start..end].to_vec();
+                        }
+                        total_count = total_tracks;
+                        tracing::info!("Found {} total tracks, returning {} (offset: {}, limit: {})", 
+                                      total_tracks, all_tracks.len(), offset, limit);
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get library tracks: {}", e);
+                    }
+                }
+            },
+            "album" => {
+                // Search albums only - get all first, then paginate
+                match self.get_library_albums_impl(query, Some(1000), Some(0)).await {
+                    Ok(all_albums_data) => {
+                        let total_albums = all_albums_data.len() as u32;
+                        let start = offset as usize;
+                        let end = (start + limit as usize).min(all_albums_data.len());
+                        
+                        if start < all_albums_data.len() {
+                            all_albums = all_albums_data[start..end].to_vec();
+                        }
+                        total_count = total_albums;
+                        tracing::info!("Found {} total albums, returning {} (offset: {}, limit: {})", 
+                                      total_albums, all_albums.len(), offset, limit);
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get library albums: {}", e);
+                    }
+                }
+            },
+            "playlist" => {
+                // Search playlists only - get all first, then paginate
+                match self.get_library_playlists_impl(query, Some(1000), Some(0)).await {
+                    Ok(all_playlists_data) => {
+                        let total_playlists = all_playlists_data.len() as u32;
+                        let start = offset as usize;
+                        let end = (start + limit as usize).min(all_playlists_data.len());
+                        
+                        if start < all_playlists_data.len() {
+                            let playlist_slice = &all_playlists_data[start..end];
+                            all_playlists = playlist_slice.iter().map(|p| super::StreamingPlaylist {
+                                id: p.id.clone(),
+                                name: p.name.clone(),
+                                description: p.description.clone(),
+                                owner: p.owner.clone(),
+                                source: p.source.clone(),
+                                cover_url: p.cover_url.clone(),
+                                track_count: p.track_count,
+                                is_public: p.is_public,
+                                external_url: p.external_url.clone(),
+                            }).collect();
+                        }
+                        total_count = total_playlists;
+                        tracing::info!("Found {} total playlists, returning {} (offset: {}, limit: {})", 
+                                      total_playlists, all_playlists.len(), offset, limit);
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get library playlists: {}", e);
+                    }
+                }
+            },
+            _ => {
+                tracing::warn!("Unknown search type: {}, defaulting to tracks", search_type);
+                // Default to tracks with proper pagination
+                match self.get_library_tracks_impl(query, Some(1000), Some(0)).await {
+                    Ok(all_tracks_data) => {
+                        let total_tracks = all_tracks_data.len() as u32;
+                        let start = offset as usize;
+                        let end = (start + limit as usize).min(all_tracks_data.len());
+                        
+                        if start < all_tracks_data.len() {
+                            all_tracks = all_tracks_data[start..end].to_vec();
+                        }
+                        total_count = total_tracks;
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get library tracks: {}", e);
+                    }
+                }
+            }
+        }
+        
+        Ok(SearchResults {
+            tracks: all_tracks,
+            albums: all_albums,
+            playlists: all_playlists,
+            total: total_count,
+            offset,
+            limit,
+        })
+    }
+}
+
+impl QobuzService {
+    async fn get_library_tracks_impl(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingTrack>> {
+        let mut params = HashMap::new();
+        params.insert("type".to_string(), "tracks".to_string());
+        params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
+        params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+
+        let response: QobuzFavoritesTracksResponse = self.make_request("favorite/getUserFavorites", &params).await?;
+
+        let tracks = response.tracks
+            .map(|track_list| track_list.items)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|track| {
+            // Skip tracks without valid ID
+            if track.id.is_null() {
+                return None;
+            }
+
+            // Filter by query if provided and not empty
+            if !query.is_empty() {
+                let title_match = track.title.to_lowercase().contains(&query.to_lowercase());
+                let artist_match = track.performer.as_ref()
+                    .map(|p| p.name.to_lowercase().contains(&query.to_lowercase()))
+                    .unwrap_or(false);
+                let album_match = track.album.as_ref()
+                    .map(|a| a.title.to_lowercase().contains(&query.to_lowercase()))
+                    .unwrap_or(false);
+                
+                if !title_match && !artist_match && !album_match {
+                    return None;
+                }
+            }
+
+            let (bitrate, sample_rate, bit_depth) = if self.user_auth_token.is_some() {
+                (Some(1411), Some(44100), Some(16))
+            } else {
+                (Some(320), None, None)
+            };
+
+            Some(StreamingTrack {
+                id: Self::json_value_to_string(&track.id),
+                title: track.title,
+                artist: track.performer.as_ref().map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+                album: track.album.as_ref().map(|a| a.title.clone()).unwrap_or_else(|| "Unknown Album".to_string()),
+                duration: track.duration,
+                stream_url: None,
+                cover_url: track.album.as_ref().and_then(|a| a.image.as_ref().and_then(|i| i.large.clone())),
+                quality: Some("lossless".to_string()),
+                source: "qobuz".to_string(),
+                bitrate,
+                sample_rate,
+                bit_depth,
+            })
+        }).collect();
+
+        Ok(tracks)
+    }
+
+    async fn get_library_albums_impl(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingAlbum>> {
+        let mut params = HashMap::new();
+        params.insert("type".to_string(), "albums".to_string());
+        params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
+        params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+
+        let response: QobuzFavoritesAlbumsResponse = self.make_request("favorite/getUserFavorites", &params).await
+            .map_err(|e| {
+                tracing::error!("Failed to get library albums: {}", e);
+                e
+            })?;
+
+        let albums = response.albums
+            .map(|album_list| album_list.items)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|album| {
+            // Filter by query if provided and not empty
+            if !query.is_empty() {
+                let title_match = album.title.to_lowercase().contains(&query.to_lowercase());
+                let artist_match = album.artist.as_ref()
+                    .map(|a| a.name.to_lowercase().contains(&query.to_lowercase()))
+                    .unwrap_or(false);
+                
+                if !title_match && !artist_match {
+                    return None;
+                }
+            }
+
+            Some(StreamingAlbum {
+                id: Self::json_value_to_string(&album.id),
+                title: album.title,
+                artist: album.artist.as_ref().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown Artist".to_string()),
+                release_date: album.released_at.map(|d| d.to_string()),
+                cover_url: album.image.as_ref().and_then(|i| i.large.clone()),
+                tracks: vec![],
+                source: "qobuz".to_string(),
+            })
+        }).collect();
+
+        Ok(albums)
+    }
+
+    async fn get_library_playlists_impl(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<super::StreamingPlaylist>> {
+        let mut params = HashMap::new();
+        params.insert("limit".to_string(), limit.unwrap_or(100).to_string());
+        params.insert("offset".to_string(), offset.unwrap_or(0).to_string());
+
+        let response: QobuzUserPlaylistsResponse = self.make_request("playlist/getUserPlaylists", &params).await
+            .map_err(|e| {
+                tracing::error!("Failed to get library playlists: {}", e);
+                e
+            })?;
+
+        let playlists = response.playlists.items.into_iter().filter_map(|playlist| {
+            // Skip playlists without valid ID
+            if playlist.id.is_null() {
+                return None;
+            }
+
+            // Filter by query if provided and not empty
+            if !query.is_empty() {
+                let name_match = playlist.name.to_lowercase().contains(&query.to_lowercase());
+                let desc_match = playlist.description.as_ref()
+                    .map(|d| d.to_lowercase().contains(&query.to_lowercase()))
+                    .unwrap_or(false);
+                
+                if !name_match && !desc_match {
+                    return None;
+                }
+            }
+
+            Some(super::StreamingPlaylist {
+                id: Self::json_value_to_string(&playlist.id),
+                name: playlist.name,
+                description: playlist.description,
+                owner: playlist.creator.as_ref().map(|c| c.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
+                source: "qobuz".to_string(),
+                cover_url: playlist.image.as_ref().and_then(|i| i.large.clone()),
+                track_count: playlist.tracks_count.unwrap_or(0),
+                is_public: playlist.is_public.unwrap_or(false),
+                external_url: playlist.url,
+            })
+        }).collect();
+
+        Ok(playlists)
+    }
 }
 
 // Qobuz API response structures
@@ -454,7 +726,12 @@ struct QobuzPlaylistCreator {
 
 #[derive(Debug, Deserialize)]
 struct QobuzPlaylistTracksResponse {
-    tracks: QobuzPlaylistTracksList,
+    tracks: Option<QobuzPlaylistTracksList>,
+    // Playlist metadata fields
+    id: Option<serde_json::Value>,
+    name: Option<String>,
+    owner: Option<QobuzPlaylistCreator>,
+    tracks_count: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -476,4 +753,25 @@ struct QobuzAlbumTracksList {
     total: u32,
     limit: u32,
     offset: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzFavoritesResponse {
+    tracks: Option<QobuzTrackList>,
+    albums: Option<QobuzAlbumList>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzFavoritesTracksResponse {
+    tracks: Option<QobuzTrackList>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzFavoritesAlbumsResponse {
+    albums: Option<QobuzAlbumList>,
+}
+
+#[derive(Debug, Deserialize)]
+struct QobuzUserPlaylistsResponse {
+    playlists: QobuzPlaylistList,
 }

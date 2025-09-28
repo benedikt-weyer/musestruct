@@ -10,6 +10,9 @@ pub trait StreamingService: Send + Sync {
     /// Search for playlists across the streaming service
     async fn search_playlists(&self, query: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingPlaylist>>;
     
+    /// Search user's library (favorites/saved items)
+    async fn search_library(&self, query: &str, search_type: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults>;
+    
     /// Get tracks from a specific playlist
     async fn get_playlist_tracks(&self, playlist_id: &str, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<StreamingTrack>>;
     

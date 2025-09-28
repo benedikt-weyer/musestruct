@@ -425,6 +425,109 @@ class MusicApiService extends BaseApiService {
       return ApiResponse<List<Track>>.error('Error getting playlist tracks: $e');
     }
   }
+
+  /// Search user's library across streaming services
+  static Future<ApiResponse<SearchResults>> searchLibrary(
+    String query, {
+    int? limit,
+    int? offset,
+    String? service,
+    List<String>? services,
+    String? type,
+  }) async {
+    try {
+      final params = <String, String>{
+        'q': query,
+        'library': 'true',
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
+        if (service != null) 'service': service,
+        if (type != null) 'type': type,
+      };
+
+      // Add services parameter if provided
+      if (services != null && services.isNotEmpty) {
+        for (int i = 0; i < services.length; i++) {
+          params['services[$i]'] = services[i];
+        }
+      }
+
+      final response = await BaseApiService.get(
+        '/streaming/search',
+        queryParams: params,
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>.fromJson(
+          json,
+          (data) => SearchResults.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>(
+          success: false,
+          message: json['message'] ?? 'Library search failed',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<SearchResults>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
+
+  /// Search all items in user's library
+  static Future<ApiResponse<SearchResults>> searchAllLibrary({
+    int? limit,
+    int? offset,
+    String? service,
+    List<String>? services,
+    String? type,
+  }) async {
+    try {
+      final params = <String, String>{
+        'q': '', // Empty query to get all library items
+        'library': 'true',
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
+        if (service != null) 'service': service,
+        if (type != null) 'type': type,
+      };
+
+      // Add services parameter if provided
+      if (services != null && services.isNotEmpty) {
+        for (int i = 0; i < services.length; i++) {
+          params['services[$i]'] = services[i];
+        }
+      }
+
+      final response = await BaseApiService.get(
+        '/streaming/search',
+        queryParams: params,
+      );
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>.fromJson(
+          json,
+          (data) => SearchResults.fromJson(data as Map<String, dynamic>),
+        );
+      } else {
+        final json = jsonDecode(response.body);
+        return ApiResponse<SearchResults>(
+          success: false,
+          message: json['message'] ?? 'Library search all failed',
+        );
+      }
+    } catch (e) {
+      return ApiResponse<SearchResults>(
+        success: false,
+        message: 'Network error: $e',
+      );
+    }
+  }
 }
 
 /// Service information model
