@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sea_orm::{EntityTrait, ColumnTrait, QueryFilter, Set, ActiveModelTrait};
 
 use crate::handlers::auth::{AppState, ApiResponse};
-use crate::services::AudioAnalysisService;
+use crate::services::SpectrogramBpmAnalysisService;
 use crate::models::saved_track::{Entity as SavedTrack, ActiveModel as SavedTrackActiveModel};
 
 #[derive(Deserialize)]
@@ -23,6 +23,16 @@ pub struct BpmAnalysisResponse {
     pub source: String,
     pub bpm: f32,
     pub analysis_time_ms: u64,
+}
+
+#[derive(Serialize)]
+pub struct SpectrogramBpmAnalysisResponse {
+    pub track_id: String,
+    pub source: String,
+    pub bpm: f32,
+    pub analysis_time_ms: u64,
+    pub spectrogram_path: String,
+    pub analysis_visualization_path: String,
 }
 
 /// Analyze BPM of a track and save it to the database
@@ -66,63 +76,44 @@ pub async fn analyze_track_bpm(
         }
     };
 
-    // Create audio analysis service
-    let analysis_service = AudioAnalysisService::new();
+    // Create spectrogram analysis service (now the only BPM analysis method)
+    let analysis_service = SpectrogramBpmAnalysisService::new();
 
-    // Analyze BPM in a separate task to avoid blocking
+    // Analyze BPM using spectrogram approach
     let track_id = query.track_id.clone();
     let source = query.source.clone();
     
-    tracing::info!("Starting BPM analysis task for track: {} ({})", track_id, source);
+    tracing::info!("Starting spectrogram BPM analysis task for track: {} ({})", track_id, source);
     
-    let bpm_result = tokio::spawn(async move {
-        tracing::debug!("BPM analysis task started with URL: {}", stream_url);
-        
-        let result = if stream_url.starts_with("http://") || stream_url.starts_with("https://") {
-            tracing::debug!("Analyzing remote file: {}", stream_url);
-            match analysis_service.analyze_remote_file(&stream_url).await {
-                Ok(bpm) => {
-                    tracing::info!("Remote file analysis successful: {} BPM", bpm);
-                    Ok(bpm)
-                },
-                Err(e) => {
-                    tracing::error!("Remote file analysis failed for {}: {}", stream_url, e);
-                    Err(e)
-                }
+    let bpm = if stream_url.starts_with("http://") || stream_url.starts_with("https://") {
+        tracing::debug!("Analyzing remote file with spectrogram: {}", stream_url);
+        match analysis_service.analyze_remote_file_spectrogram(&stream_url).await {
+            Ok((bpm, _, _)) => {
+                tracing::info!("Remote spectrogram analysis successful: {} BPM", bpm);
+                bpm
+            },
+            Err(e) => {
+                tracing::error!("Remote spectrogram analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("BPM analysis failed: {}", e))),
+                ));
             }
-        } else {
-            tracing::debug!("Analyzing local file: {}", stream_url);
-            match analysis_service.analyze_bpm(&stream_url).await {
-                Ok(bpm) => {
-                    tracing::info!("Local file analysis successful: {} BPM", bpm);
-                    Ok(bpm)
-                },
-                Err(e) => {
-                    tracing::error!("Local file analysis failed for {}: {}", stream_url, e);
-                    Err(e)
-                }
-            }
-        };
-        
-        tracing::debug!("BPM analysis task completed with result: {:?}", result);
-        result
-    }).await;
-
-    let bpm = match bpm_result {
-        Ok(Ok(bpm)) => bpm,
-        Ok(Err(e)) => {
-            tracing::error!("BPM analysis failed for track {}: {}", query.track_id, e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error(format!("BPM analysis failed: {}", e))),
-            ));
         }
-        Err(e) => {
-            tracing::error!("BPM analysis task failed for track {}: {}", query.track_id, e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::error("BPM analysis task failed".to_string())),
-            ));
+    } else {
+        tracing::debug!("Analyzing local file with spectrogram: {}", stream_url);
+        match analysis_service.analyze_bpm_with_spectrogram(&stream_url).await {
+            Ok((bpm, _, _)) => {
+                tracing::info!("Spectrogram analysis successful: {} BPM", bpm);
+                bpm
+            },
+            Err(e) => {
+                tracing::error!("Spectrogram analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("BPM analysis failed: {}", e))),
+                ));
+            }
         }
     };
 
@@ -298,6 +289,154 @@ pub async fn get_track_bpm(
         source: query.source,
         bpm,
     };
+
+    Ok(Json(ApiResponse::success(response)))
+}
+
+/// Analyze BPM using spectrogram approach and save spectrogram image
+pub async fn analyze_track_bpm_spectrogram(
+    State(state): State<AppState>,
+    Query(query): Query<AnalyzeBpmQuery>,
+) -> Result<Json<ApiResponse<SpectrogramBpmAnalysisResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let start_time = std::time::Instant::now();
+    
+    tracing::info!("=== SPECTROGRAM BPM ANALYSIS ENDPOINT CALLED ===");
+    tracing::info!("Spectrogram BPM analysis request - Track ID: {}, Source: {}, Stream URL: {:?}", 
+                   query.track_id, query.source, query.stream_url);
+    
+    // Get the stream URL for the track
+    let stream_url = match query.stream_url {
+        Some(url) => {
+            tracing::debug!("Using provided stream URL: {}", url);
+            url
+        },
+        None => {
+            tracing::debug!("No stream URL provided, attempting to resolve for source: {}", query.source);
+            match get_stream_url_for_track(&state, &query.track_id, &query.source).await {
+                Ok(url) => {
+                    tracing::debug!("Resolved stream URL: {}", url);
+                    url
+                },
+                Err(e) => {
+                    tracing::error!("Failed to get stream URL for track {} ({}): {}", 
+                                   query.track_id, query.source, e);
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ApiResponse::<()>::error(format!("Could not get stream URL: {}", e))),
+                    ));
+                }
+            }
+        }
+    };
+
+    // Create spectrogram analysis service
+    let analysis_service = SpectrogramBpmAnalysisService::new();
+
+    // Analyze BPM with spectrogram
+    let track_id = query.track_id.clone();
+    let source = query.source.clone();
+    
+    tracing::info!("Starting spectrogram BPM analysis task for track: {} ({})", track_id, source);
+    
+    let (bpm, spectrogram_path, analysis_visualization_path) = if stream_url.starts_with("http://") || stream_url.starts_with("https://") {
+        tracing::debug!("Analyzing remote file with spectrogram: {}", stream_url);
+        match analysis_service.analyze_remote_file_spectrogram(&stream_url).await {
+            Ok((bpm, spec_path, viz_path)) => {
+                tracing::info!("Remote spectrogram analysis successful: {} BPM, spectrogram: {}, visualization: {}", bpm, spec_path, viz_path);
+                (bpm, spec_path, viz_path)
+            },
+            Err(e) => {
+                tracing::error!("Remote spectrogram analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Remote spectrogram analysis failed: {}", e))),
+                ));
+            }
+        }
+    } else {
+        tracing::debug!("Analyzing local file with spectrogram: {}", stream_url);
+        match analysis_service.analyze_bpm_with_spectrogram(&stream_url).await {
+            Ok((bpm, spec_path, viz_path)) => {
+                tracing::info!("Spectrogram analysis successful: {} BPM, spectrogram: {}, visualization: {}", bpm, spec_path, viz_path);
+                (bpm, spec_path, viz_path)
+            },
+            Err(e) => {
+                tracing::error!("Spectrogram analysis failed for {}: {}", stream_url, e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Spectrogram analysis failed: {}", e))),
+                ));
+            }
+        }
+    };
+
+    let analysis_duration = start_time.elapsed();
+    
+    // Save BPM to database
+    let db = state.db();
+    
+    // Find existing saved track or create new one
+    let existing_track = SavedTrack::find()
+        .filter(crate::models::saved_track::Column::TrackId.eq(&track_id))
+        .filter(crate::models::saved_track::Column::Source.eq(&source))
+        .one(db)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error when finding saved track: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error("Database error".to_string())),
+            )
+        })?;
+
+    match existing_track {
+        Some(track) => {
+            // Update existing track
+            let mut active_track: SavedTrackActiveModel = track.into();
+            active_track.bpm = Set(Some(bpm));
+            
+            active_track.update(db).await.map_err(|e| {
+                tracing::error!("Failed to update track BPM in database: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error("Failed to save BPM".to_string())),
+                )
+            })?;
+            
+            tracing::info!("Updated existing track {} ({}) with BPM: {}", track_id, source, bpm);
+        }
+        None => {
+            // Create new saved track entry
+            let new_track = SavedTrackActiveModel {
+                track_id: Set(track_id.clone()),
+                source: Set(source.clone()),
+                bpm: Set(Some(bpm)),
+                ..Default::default()
+            };
+            
+            new_track.insert(db).await.map_err(|e| {
+                tracing::error!("Failed to insert new track with BPM: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error("Failed to save BPM".to_string())),
+                )
+            })?;
+            
+            tracing::info!("Created new track entry {} ({}) with BPM: {}", track_id, source, bpm);
+        }
+    }
+
+    let response = SpectrogramBpmAnalysisResponse {
+        track_id,
+        source,
+        bpm,
+        analysis_time_ms: analysis_duration.as_millis() as u64,
+        spectrogram_path,
+        analysis_visualization_path,
+    };
+
+    tracing::info!("Spectrogram BPM analysis completed successfully: {} BPM in {}ms", 
+                   bpm, analysis_duration.as_millis());
 
     Ok(Json(ApiResponse::success(response)))
 }

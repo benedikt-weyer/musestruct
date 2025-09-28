@@ -830,23 +830,27 @@ class ExpandedMusicPlayer extends StatelessWidget {
       final apiService = Provider.of<ApiService>(context, listen: false);
       final analysisService = AudioAnalysisService(apiService);
       
-      // Trigger BPM analysis asynchronously (fire and forget)
-      analysisService.analyzeBpm(track).then((result) {
+      // Trigger spectrogram BPM analysis asynchronously (fire and forget)
+      analysisService.analyzeBpmSpectrogram(track).then((result) {
         // Update the track with the new BPM value
         if (context.mounted) {
           final musicProvider = Provider.of<MusicProvider>(context, listen: false);
           musicProvider.updateTrackBpm(track.id, result.bpm);
           
+          // Also update saved tracks if this track is saved
+          final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
+          savedTracksProvider.updateTrackBpm(track.id, track.source, result.bpm);
+          
           // Show success message when analysis completes
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'BPM analysis complete: ${result.bpm.toStringAsFixed(1)} BPM',
+                'Spectrogram BPM analysis complete: ${result.bpm.toStringAsFixed(1)} BPM\nSpectrogram: ${result.spectrogramPath.split('/').last}\nVisualization: ${result.analysisVisualizationPath.split('/').last}',
               ),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -855,7 +859,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('BPM analysis failed: $e'),
+              content: Text('Spectrogram BPM analysis failed: $e'),
               backgroundColor: Colors.red,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
@@ -869,7 +873,7 @@ class ExpandedMusicPlayer extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('BPM analysis started for "${track.title}"'),
+            content: Text('Spectrogram BPM analysis started for "${track.title}"'),
             backgroundColor: Colors.blue,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),

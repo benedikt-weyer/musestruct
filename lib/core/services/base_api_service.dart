@@ -11,6 +11,7 @@ abstract class BaseApiService {
   // Timeout configurations
   static const Duration defaultTimeout = Duration(seconds: 30);
   static const Duration streamingTimeout = Duration(minutes: 3);
+  static const Duration analysisTimeout = Duration(minutes: 5); // For BPM analysis
   
   /// Get the base URL for API calls
   static Future<String> get baseUrl async {

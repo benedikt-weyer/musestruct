@@ -74,6 +74,9 @@ rustfft = "6.2"
 symphonia = { version = "0.5", features = ["all"] }
 spectrum-analyzer = "1.5"
 
+# Image processing for spectrograms
+image = "0.25"
+
 [dev-dependencies]
 # SeaORM CLI for migrations
 sea-orm-cli = "1.1"

@@ -116,4 +116,33 @@ class SavedTracksProvider with ChangeNotifier {
   void refresh() {
     loadSavedTracks();
   }
+
+  /// Update the BPM of a saved track
+  void updateTrackBpm(String trackId, String source, double bpm) {
+    bool updated = false;
+    
+    // Update saved tracks list
+    for (int i = 0; i < _savedTracks.length; i++) {
+      if (_savedTracks[i].trackId == trackId && _savedTracks[i].source == source) {
+        _savedTracks[i] = SavedTrack(
+          id: _savedTracks[i].id,
+          trackId: _savedTracks[i].trackId,
+          title: _savedTracks[i].title,
+          artist: _savedTracks[i].artist,
+          album: _savedTracks[i].album,
+          duration: _savedTracks[i].duration,
+          source: _savedTracks[i].source,
+          coverUrl: _savedTracks[i].coverUrl,
+          bpm: bpm,
+          createdAt: _savedTracks[i].createdAt,
+        );
+        updated = true;
+        break;
+      }
+    }
+    
+    if (updated) {
+      notifyListeners();
+    }
+  }
 }
