@@ -7,6 +7,7 @@ import '../../playlists/providers/playlist_provider.dart';
 import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 import '../services/audio_analysis_service.dart';
+import 'network_image_widget.dart';
 import '../services/api_service.dart';
 import '../../music/models/music.dart';
 
@@ -148,26 +149,18 @@ class ExpandedMusicPlayer extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: track.coverUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.network(
-                                    track.coverUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Icon(
-                                        Icons.music_note,
-                                        size: 120,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      );
-                                    },
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.music_note,
-                                  size: 120,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                          child: NetworkImageWidget(
+                            imageUrl: track.coverUrl,
+                            width: 240,
+                            height: 240,
+                            fit: BoxFit.cover,
+                            borderRadius: BorderRadius.circular(16),
+                            errorWidget: Icon(
+                              Icons.music_note,
+                              size: 120,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         );
                       },
                     ),

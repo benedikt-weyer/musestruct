@@ -8,6 +8,7 @@ import '../screens/queue/queue_screen.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
 import 'expanded_music_player.dart';
 import '../services/audio_analysis_service.dart';
+import 'network_image_widget.dart';
 import '../services/api_service.dart';
 import '../../music/models/music.dart';
 
@@ -181,31 +182,19 @@ class MusicPlayerBar extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(6),
                                     color: Colors.grey[300],
                                   ),
-                                  child: track.coverUrl != null
-                                      ? ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                          child: Image.network(
-                                            track.coverUrl!,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Icon(
-                                                    Icons.music_note,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                  );
-                                                },
-                                          ),
-                                        )
-                                      : Icon(
-                                          Icons.music_note,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
+                                  child: NetworkImageWidget(
+                                    imageUrl: track.coverUrl,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    borderRadius: BorderRadius.circular(6),
+                                    errorWidget: Icon(
+                                      Icons.music_note,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
 

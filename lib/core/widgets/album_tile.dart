@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../music/models/music.dart';
 import '../../music/providers/saved_albums_provider.dart';
+import 'network_image_widget.dart';
 import '../../music/providers/music_provider.dart';
 import '../screens/playlists/select_playlist_for_album_dialog.dart';
 
@@ -469,24 +470,17 @@ class AlbumTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           color: Colors.grey[300],
         ),
-        child: album.coverUrl != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  album.coverUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.album,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    );
-                  },
-                ),
-              )
-            : Icon(
-                Icons.album,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+        child: NetworkImageWidget(
+          imageUrl: album.coverUrl,
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          borderRadius: BorderRadius.circular(8),
+          errorWidget: Icon(
+            Icons.album,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
       ),
       title: Text(
         album.title,

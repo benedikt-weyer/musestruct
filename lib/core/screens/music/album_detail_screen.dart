@@ -5,6 +5,7 @@ import '../../../music/providers/music_provider.dart';
 import '../../../queue/providers/queue_provider.dart';
 import '../../../music/models/music.dart';
 import '../../widgets/track_tile.dart';
+import '../../widgets/network_image_widget.dart';
 import '../playlists/select_playlist_for_album_dialog.dart';
 
 class AlbumDetailScreen extends StatefulWidget {
@@ -346,25 +347,19 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
               // Album cover
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: widget.savedAlbum.coverUrl != null
-                    ? Image.network(
-                        widget.savedAlbum.coverUrl!,
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 120,
-                          height: 120,
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.album, size: 40),
-                        ),
-                      )
-                    : Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.album, size: 40),
-                      ),
+                child: NetworkImageWidget(
+                  imageUrl: widget.savedAlbum.coverUrl,
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  borderRadius: BorderRadius.circular(8),
+                  errorWidget: Container(
+                    width: 120,
+                    height: 120,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.album, size: 40),
+                  ),
+                ),
               ),
               const SizedBox(width: 16),
               // Album info

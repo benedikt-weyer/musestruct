@@ -5,6 +5,7 @@ import '../../music/providers/saved_tracks_provider.dart';
 import '../../music/providers/music_provider.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../screens/playlists/select_playlist_dialog.dart';
+import 'network_image_widget.dart';
 
 class TrackTile extends StatelessWidget {
   final Track track;
@@ -512,24 +513,17 @@ class TrackTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     color: Colors.grey[300],
                   ),
-                  child: track.coverUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            track.coverUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.music_note,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            );
-                            },
-                          ),
-                        )
-                      : Icon(
-                          Icons.music_note,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                  child: NetworkImageWidget(
+                    imageUrl: track.coverUrl,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(8),
+                    errorWidget: Icon(
+                      Icons.music_note,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
                 if (isLoading)
                   Container(
