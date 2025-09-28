@@ -9,6 +9,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::{MetadataOptions, StandardTagKey};
 use symphonia::core::probe::Hint;
 use std::fs::File;
+use id3::{Tag, TagLike};
 
 use super::{StreamingService, SearchResults, StreamingTrack, StreamingAlbum, StreamingPlaylist, ServiceCredentials, AuthResult};
 
@@ -109,66 +110,99 @@ impl LocalMusicService {
     }
 
     async fn extract_metadata(&self, file_path: &std::path::Path) -> TrackMetadata {
-        // First try to extract metadata from the audio file tags
-        if let Ok(metadata) = self.extract_audio_metadata(file_path) {
-            return metadata;
-        }
+        println!("Extracting metadata for file: {:?}", file_path);
         
-        // Fallback to parsing from filename and directory structure
-        self.parse_file_metadata(file_path)
+        // First try to extract metadata from the audio file tags
+        match self.extract_audio_metadata(file_path) {
+            Ok(metadata) => {
+                println!("Successfully extracted metadata from tags for: {:?}", file_path.file_name());
+                println!("  Title: '{}', Artist: '{}', Album: '{}'", metadata.title, metadata.artist, metadata.album);
+                metadata
+            },
+            Err(e) => {
+                println!("Failed to extract metadata from tags for {:?}: {}. Falling back to folder structure.", file_path.file_name(), e);
+                // Fallback to parsing from filename and directory structure
+                let fallback = self.parse_file_metadata(file_path);
+                println!("Fallback metadata - Title: '{}', Artist: '{}', Album: '{}'", fallback.title, fallback.artist, fallback.album);
+                fallback
+            }
+        }
     }
 
     fn extract_audio_metadata(&self, file_path: &std::path::Path) -> Result<TrackMetadata> {
+        println!("Attempting to read ID3 tags from: {:?}", file_path);
+        
+        // Try to read ID3 tags using the id3 crate
+        let tag = Tag::read_from_path(file_path)
+            .map_err(|e| anyhow!("Failed to read ID3 tags: {}", e))?;
+        
+        println!("Successfully read ID3 tag");
+        
+        // Extract basic metadata
+        let title = tag.title().map(|s| s.to_string());
+        let artist = tag.artist().map(|s| s.to_string());
+        let album = tag.album().map(|s| s.to_string());
+        let track_number = tag.track();
+        let year = tag.year();
+        
+        println!("ID3 metadata - title: {:?}, artist: {:?}, album: {:?}, track: {:?}, year: {:?}", 
+                 title, artist, album, track_number, year);
+        
+        // Get duration using Symphonia (since id3 doesn't provide duration)
+        let duration = self.get_duration_from_symphonia(file_path).unwrap_or(None);
+        
+        // Look for cover image
+        let cover_url = self.find_cover_image(file_path);
+        
+        // Check if we have any essential metadata
+        let has_essential_metadata = title.is_some() || artist.is_some() || album.is_some();
+        
+        if !has_essential_metadata {
+            println!("No essential metadata found in ID3 tags, falling back to folder structure");
+            return Err(anyhow!("No essential metadata found in ID3 tags"));
+        }
+        
+        // Use fallback values only for missing fields
+        let fallback_metadata = self.parse_file_metadata(file_path);
+        
+        let final_metadata = TrackMetadata {
+            title: title.unwrap_or(fallback_metadata.title),
+            artist: artist.unwrap_or(fallback_metadata.artist),
+            album: album.unwrap_or(fallback_metadata.album),
+            duration,
+            cover_url,
+            track_number,
+            year: year.map(|y| y as u32), // Convert i32 to u32
+        };
+        
+        println!("Final ID3 metadata - title: '{}', artist: '{}', album: '{}'", 
+                 final_metadata.title, final_metadata.artist, final_metadata.album);
+        
+        Ok(final_metadata)
+    }
+    
+    fn get_duration_from_symphonia(&self, file_path: &std::path::Path) -> Result<Option<u32>> {
         let file = File::open(file_path)
-            .map_err(|e| anyhow!("Failed to open file: {}", e))?;
+            .map_err(|e| anyhow!("Failed to open file for duration: {}", e))?;
         
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
-
+        
         let mut hint = Hint::new();
         if let Some(extension) = file_path.extension() {
             if let Some(ext_str) = extension.to_str() {
                 hint.with_extension(ext_str);
             }
         }
-
+        
         let meta_opts: MetadataOptions = Default::default();
         let fmt_opts: FormatOptions = Default::default();
-
+        
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &fmt_opts, &meta_opts)
-            .map_err(|e| anyhow!("Failed to probe audio format: {}", e))?;
-
-        let mut format = probed.format;
-        let metadata = format.metadata();
-
-        let mut title = None;
-        let mut artist = None;
-        let mut album = None;
-        let mut track_number = None;
-        let mut year = None;
-
-        // Extract metadata from tags
-        if let Some(metadata_rev) = metadata.current() {
-            for tag in metadata_rev.tags() {
-                match tag.std_key {
-                    Some(StandardTagKey::TrackTitle) => title = Some(tag.value.to_string()),
-                    Some(StandardTagKey::Artist) => artist = Some(tag.value.to_string()),
-                    Some(StandardTagKey::Album) => album = Some(tag.value.to_string()),
-                    Some(StandardTagKey::TrackNumber) => {
-                        if let Ok(num) = tag.value.to_string().parse::<u32>() {
-                            track_number = Some(num);
-                        }
-                    },
-                    Some(StandardTagKey::Date) => {
-                        if let Ok(y) = tag.value.to_string().parse::<u32>() {
-                            year = Some(y);
-                        }
-                    },
-                    _ => {}
-                }
-            }
-        }
-
+            .map_err(|e| anyhow!("Failed to probe audio format for duration: {}", e))?;
+        
+        let format = probed.format;
+        
         // Get duration from track info
         let duration = if let Some(track) = format.tracks().iter().next() {
             if let Some(time_base) = track.codec_params.time_base {
@@ -183,22 +217,8 @@ impl LocalMusicService {
         } else {
             None
         };
-
-        // Look for cover image
-        let cover_url = self.find_cover_image(file_path);
-
-        // Use fallback values if metadata is missing
-        let fallback_metadata = self.parse_file_metadata(file_path);
-
-        Ok(TrackMetadata {
-            title: title.unwrap_or(fallback_metadata.title),
-            artist: artist.unwrap_or(fallback_metadata.artist),
-            album: album.unwrap_or(fallback_metadata.album),
-            duration,
-            cover_url,
-            track_number,
-            year,
-        })
+        
+        Ok(duration)
     }
 
     fn find_cover_image(&self, audio_file_path: &std::path::Path) -> Option<String> {
@@ -240,23 +260,43 @@ impl LocalMusicService {
             .to_string_lossy();
         
         // Try to extract artist and album from directory structure
-        // Expected structure: .../Artist/Album/Track.mp3 or .../Artist/Track.mp3
+        // Expected structures: 
+        // .../Artist/Album/Track.mp3
+        // .../Artist/Track.mp3
+        // .../Album/Track.mp3
         let mut artist = "Unknown Artist".to_string();
         let mut album = "Unknown Album".to_string();
         
         if let Some(parent) = file_path.parent() {
             if let Some(album_name) = parent.file_name() {
-                album = album_name.to_string_lossy().to_string();
+                let album_str = album_name.to_string_lossy().to_string();
                 
                 // Check if there's a parent directory for artist
                 if let Some(grandparent) = parent.parent() {
                     if let Some(artist_name) = grandparent.file_name() {
-                        // Skip the root music directory names
-                        let artist_str = artist_name.to_string_lossy();
-                        if artist_str != "own_music" && artist_str != "music_sl" && artist_str != "Musik" {
-                            artist = artist_str.to_string();
+                        let artist_str = artist_name.to_string_lossy().to_string();
+                        
+                        // Skip common root directory names
+                        let skip_names = ["own_music", "music_sl", "Musik", "Music", "music", "Audio", "audio"];
+                        if !skip_names.contains(&artist_str.as_str()) && 
+                           !artist_str.starts_with('/') && 
+                           artist_str.len() > 1 {
+                            artist = artist_str;
+                            album = album_str;
+                        } else {
+                            // If grandparent is a root dir, treat parent as artist
+                            artist = album_str;
+                            album = "Unknown Album".to_string();
                         }
+                    } else {
+                        // No grandparent, treat parent as artist
+                        artist = album_str;
+                        album = "Unknown Album".to_string();
                     }
+                } else {
+                    // No parent directory, treat current dir as artist
+                    artist = album_str;
+                    album = "Unknown Album".to_string();
                 }
             }
         }
@@ -277,25 +317,51 @@ impl LocalMusicService {
 
     fn parse_title_from_filename(&self, filename: &str) -> String {
         // Remove file extension
-        let name_without_ext = filename.rsplit('.').nth(1).unwrap_or(filename);
-        
-        // Try to parse common formats:
-        // "01 - Title.mp3" -> "Title"
-        // "01. Title.mp3" -> "Title"
-        // "Artist - Title.mp3" -> "Title"
-        // "Title.mp3" -> "Title"
+        let name_without_ext = if let Some(dot_pos) = filename.rfind('.') {
+            &filename[..dot_pos]
+        } else {
+            filename
+        };
         
         let cleaned = name_without_ext.trim();
         
-        // Remove track numbers at the beginning
-        let without_track_num = if let Some(rest) = cleaned.strip_prefix(|c: char| c.is_ascii_digit()) {
-            // Handle formats like "01 - Title" or "01. Title"
-            if let Some(title) = rest.strip_prefix(" - ") {
-                title
-            } else if let Some(title) = rest.strip_prefix(". ") {
-                title
-            } else if let Some(title) = rest.strip_prefix(" ") {
-                title
+        // Handle various filename formats:
+        // "01 - Title" -> "Title"
+        // "01. Title" -> "Title"  
+        // "01 Title" -> "Title"
+        // "Artist - Title" -> "Title"
+        // "Title" -> "Title"
+        
+        // First, try to remove track numbers at the beginning
+        let without_track_num = if let Some(first_char) = cleaned.chars().next() {
+            if first_char.is_ascii_digit() {
+                // Find where the track number ends
+                let mut end_pos = 0;
+                for (i, c) in cleaned.char_indices() {
+                    if c.is_ascii_digit() {
+                        end_pos = i + 1;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Skip track number and any following separators
+                let rest = &cleaned[end_pos..];
+                if let Some(title) = rest.strip_prefix(" - ") {
+                    title
+                } else if let Some(title) = rest.strip_prefix(". ") {
+                    title
+                } else if let Some(title) = rest.strip_prefix(" ") {
+                    title
+                } else if let Some(title) = rest.strip_prefix("-") {
+                    title.trim()
+                } else if let Some(title) = rest.strip_prefix(".") {
+                    title.trim()
+                } else if !rest.is_empty() {
+                    rest
+                } else {
+                    cleaned
+                }
             } else {
                 cleaned
             }
@@ -303,11 +369,20 @@ impl LocalMusicService {
             cleaned
         };
         
-        // Handle "Artist - Title" format (if not already handled by directory structure)
-        if let Some((_, title_part)) = without_track_num.split_once(" - ") {
-            title_part.trim().to_string()
+        // Handle "Artist - Title" format (only if we haven't already extracted from directory)
+        let final_title = if let Some((_, title_part)) = without_track_num.split_once(" - ") {
+            title_part.trim()
+        } else if let Some((_, title_part)) = without_track_num.split_once(" – ") { // em dash
+            title_part.trim()
         } else {
-            without_track_num.trim().to_string()
+            without_track_num.trim()
+        };
+        
+        // If the result is empty or too short, use the original filename
+        if final_title.is_empty() || final_title.len() < 2 {
+            cleaned.to_string()
+        } else {
+            final_title.to_string()
         }
     }
 

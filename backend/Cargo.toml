@@ -73,6 +73,7 @@ hound = "3.5"
 rustfft = "6.2"
 symphonia = { version = "0.5", features = ["all"] }
 spectrum-analyzer = "1.5"
+id3 = "1.13"
 
 # Image processing for spectrograms
 image = "0.25"
