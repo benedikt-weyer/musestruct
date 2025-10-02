@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
-RUN useradd -m -u 1001 appuser
+RUN useradd -m -u 1005 appuser
 
 # Set the working directory
 WORKDIR /app
