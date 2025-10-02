@@ -19,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _backendUrlController = TextEditingController();
   bool _obscurePassword = true;
   bool _showAdvancedSettings = false;
+  bool _isCheckingConnection = false;
+  String? _connectionStatus;
 
   @override
   void initState() {
@@ -37,6 +39,44 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _backendUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkConnection() async {
+    if (_backendUrlController.text.isEmpty) {
+      setState(() {
+        _connectionStatus = 'Please enter a backend URL';
+      });
+      return;
+    }
+
+    if (!AppConfigService.isValidBackendUrl(_backendUrlController.text)) {
+      setState(() {
+        _connectionStatus = 'Invalid URL format';
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingConnection = true;
+      _connectionStatus = null;
+    });
+
+    try {
+      final isConnected = await AppConfigService.testConnection(_backendUrlController.text.trim());
+      setState(() {
+        _connectionStatus = isConnected 
+          ? 'Connection successful!' 
+          : 'Connection failed. Please check the URL and try again.';
+      });
+    } catch (e) {
+      setState(() {
+        _connectionStatus = 'Connection error: $e';
+      });
+    } finally {
+      setState(() {
+        _isCheckingConnection = false;
+      });
+    }
   }
 
   Future<void> _login() async {
@@ -176,12 +216,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.cloud),
                       border: const OutlineInputBorder(),
                       helperText: 'Configure the Musestruct backend server URL',
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () {
-                          _backendUrlController.text = AppConfigService.defaultBackendUrl;
-                        },
-                        tooltip: 'Reset to default',
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: _isCheckingConnection 
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.wifi_find),
+                            onPressed: _isCheckingConnection ? null : _checkConnection,
+                            tooltip: 'Test connection',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () {
+                              _backendUrlController.text = AppConfigService.defaultBackendUrl;
+                              setState(() {
+                                _connectionStatus = null;
+                              });
+                            },
+                            tooltip: 'Reset to default',
+                          ),
+                        ],
                       ),
                     ),
                     validator: (value) {
@@ -194,6 +253,51 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
+                  
+                  // Connection status
+                  if (_connectionStatus != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _connectionStatus!.contains('successful')
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _connectionStatus!.contains('successful')
+                            ? Colors.green
+                            : Colors.red,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _connectionStatus!.contains('successful')
+                              ? Icons.check_circle
+                              : Icons.error,
+                            color: _connectionStatus!.contains('successful')
+                              ? Colors.green
+                              : Colors.red,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _connectionStatus!,
+                              style: TextStyle(
+                                color: _connectionStatus!.contains('successful')
+                                  ? Colors.green[700]
+                                  : Colors.red[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                 ],
                 

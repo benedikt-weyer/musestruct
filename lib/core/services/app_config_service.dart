@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 class AppConfigService {
   static const String _backendUrlKey = 'backend_url';
@@ -61,4 +62,22 @@ class AppConfigService {
   
   /// Get default backend URL
   static String get defaultBackendUrl => _defaultBackendUrl;
+  
+  /// Test connection to the backend server
+  static Future<bool> testConnection(String url) async {
+    try {
+      // Ensure URL doesn't end with slash
+      final cleanUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+      final healthUrl = '$cleanUrl/health';
+      
+      final response = await http.get(
+        Uri.parse(healthUrl),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      
+      return response.statusCode == 200 && response.body.trim() == 'OK';
+    } catch (e) {
+      return false;
+    }
+  }
 }
