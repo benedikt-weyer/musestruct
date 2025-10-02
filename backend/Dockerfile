@@ -58,4 +58,4 @@ ENV RUST_BACKTRACE=1
 ENV RUST_LOG=debug
 
 # Run the application with explicit error handling
-CMD ["sh", "-c", "echo 'Starting musestruct backend...' && echo 'Environment check:' && env | grep -E '(DATABASE_URL|SERVER_|SPOTIFY_|QOBUZ_)' && echo 'Starting application...' && ./musestruct_backend"]
+CMD ["sh", "-c", "echo 'Starting musestruct backend...' && echo 'Checking required environment variables...' && [ -n \"$DATABASE_URL\" ] && echo 'DATABASE_URL: ✓' || echo 'DATABASE_URL: ✗ MISSING' && echo 'Starting application...' && ./musestruct_backend"]
