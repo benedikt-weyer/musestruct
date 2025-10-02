@@ -87,6 +87,9 @@
             gst_all_1.gst-libav
             pulseaudio
             alsa-lib
+            # TLS/SSL support for GStreamer HTTPS
+            openssl
+            gnutls
             
             # Additional development tools
             git
@@ -149,6 +152,9 @@
             
             # Desktop development
             export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:${pkgs.libsecret}/lib/pkgconfig:${pkgs.libsoup_3}/lib/pkgconfig:${pkgs.gst_all_1.gstreamer}/lib/pkgconfig:${pkgs.gst_all_1.gst-plugins-base}/lib/pkgconfig:${pkgs.pulseaudio}/lib/pkgconfig:${pkgs.alsa-lib}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            
+            # Force GStreamer to prefer curlhttpsrc over souphttpsrc for HTTPS
+            export GST_PLUGIN_FEATURE_RANK="curlhttpsrc:MAX,souphttpsrc:NONE"
             
             # Chrome for web development
             export CHROME_EXECUTABLE="${pkgs.google-chrome}/bin/google-chrome-stable"
