@@ -52,5 +52,10 @@ USER appuser
 # Expose the port the app runs on
 EXPOSE 8080
 
-# Run the application
-CMD ["./musestruct_backend"]
+# Add debugging and better error handling
+# Set environment for better error messages
+ENV RUST_BACKTRACE=1
+ENV RUST_LOG=debug
+
+# Run the application with explicit error handling
+CMD ["sh", "-c", "echo 'Starting musestruct backend...' && echo 'Environment check:' && env | grep -E '(DATABASE_URL|SERVER_|SPOTIFY_|QOBUZ_)' && echo 'Starting application...' && ./musestruct_backend"]

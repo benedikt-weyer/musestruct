@@ -50,7 +50,12 @@ async fn main() -> Result<()> {
         .expect("DATABASE_URL must be set");
     
     info!("Connecting to database: {}", database_url);
-    let db = Database::connect(&database_url).await?;
+    let db = Database::connect(&database_url).await
+        .map_err(|e| {
+            error!("Failed to connect to database: {}", e);
+            error!("Database URL: {}", database_url);
+            e
+        })?;
     
     // Run migrations
     info!("Running database migrations...");
@@ -62,8 +67,13 @@ async fn main() -> Result<()> {
     
     // Create streaming service
     let cache_dir = std::path::PathBuf::from("./cache");
+    info!("Initializing streaming service with cache dir: {:?}", cache_dir);
     let streaming_service = Arc::new(StreamingService::new(cache_dir));
-    streaming_service.initialize().await?;
+    streaming_service.initialize().await
+        .map_err(|e| {
+            error!("Failed to initialize streaming service: {}", e);
+            e
+        })?;
     
     // Application state
     let app_state = AppState {
@@ -160,8 +170,18 @@ async fn main() -> Result<()> {
 
     info!("🚀 Musestruct backend starting on {}", address);
     
-    let listener = tokio::net::TcpListener::bind(&address).await?;
-    axum::serve(listener, app).await?;
+    let listener = tokio::net::TcpListener::bind(&address).await
+        .map_err(|e| {
+            error!("Failed to bind to address {}: {}", address, e);
+            e
+        })?;
+    
+    info!("Server successfully bound to {}, starting to serve requests", address);
+    axum::serve(listener, app).await
+        .map_err(|e| {
+            error!("Server error: {}", e);
+            e
+        })?;
 
     Ok(())
 }
