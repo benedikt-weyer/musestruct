@@ -52,9 +52,5 @@ USER appuser
 # Expose the port the app runs on
 EXPOSE 8080
 
-# Set environment variables
-ENV RUST_LOG=info
-ENV DATABASE_URL=postgresql://musestruct:musestruct123@postgres:5432/musestruct
-
 # Run the application
 CMD ["./musestruct_backend"]
