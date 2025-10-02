@@ -25,7 +25,7 @@ services:
       dockerfile: Dockerfile
     container_name: musestruct_backend
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-musestruct}:${POSTGRES_PASSWORD:-musestruct123}@postgres:5432/${POSTGRES_DB:-musestruct}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-musestruct}:${POSTGRES_PASSWORD:-musestruct123}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-musestruct}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
