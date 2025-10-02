@@ -120,10 +120,15 @@ app.*.symbols
 
 .env
 
-backend/cache/
+backend/cache/*
+
+!backend/cache/.gitkeep
+
+
 
 result
 
 .direnv/
 
-backend/own_music/
+/backend/own_music/*
+!/backend/own_music/.gitkeep
