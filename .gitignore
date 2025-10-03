@@ -132,3 +132,5 @@ result
 
 /backend/own_music/*
 !/backend/own_music/.gitkeep
+
+docker-compose.override.yaml
