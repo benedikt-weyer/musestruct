@@ -26,7 +26,7 @@ services:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - backend_cache:/app/cache
-      - ./backend/own_music:/app/own_music
+      - ./backend/own_music:/app/backend/own_music
     depends_on:
       postgres:
         condition: service_healthy
