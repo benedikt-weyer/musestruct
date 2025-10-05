@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use anyhow::{Result, anyhow};
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::{MetadataOptions, StandardTagKey};
+use symphonia::core::meta::{MetadataOptions, StandardTagKey, Visual};
 use symphonia::core::probe::Hint;
 use std::fs::File;
 use id3::{Tag, TagLike};
+use sha2::{Sha256, Digest};
 
 use super::{StreamingService, SearchResults, StreamingTrack, StreamingAlbum, StreamingPlaylist, ServiceCredentials, AuthResult};
 
@@ -27,6 +28,7 @@ struct TrackMetadata {
 #[derive(Debug, Clone)]
 pub struct LocalMusicService {
     music_dir: PathBuf,
+    cache_dir: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +46,20 @@ pub struct LocalTrack {
 
 impl LocalMusicService {
     pub fn new(music_dir: PathBuf) -> Self {
-        Self { music_dir }
+        let cache_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("cache")
+            .join("covers");
+        
+        // Create cache directory if it doesn't exist
+        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+            eprintln!("Warning: Failed to create cover cache directory: {}", e);
+        }
+        
+        Self { 
+            music_dir,
+            cache_dir,
+        }
     }
 
     async fn scan_music_files(&self) -> Result<Vec<LocalTrack>, String> {
@@ -222,6 +237,12 @@ impl LocalMusicService {
     }
 
     fn find_cover_image(&self, audio_file_path: &std::path::Path) -> Option<String> {
+        // PREFERRED METHOD: Extract embedded cover art from audio file
+        if let Some(cached_cover_url) = self.extract_and_cache_embedded_cover(audio_file_path) {
+            return Some(cached_cover_url);
+        }
+        
+        // FALLBACK 1: Look for external image files
         let audio_stem = audio_file_path.file_stem()?.to_string_lossy();
         let parent_dir = audio_file_path.parent()?;
         
@@ -252,6 +273,162 @@ impl LocalMusicService {
         }
         
         None
+    }
+    
+    /// Extract embedded cover art from audio files and cache it
+    /// Returns the URL to the cached cover image
+    fn extract_and_cache_embedded_cover(&self, audio_file_path: &std::path::Path) -> Option<String> {
+        // Generate a unique hash for this audio file based on its path
+        let file_path_str = audio_file_path.to_string_lossy();
+        let mut hasher = Sha256::new();
+        hasher.update(file_path_str.as_bytes());
+        let hash = hasher.finalize();
+        let hash_hex = format!("{:x}", hash);
+        
+        // Check if we already have a cached cover for this file
+        let cache_extensions = ["jpg", "jpeg", "png"];
+        for ext in &cache_extensions {
+            let cached_path = self.cache_dir.join(format!("{}.{}", hash_hex, ext));
+            if cached_path.exists() {
+                // Return URL to cached cover
+                return Some(format!("/api/stream/local/cover/cached/{}.{}", hash_hex, ext));
+            }
+        }
+        
+        // Try to extract cover art from the audio file
+        let cover_data = self.extract_cover_from_audio(audio_file_path)?;
+        
+        // Determine image format and save to cache
+        let image_format = self.detect_image_format(&cover_data);
+        let cache_filename = format!("{}.{}", hash_hex, image_format);
+        let cache_path = self.cache_dir.join(&cache_filename);
+        
+        // Write the cover data to cache
+        if let Err(e) = std::fs::write(&cache_path, &cover_data) {
+            eprintln!("Failed to cache cover art for {:?}: {}", audio_file_path, e);
+            return None;
+        }
+        
+        println!("Cached cover art for {:?} as {}", audio_file_path.file_name()?, cache_filename);
+        
+        // Return URL to cached cover
+        Some(format!("/api/stream/local/cover/cached/{}", cache_filename))
+    }
+    
+    /// Extract cover art from audio file using multiple methods
+    fn extract_cover_from_audio(&self, file_path: &std::path::Path) -> Option<Vec<u8>> {
+        // Try Symphonia first (supports FLAC, MP3, M4A, OGG, WAV, and more)
+        if let Some(cover) = self.extract_cover_with_symphonia(file_path) {
+            return Some(cover);
+        }
+        
+        // Fallback to ID3 for MP3 files (more comprehensive MP3 support)
+        if let Some(ext) = file_path.extension() {
+            if ext.to_string_lossy().to_lowercase() == "mp3" {
+                if let Some(cover) = self.extract_cover_with_id3(file_path) {
+                    return Some(cover);
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Extract cover art using Symphonia (supports most audio formats)
+    fn extract_cover_with_symphonia(&self, file_path: &std::path::Path) -> Option<Vec<u8>> {
+        let file = File::open(file_path).ok()?;
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        
+        let mut hint = Hint::new();
+        if let Some(extension) = file_path.extension() {
+            if let Some(ext_str) = extension.to_str() {
+                hint.with_extension(ext_str);
+            }
+        }
+        
+        let meta_opts: MetadataOptions = Default::default();
+        let fmt_opts: FormatOptions = Default::default();
+        
+        let mut probed = symphonia::default::get_probe()
+            .format(&hint, mss, &fmt_opts, &meta_opts)
+            .ok()?;
+        
+        // Check metadata for visual (cover art)
+        if let Some(metadata_rev) = probed.format.metadata().current() {
+            for visual in metadata_rev.visuals() {
+                // Return the first cover art found
+                if matches!(visual.usage, Some(symphonia::core::meta::StandardVisualKey::FrontCover) | None) {
+                    return Some(visual.data.to_vec());
+                }
+            }
+            // If no front cover, return any visual
+            if let Some(visual) = metadata_rev.visuals().first() {
+                return Some(visual.data.to_vec());
+            }
+        }
+        
+        // Also check track-level metadata
+        if let Some(track) = probed.format.tracks().iter().next() {
+            // Some formats store metadata at track level
+            // This is already handled by metadata().current() in most cases
+        }
+        
+        None
+    }
+    
+    /// Extract cover art using ID3 tags (MP3 specific)
+    fn extract_cover_with_id3(&self, file_path: &std::path::Path) -> Option<Vec<u8>> {
+        let tag = Tag::read_from_path(file_path).ok()?;
+        
+        // Look for picture frames (APIC)
+        for picture in tag.pictures() {
+            // Prefer front cover, but accept any picture
+            if picture.picture_type == id3::frame::PictureType::CoverFront 
+               || picture.picture_type == id3::frame::PictureType::Other {
+                return Some(picture.data.to_vec());
+            }
+        }
+        
+        // If no front cover found, return first picture
+        if let Some(picture) = tag.pictures().next() {
+            return Some(picture.data.to_vec());
+        }
+        
+        None
+    }
+    
+    /// Detect image format from raw bytes
+    fn detect_image_format(&self, data: &[u8]) -> &'static str {
+        if data.len() < 12 {
+            return "jpg"; // Default fallback
+        }
+        
+        // Check PNG signature
+        if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+            return "png";
+        }
+        
+        // Check JPEG signature
+        if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            return "jpg";
+        }
+        
+        // Check GIF signature
+        if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+            return "gif";
+        }
+        
+        // Check BMP signature
+        if data.starts_with(b"BM") {
+            return "bmp";
+        }
+        
+        // Check WebP signature
+        if data.len() >= 12 && data.starts_with(b"RIFF") && &data[8..12] == b"WEBP" {
+            return "webp";
+        }
+        
+        "jpg" // Default fallback
     }
 
     fn parse_file_metadata(&self, file_path: &std::path::Path) -> TrackMetadata {
@@ -598,12 +775,31 @@ impl LocalMusicService {
         let cover_names = ["cover", "folder", "album", "front"];
         let image_extensions = ["jpg", "jpeg", "png", "bmp", "gif"];
         
+        // First, look for external cover images
         for name in &cover_names {
             for ext in &image_extensions {
                 let cover_path = dir_path.join(format!("{}.{}", name, ext));
                 if cover_path.exists() {
                     if let Ok(relative_path) = cover_path.strip_prefix(&self.music_dir) {
                         return Some(format!("/api/stream/local/cover/{}", urlencoding::encode(&relative_path.to_string_lossy())));
+                    }
+                }
+            }
+        }
+        
+        // Fallback: Try to extract cover from the first audio file in the directory
+        if let Ok(entries) = std::fs::read_dir(dir_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(extension) = path.extension() {
+                        let ext = extension.to_string_lossy().to_lowercase();
+                        if matches!(ext.as_str(), "mp3" | "flac" | "wav" | "m4a" | "ogg") {
+                            // Try to extract and cache cover from this audio file
+                            if let Some(cover_url) = self.extract_and_cache_embedded_cover(&path) {
+                                return Some(cover_url);
+                            }
+                        }
                     }
                 }
             }

@@ -1732,7 +1732,7 @@ pub async fn stream_local_file(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-// Stream local cover images
+// Stream local cover images (both cached and direct files)
 pub async fn stream_local_cover(
     axum::extract::Path(file_path_param): axum::extract::Path<String>,
     headers: HeaderMap,
@@ -1745,16 +1745,29 @@ pub async fn stream_local_cover(
         .map_err(|_| StatusCode::BAD_REQUEST)?
         .into_owned();
     
-    // Create path to the file in own_music directory
-    let music_dir = std::env::current_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."))
-        .join("own_music");
-    let file_path = music_dir.join(&decoded_path);
-    
-    // Security check: ensure the file is within the own_music directory
-    if !file_path.starts_with(&music_dir) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    // Determine if this is a cached cover or a direct file
+    let file_path = if decoded_path.starts_with("cached/") {
+        // This is a cached cover from extracted audio file
+        let cache_filename = decoded_path.strip_prefix("cached/").unwrap_or(&decoded_path);
+        let cache_dir = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("cache")
+            .join("covers");
+        cache_dir.join(cache_filename)
+    } else {
+        // This is a direct cover image file from the music directory
+        let music_dir = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("own_music");
+        let file_path = music_dir.join(&decoded_path);
+        
+        // Security check: ensure the file is within the own_music directory
+        if !file_path.starts_with(&music_dir) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+        
+        file_path
+    };
     
     // Check if file exists and is an image
     if !file_path.exists() {
@@ -1771,6 +1784,7 @@ pub async fn stream_local_cover(
         "png" => "image/png",
         "gif" => "image/gif",
         "bmp" => "image/bmp",
+        "webp" => "image/webp",
         _ => return Err(StatusCode::UNSUPPORTED_MEDIA_TYPE),
     };
     
