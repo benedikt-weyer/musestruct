@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
+import 'package:audio_service/audio_service.dart';
+import 'dart:io' show Platform;
 import 'auth/providers/auth_provider.dart';
 import 'music/providers/music_provider.dart';
 import 'core/providers/connectivity_provider.dart';
@@ -11,6 +14,7 @@ import 'queue/providers/queue_provider.dart';
 import 'playlists/providers/playlist_provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/api_service.dart';
+import 'core/services/audio_service_handler.dart';
 import 'core/themes/app_themes.dart';
 import 'core/screens/auth/login_screen.dart';
 import 'core/screens/home/home_screen.dart';
@@ -25,7 +29,18 @@ import 'playlists/models/playlist.dart';
 import 'music/models/music.dart';
 // import 'core/widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
 
-void main() {
+Future<void> main() async {
+  // Ensure Flutter bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Log platform for debugging
+  if (!kIsWeb) {
+    debugPrint('Running on platform: ${Platform.operatingSystem}');
+    if (Platform.isLinux) {
+      debugPrint('MPRIS support will be automatically enabled via audio_service_mpris package');
+    }
+  }
+  
   runApp(const MusestructApp());
 }
 
@@ -154,6 +169,37 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
             
             musicProvider.setQueueProvider(queueProvider);
             await queueProvider.initialize();
+            
+            // Initialize audio service for media controls (MPRIS on Linux, notifications on Android/iOS, etc.)
+            try {
+              final audioHandler = await AudioService.init(
+                builder: () => MusestructAudioHandler(
+                  onPlayCallback: () async => await musicProvider.togglePlayPause(),
+                  onPauseCallback: () async => await musicProvider.togglePlayPause(),
+                  onStopCallback: () async => await musicProvider.stopPlayback(),
+                  onSeekCallback: (position) async => await musicProvider.seekTo(position),
+                  onSkipToNextCallback: () async => await musicProvider.playNextTrack(),
+                  onSkipToPreviousCallback: () async => await musicProvider.playPreviousTrackFromPlaylist(),
+                ),
+                config: AudioServiceConfig(
+                  androidNotificationChannelId: 'com.musestruct.audio',
+                  androidNotificationChannelName: 'Musestruct Audio',
+                  androidNotificationOngoing: true,
+                  androidStopForegroundOnPause: true, // Must be true when androidNotificationOngoing is true
+                  // MPRIS-specific configuration for Linux
+                  // The app will be registered as org.mpris.MediaPlayer2.Musestruct
+                  artDownscaleWidth: 384,
+                  artDownscaleHeight: 384,
+                  fastForwardInterval: const Duration(seconds: 10),
+                  rewindInterval: const Duration(seconds: 10),
+                ),
+              );
+              musicProvider.setAudioServiceHandler(audioHandler);
+              debugPrint('Audio service initialized successfully - MPRIS should now be active on Linux');
+            } catch (e) {
+              debugPrint('Failed to initialize audio service: $e');
+              // Continue without audio service - the app will still work, just without media controls
+            }
             
             // Load service status immediately after authentication
             streamingProvider.loadServiceStatus();

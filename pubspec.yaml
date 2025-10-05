@@ -55,6 +55,11 @@ dependencies:
   
   # WebView for Spotify Web Playback SDK on desktop platforms
   desktop_webview_window: ^0.2.3
+  
+  # Audio service for MPRIS support on Linux (and media controls on other platforms)
+  audio_service: ^0.18.15
+  # MPRIS support for Linux via audio_service
+  audio_service_mpris: ^0.2.0
 
 dev_dependencies:
   flutter_test:

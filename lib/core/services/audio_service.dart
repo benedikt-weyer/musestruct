@@ -2,6 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import '../../music/models/music.dart';
 import 'dart:async';
+import 'audio_service_handler.dart';
 
 class AudioService {
   static final AudioService _instance = AudioService._internal();
@@ -15,6 +16,9 @@ class AudioService {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   AudioOutputInfo _audioOutputInfo = AudioOutputInfo();
+  
+  // Audio service handler for media controls (MPRIS on Linux, notifications on Android/iOS, etc.)
+  MusestructAudioHandler? _audioServiceHandler;
 
   AudioPlayer get player => _player;
   Track? get currentTrack => _currentTrack;
@@ -23,6 +27,12 @@ class AudioService {
   Duration get position => _position;
   Duration get duration => _duration;
   AudioOutputInfo get audioOutputInfo => _audioOutputInfo;
+  
+  // Set the audio service handler
+  void setAudioServiceHandler(MusestructAudioHandler handler) {
+    _audioServiceHandler = handler;
+    print('AudioService: Audio service handler set for media controls');
+  }
 
   // Stream controllers for state management
   Stream<bool> get playingStream => _player.onPlayerStateChanged.map((state) => state == PlayerState.playing);
@@ -63,7 +73,12 @@ class AudioService {
   Future<void> playTrack(Track track, String streamUrl) async {
     try {
       _currentTrack = track;
+      _duration = track.duration != null ? Duration(seconds: track.duration!) : Duration.zero;
+      _position = Duration.zero;
       print('AudioService: Starting playback for ${track.title} from $streamUrl');
+      
+      // Update audio service handler with track info
+      _audioServiceHandler?.updateTrackInfo(track);
       
       // Set a longer timeout for the play operation
       await _player.play(UrlSource(streamUrl)).timeout(
@@ -72,6 +87,9 @@ class AudioService {
           throw TimeoutException('Audio playback timed out after 45 seconds. The audio file may be too large or the network connection is slow.', const Duration(seconds: 45));
         },
       );
+      
+      // Mark as playing immediately after starting playback
+      _isPlaying = true;
       
       // Analyze audio stream for real-time info (with delay to ensure playback started)
       Timer(const Duration(seconds: 2), () {
@@ -155,16 +173,19 @@ class AudioService {
 
   Future<void> play() async {
     await _player.resume();
+    // Audio service handler will be notified via the playing stream listener
   }
 
   Future<void> pause() async {
     await _player.pause();
+    // Audio service handler will be notified via the playing stream listener
   }
 
   Future<void> stop() async {
     await _player.stop();
     _currentTrack = null;
     _audioOutputInfo = AudioOutputInfo();
+    _audioServiceHandler?.clearMediaItem();
   }
 
   Future<void> seek(Duration position) async {

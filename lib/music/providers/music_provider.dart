@@ -4,6 +4,7 @@ import '../models/music.dart';
 import '../../core/models/api_response.dart';
 import '../services/music_api_service.dart';
 import '../../core/services/audio_service.dart';
+import '../../core/services/audio_service_handler.dart';
 import '../../core/services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../../playlists/services/playlist_api_service.dart';
@@ -15,6 +16,7 @@ class MusicProvider with ChangeNotifier {
   final AudioService _audioService = AudioService();
   // final SpotifyWebViewPlayer _spotifyPlayer = SpotifyWebViewPlayer(); // Disabled
   QueueProvider? _queueProvider;
+  MusestructAudioHandler? _audioServiceHandler;
   
   SearchResults? _searchResults;
   bool _isSearching = false;
@@ -162,6 +164,8 @@ class MusicProvider with ChangeNotifier {
       if (!_isUIUpdatesPaused) {
         notifyListeners();
       }
+      // Update audio service handler
+      _updateAudioServiceHandlerState();
     });
 
     // Listen to position changes
@@ -169,6 +173,11 @@ class MusicProvider with ChangeNotifier {
       _position = position;
       if (!_isUIUpdatesPaused) {
         notifyListeners();
+      }
+      
+      // Update audio service handler periodically (every second)
+      if (position.inSeconds != (_position.inSeconds)) {
+        _updateAudioServiceHandlerState();
       }
       
       // Fallback completion detection based on position
@@ -181,6 +190,8 @@ class MusicProvider with ChangeNotifier {
       if (!_isUIUpdatesPaused) {
         notifyListeners();
       }
+      // Update audio service handler
+      _updateAudioServiceHandlerState();
     });
     
     // Listen to track completion events
@@ -190,6 +201,29 @@ class MusicProvider with ChangeNotifier {
         _playNextTrackAfterCompletion();
       }
     });
+  }
+  
+  /// Set the audio service handler for media controls
+  void setAudioServiceHandler(MusestructAudioHandler handler) {
+    _audioServiceHandler = handler;
+    _audioService.setAudioServiceHandler(handler);
+    print('MusicProvider: Audio service handler set');
+  }
+  
+  /// Update the audio service handler with current playback state
+  void _updateAudioServiceHandlerState() {
+    if (_audioServiceHandler == null) return;
+    
+    final bool hasNext = _queueProvider?.hasNextTrack() ?? false;
+    final bool hasPrevious = _isPlayingFromPlaylist && ((_currentPlaylistQueueItem?.currentTrackIndex ?? 0) > 0);
+    
+    _audioServiceHandler!.updatePlaybackState(
+      playing: _isPlaying,
+      position: _position,
+      duration: _duration,
+      hasNext: hasNext,
+      hasPrevious: hasPrevious,
+    );
   }
 
   Future<void> _loadAvailableServices() async {
@@ -751,6 +785,7 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> _playRegularTrack(Track track) async {
     try {
+      _currentTrack = track;
       print('MusicProvider: Getting stream URL for ${track.title}...');
       
       // First get the original stream URL
@@ -800,6 +835,16 @@ class MusicProvider with ChangeNotifier {
         
         print('MusicProvider: Starting audio playback...');
         await _audioService.playTrack(_currentTrack!, backendUrl);
+        
+        // Update local state for UI and media controls
+        _isPlaying = true;
+        _position = Duration.zero;
+        _duration = _currentTrack!.duration != null ? Duration(seconds: _currentTrack!.duration!) : Duration.zero;
+        
+        // Immediately update audio service handler state for MPRIS/media controls
+        _updateAudioServiceHandlerState();
+        notifyListeners();
+        
         _startAudioInfoUpdates();
       } else {
         throw Exception(backendResponse.message ?? 'Failed to get backend stream URL');
