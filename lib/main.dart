@@ -29,6 +29,9 @@ import 'playlists/models/playlist.dart';
 import 'music/models/music.dart';
 // import 'core/widgets/hidden_spotify_webview.dart'; // Disabled - WebView playback not working reliably
 
+// Global audio handler - initialized once at app startup
+late MusestructAudioHandler _audioHandler;
+
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +42,31 @@ Future<void> main() async {
     if (Platform.isLinux) {
       debugPrint('MPRIS support will be automatically enabled via audio_service_mpris package');
     }
+  }
+  
+  // Initialize audio service early for background audio support
+  // This is critical for Android to keep audio playing when app is backgrounded
+  try {
+    _audioHandler = await AudioService.init(
+      builder: () => MusestructAudioHandler(
+        // Callbacks will be set later after providers are initialized
+      ),
+      config: AudioServiceConfig(
+        androidNotificationChannelId: 'com.musestruct.audio',
+        androidNotificationChannelName: 'Musestruct Audio',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+        // MPRIS-specific configuration for Linux
+        artDownscaleWidth: 384,
+        artDownscaleHeight: 384,
+        fastForwardInterval: const Duration(seconds: 10),
+        rewindInterval: const Duration(seconds: 10),
+      ),
+    );
+    debugPrint('Audio service initialized successfully at app startup');
+  } catch (e) {
+    debugPrint('Failed to initialize audio service: $e');
+    // Continue without audio service - the app will still work, just without media controls
   }
   
   runApp(const MusestructApp());
@@ -170,35 +198,20 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
             musicProvider.setQueueProvider(queueProvider);
             await queueProvider.initialize();
             
-            // Initialize audio service for media controls (MPRIS on Linux, notifications on Android/iOS, etc.)
+            // Set up callbacks for the pre-initialized audio handler
+            // This connects the audio service to the music provider after authentication
             try {
-              final audioHandler = await AudioService.init(
-                builder: () => MusestructAudioHandler(
-                  onPlayCallback: () async => await musicProvider.togglePlayPause(),
-                  onPauseCallback: () async => await musicProvider.togglePlayPause(),
-                  onStopCallback: () async => await musicProvider.stopPlayback(),
-                  onSeekCallback: (position) async => await musicProvider.seekTo(position),
-                  onSkipToNextCallback: () async => await musicProvider.playNextTrack(),
-                  onSkipToPreviousCallback: () async => await musicProvider.playPreviousTrackFromPlaylist(),
-                ),
-                config: AudioServiceConfig(
-                  androidNotificationChannelId: 'com.musestruct.audio',
-                  androidNotificationChannelName: 'Musestruct Audio',
-                  androidNotificationOngoing: true,
-                  androidStopForegroundOnPause: true, // Must be true when androidNotificationOngoing is true
-                  // MPRIS-specific configuration for Linux
-                  // The app will be registered as org.mpris.MediaPlayer2.Musestruct
-                  artDownscaleWidth: 384,
-                  artDownscaleHeight: 384,
-                  fastForwardInterval: const Duration(seconds: 10),
-                  rewindInterval: const Duration(seconds: 10),
-                ),
-              );
-              musicProvider.setAudioServiceHandler(audioHandler);
-              debugPrint('Audio service initialized successfully - MPRIS should now be active on Linux');
+              _audioHandler.onPlayCallback = () async => await musicProvider.togglePlayPause();
+              _audioHandler.onPauseCallback = () async => await musicProvider.togglePlayPause();
+              _audioHandler.onStopCallback = () async => await musicProvider.stopPlayback();
+              _audioHandler.onSeekCallback = (position) async => await musicProvider.seekTo(position);
+              _audioHandler.onSkipToNextCallback = () async => await musicProvider.playNextTrack();
+              _audioHandler.onSkipToPreviousCallback = () async => await musicProvider.playPreviousTrackFromPlaylist();
+              
+              musicProvider.setAudioServiceHandler(_audioHandler);
+              debugPrint('Audio service callbacks connected to music provider');
             } catch (e) {
-              debugPrint('Failed to initialize audio service: $e');
-              // Continue without audio service - the app will still work, just without media controls
+              debugPrint('Failed to connect audio service callbacks: $e');
             }
             
             // Load service status immediately after authentication

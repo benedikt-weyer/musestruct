@@ -10,12 +10,13 @@ import '../../music/models/music.dart';
 /// - Linux: MPRIS (Media Player Remote Interfacing Specification)
 class MusestructAudioHandler extends BaseAudioHandler with SeekHandler {
   // Callback functions to control the actual audio player
-  final Future<void> Function()? onPlayCallback;
-  final Future<void> Function()? onPauseCallback;
-  final Future<void> Function()? onStopCallback;
-  final Future<void> Function(Duration position)? onSeekCallback;
-  final Future<void> Function()? onSkipToNextCallback;
-  final Future<void> Function()? onSkipToPreviousCallback;
+  // These are mutable so they can be set after initialization
+  Future<void> Function()? onPlayCallback;
+  Future<void> Function()? onPauseCallback;
+  Future<void> Function()? onStopCallback;
+  Future<void> Function(Duration position)? onSeekCallback;
+  Future<void> Function()? onSkipToNextCallback;
+  Future<void> Function()? onSkipToPreviousCallback;
 
   MusestructAudioHandler({
     this.onPlayCallback,
