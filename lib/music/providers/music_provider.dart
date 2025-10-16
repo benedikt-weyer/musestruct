@@ -814,17 +814,29 @@ class MusicProvider with ChangeNotifier {
         final configuredBackendUrl = await AppConfigService.instance.getBackendUrl();
         final backendUrl = '$configuredBackendUrl${backendResponse.data!.streamUrl}';
         
+        // Convert coverUrl to absolute URL if it's a relative path
+        String? absoluteCoverUrl;
+        if (track.coverUrl != null) {
+          if (track.coverUrl!.startsWith('http://') || track.coverUrl!.startsWith('https://')) {
+            // Already an absolute URL
+            absoluteCoverUrl = track.coverUrl;
+          } else {
+            // Relative path - prepend backend URL
+            absoluteCoverUrl = '$configuredBackendUrl${track.coverUrl}';
+          }
+        }
+        
         print('MusicProvider: Backend stream URL ready: $backendUrl');
         
-        // Update the current track with the backend stream URL
+        // Update the current track with the backend stream URL and absolute cover URL
         _currentTrack = Track(
           id: track.id,
           title: track.title,
           artist: track.artist,
           album: track.album,
           duration: track.duration,
-          streamUrl: backendUrl, // This is the key change!
-          coverUrl: track.coverUrl,
+          streamUrl: backendUrl,
+          coverUrl: absoluteCoverUrl,
           source: track.source,
           quality: track.quality,
           bitrate: track.bitrate,
