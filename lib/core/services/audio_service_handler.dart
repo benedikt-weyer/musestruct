@@ -118,6 +118,7 @@ class MusestructAudioHandler extends BaseAudioHandler with SeekHandler {
     bool hasNext = false,
     bool hasPrevious = false,
   }) {
+    // Don't include stop button - modern music apps use pause instead
     final controls = <MediaControl>[
       if (hasPrevious) MediaControl.skipToPrevious,
       if (playing)
@@ -125,7 +126,6 @@ class MusestructAudioHandler extends BaseAudioHandler with SeekHandler {
       else
         MediaControl.play,
       if (hasNext) MediaControl.skipToNext,
-      MediaControl.stop,
     ];
 
     final state = PlaybackState(
@@ -133,14 +133,14 @@ class MusestructAudioHandler extends BaseAudioHandler with SeekHandler {
       systemActions: {
         MediaAction.play,
         MediaAction.pause,
-        MediaAction.stop,
         MediaAction.seek,
         if (hasNext) MediaAction.skipToNext,
         if (hasPrevious) MediaAction.skipToPrevious,
       },
-      androidCompactActionIndices: hasPrevious 
-          ? [0, 1, 2] // Previous, Play/Pause, Next
-          : [0, 1], // Play/Pause, Next (or just Play/Pause if no next)
+      // Show all 3 controls in compact view (or 2 if no previous, or 1 if no next/previous)
+      androidCompactActionIndices: controls.isNotEmpty 
+          ? List.generate(controls.length > 3 ? 3 : controls.length, (index) => index)
+          : null,
       processingState: processingState,
       playing: playing,
       updatePosition: position,
