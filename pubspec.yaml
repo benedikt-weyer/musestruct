@@ -72,6 +72,9 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   
+  # Flutter launcher icons generator
+  flutter_launcher_icons: ^0.13.1
+  
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -114,3 +117,22 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Flutter Launcher Icons Configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "musestruct_logo_v1.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "musestruct_logo_v1.png"
+  windows:
+    generate: true
+    image_path: "musestruct_logo_v1.png"
+  macos:
+    generate: true
+    image_path: "musestruct_logo_v1.png"
+  linux:
+    generate: true
+    image_path: "musestruct_logo_v1.png"
