@@ -193,9 +193,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final musicProvider = Provider.of<MusicProvider>(context, listen: false);
             final queueProvider = Provider.of<QueueProvider>(context, listen: false);
+            final savedTracksProvider = Provider.of<SavedTracksProvider>(context, listen: false);
             final streamingProvider = Provider.of<StreamingProvider>(context, listen: false);
             
             musicProvider.setQueueProvider(queueProvider);
+            musicProvider.setSavedTracksProvider(savedTracksProvider);
             await queueProvider.initialize();
             
             // Set up callbacks for the pre-initialized audio handler
@@ -207,6 +209,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
               _audioHandler.onSeekCallback = (position) async => await musicProvider.seekTo(position);
               _audioHandler.onSkipToNextCallback = () async => await musicProvider.playNextTrack();
               _audioHandler.onSkipToPreviousCallback = () async => await musicProvider.playPreviousTrackFromPlaylist();
+              _audioHandler.onToggleFavoriteCallback = () async => await musicProvider.toggleFavorite();
               
               musicProvider.setAudioServiceHandler(_audioHandler);
               debugPrint('Audio service callbacks connected to music provider');

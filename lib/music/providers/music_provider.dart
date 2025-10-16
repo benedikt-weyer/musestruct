@@ -9,6 +9,7 @@ import '../../core/services/app_config_service.dart';
 import '../../queue/providers/queue_provider.dart';
 import '../../playlists/services/playlist_api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'saved_tracks_provider.dart';
 // import '../../core/services/spotify_webview_player.dart'; // Disabled
 // import '../../core/widgets/spotify_webview_widget.dart'; // Disabled
 
@@ -17,6 +18,7 @@ class MusicProvider with ChangeNotifier {
   // final SpotifyWebViewPlayer _spotifyPlayer = SpotifyWebViewPlayer(); // Disabled
   QueueProvider? _queueProvider;
   MusestructAudioHandler? _audioServiceHandler;
+  SavedTracksProvider? _savedTracksProvider;
   
   SearchResults? _searchResults;
   bool _isSearching = false;
@@ -87,6 +89,10 @@ class MusicProvider with ChangeNotifier {
 
   void setQueueProvider(QueueProvider queueProvider) {
     _queueProvider = queueProvider;
+  }
+
+  void setSavedTracksProvider(SavedTracksProvider savedTracksProvider) {
+    _savedTracksProvider = savedTracksProvider;
   }
 
   Future<void> playNextTrack() async {
@@ -217,13 +223,47 @@ class MusicProvider with ChangeNotifier {
     final bool hasNext = _queueProvider?.hasNextTrack() ?? false;
     final bool hasPrevious = _isPlayingFromPlaylist && ((_currentPlaylistQueueItem?.currentTrackIndex ?? 0) > 0);
     
+    // Check if current track is favorited
+    final bool isFavorite = _currentTrack != null && _savedTracksProvider != null
+        ? _savedTracksProvider!.isTrackSaved(_currentTrack!.id, _currentTrack!.source)
+        : false;
+    
+    print('MusicProvider: Updating audio service state - HasNext: $hasNext, HasPrevious: $hasPrevious, IsFavorite: $isFavorite');
+    
     _audioServiceHandler!.updatePlaybackState(
       playing: _isPlaying,
       position: _position,
       duration: _duration,
       hasNext: hasNext,
       hasPrevious: hasPrevious,
+      isFavorite: isFavorite,
     );
+  }
+
+  /// Toggle favorite status of current track
+  Future<void> toggleFavorite() async {
+    if (_currentTrack == null || _savedTracksProvider == null) {
+      print('MusicProvider: Cannot toggle favorite - no current track or saved tracks provider');
+      return;
+    }
+    
+    final isSaved = _savedTracksProvider!.isTrackSaved(_currentTrack!.id, _currentTrack!.source);
+    
+    if (isSaved) {
+      // Find the saved track to get its ID
+      final savedTrack = _savedTracksProvider!.savedTracks.firstWhere(
+        (st) => st.trackId == _currentTrack!.id && st.source == _currentTrack!.source,
+        orElse: () => throw Exception('Saved track not found'),
+      );
+      await _savedTracksProvider!.removeSavedTrack(savedTrack.id, _currentTrack!.id, _currentTrack!.source);
+      print('MusicProvider: Track removed from favorites: ${_currentTrack!.title}');
+    } else {
+      await _savedTracksProvider!.saveTrack(_currentTrack!);
+      print('MusicProvider: Track added to favorites: ${_currentTrack!.title}');
+    }
+    
+    // Update audio service handler to reflect new favorite status
+    _updateAudioServiceHandlerState();
   }
 
   Future<void> _loadAvailableServices() async {
