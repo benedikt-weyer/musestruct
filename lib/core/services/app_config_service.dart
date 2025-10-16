@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class AppConfigService {
   static const String _backendUrlKey = 'backend_url';
-  static const String _defaultBackendUrl = 'http://127.0.0.1:8080';
+  static const String _defaultBackendUrl = 'https://musestruct.benedikt-home.net';
   
   static AppConfigService? _instance;
   static AppConfigService get instance => _instance ??= AppConfigService._internal();

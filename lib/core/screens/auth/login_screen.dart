@@ -212,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _backendUrlController,
                     decoration: InputDecoration(
                       labelText: 'Backend URL',
-                      hintText: 'http://127.0.0.1:8080',
+                      hintText: 'https://musestruct.benedikt-home.net',
                       prefixIcon: const Icon(Icons.cloud),
                       border: const OutlineInputBorder(),
                       helperText: 'Configure the Musestruct backend server URL',
