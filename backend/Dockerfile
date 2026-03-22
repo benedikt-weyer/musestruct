@@ -18,6 +18,7 @@ RUN cargo build --release && rm -rf src
 
 # Copy the source code
 COPY src ./src
+COPY migrations ./migrations
 
 # Build the application
 RUN cargo build --release
