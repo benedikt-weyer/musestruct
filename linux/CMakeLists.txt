@@ -74,6 +74,16 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  foreach(plugin ${FLUTTER_PLUGIN_LIST})
+    if(TARGET ${plugin}_plugin)
+      target_compile_options(${plugin}_plugin PRIVATE
+        -Wno-error=deprecated-literal-operator
+      )
+    endif()
+  endforeach()
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
