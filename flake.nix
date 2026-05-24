@@ -54,25 +54,46 @@
             # Desktop development (Linux/GTK)
             pkg-config
             cmake
+            clang
             ninja
+
             gtk3
             glib
-            pcre
-            util-linux
-            libselinux
-            libsepol
-            libthai
-            libdatrie
-            xorg.libXdmcp
-            xorg.libXtst
+            sysprof
+            webkitgtk_4_1
+            at-spi2-core
             libxkbcommon
             mesa
             fontconfig
             freetype
             dbus
-            at-spi2-core
-            clang
-            sysprof
+            pulseaudio
+            alsa-lib
+            openssl
+            gnutls
+            libunwind
+
+            #pkg-config
+            #cmake
+            #ninja
+            #gtk3
+            #glib
+            #pcre
+            #util-linux
+            #libselinux
+            #libsepol
+            #libthai
+            #libdatrie
+            #xorg.libXdmcp
+            #xorg.libXtst
+            #libxkbcommon
+            #mesa
+            #fontconfig
+            #freetype
+            #dbus
+            #at-spi2-core
+            #clang
+            #sysprof
             
             # Additional libraries for Flutter plugins
             libsecret
@@ -91,14 +112,6 @@
             openssl
             gnutls
             
-            # Additional development tools
-            git
-            curl
-            unzip
-            which
-            gnused
-            file
-            
             # Rust development
             rustc
             cargo
@@ -106,22 +119,6 @@
             rustfmt
             clippy
             rust-analyzer
-            
-            # Chrome for web development and testing
-            google-chrome
-            
-            # VS Code extensions and IDE support
-            nodejs_20
-            
-            # Development utilities
-            watchexec
-            ripgrep
-            fd
-            
-            # Docker and containerization
-            docker-compose
-
-            webkitgtk_4_1
           ];
 
           # Set environment variables for the shell
