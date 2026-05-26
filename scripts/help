@@ -21,12 +21,11 @@ Monorepo commands
   npm run check            Run validation across all apps
   npm run build            Run build tasks across all apps
   npm run test             Run tests across all apps
-
-App commands
-  cd apps/backend && cargo run
-  cd apps/flutter && flutter run
-  cd apps/react-native && npm run android
-  cd apps/react-native && npm start
+  npm run backend          Run the backend dev task through Turborepo
+  npm run flutter          Run the Flutter app through Turborepo
+  npm run react-native     Run the React Native Metro dev task through Turborepo
+  npm run android          Run the React Native Android app through Turborepo
+  npm run ios              Run the React Native iOS app through Turborepo
 
 Infrastructure
   docker compose up -d postgres

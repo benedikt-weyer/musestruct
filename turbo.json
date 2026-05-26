@@ -5,6 +5,14 @@
       "cache": false,
       "persistent": true
     },
+    "android": {
+      "cache": false,
+      "outputs": []
+    },
+    "ios": {
+      "cache": false,
+      "outputs": []
+    },
     "build": {
       "dependsOn": [
         "^build"

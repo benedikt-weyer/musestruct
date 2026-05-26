@@ -7,6 +7,11 @@
   ],
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "backend": "turbo run dev --filter=@musestruct/backend",
+    "flutter": "turbo run dev --filter=@musestruct/flutter",
+    "react-native": "turbo run dev --filter=@musestruct/react-native",
+    "android": "turbo run android --filter=@musestruct/react-native",
+    "ios": "turbo run ios --filter=@musestruct/react-native",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
