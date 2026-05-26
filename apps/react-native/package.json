@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "react-native start",
-    "android": "react-native run-android",
+    "android": "./scripts/run-android.sh",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "check": "tsc --noEmit",
