@@ -177,6 +177,7 @@
             echo "  - Cargo: $(cargo --version)"
             echo "  - Android SDK: $ANDROID_HOME"
             echo "  - Java: $(java -version 2>&1 | head -n1)"
+            echo "  - Repo help: run 'help' to list project commands"
             echo ""
             echo "Getting started:"
             echo "  Flutter:"

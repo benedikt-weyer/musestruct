@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+cat <<'EOF'
+Musestruct developer commands
+
+Repo helpers
+  help                     Show this help text
+  start-backend            Start PostgreSQL and the Rust backend with hot reload
+  stop-backend             Stop the backend and PostgreSQL
+
+Android emulator helpers
+  create-emulator          Create the default Android emulator
+  list-emulators           List available Android emulators
+  start-emulator           Start the default emulator
+  start-emulator-software  Start the emulator with software rendering
+  start-emulator-headless  Start the emulator without a window
+  delete-emulator          Delete the default emulator
+
+Monorepo commands
+  npm run dev              Run Turborepo dev tasks
+  npm run check            Run validation across all apps
+  npm run build            Run build tasks across all apps
+  npm run test             Run tests across all apps
+
+App commands
+  cd apps/backend && cargo run
+  cd apps/flutter && flutter run
+  cd apps/react-native && npm run android
+  cd apps/react-native && npm start
+
+Infrastructure
+  docker compose up -d postgres
+  docker compose down
+EOF
