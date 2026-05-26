@@ -167,18 +167,18 @@
               pkgs.libdrm
               pkgs.alsa-lib
               pkgs.pulseaudio
-              pkgs.xorg.libX11
-              pkgs.xorg.libXcomposite
-              pkgs.xorg.libXcursor
-              pkgs.xorg.libXdamage
-              pkgs.xorg.libXext
-              pkgs.xorg.libXfixes
-              pkgs.xorg.libXi
-              pkgs.xorg.libXrandr
-              pkgs.xorg.libXScrnSaver
-              pkgs.xorg.libXtst
-              pkgs.xorg.libxcb
-              pkgs.xorg.libxshmfence
+              pkgs.libX11
+              pkgs.libXcomposite
+              pkgs.libXcursor
+              pkgs.libXdamage
+              pkgs.libXext
+              pkgs.libXfixes
+              pkgs.libXi
+              pkgs.libXrandr
+              pkgs.libXScrnSaver
+              pkgs.libXtst
+              pkgs.libxcb
+              pkgs.libxshmfence
             ]}:$LD_LIBRARY_PATH"
             
             # Force GStreamer to prefer curlhttpsrc over souphttpsrc for HTTPS
