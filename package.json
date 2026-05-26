@@ -18,6 +18,8 @@
     "check": "turbo run check"
   },
   "devDependencies": {
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-server-api": "20.1.0",
     "turbo": "^2.5.4"
   }
 }
