@@ -137,7 +137,7 @@
             export PATH="$(echo "$ANDROID_HOME/cmake/${cmakeVersion}".*/bin):$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
             export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk-bundle";
-            export GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${ANDROID_HOME}/build-tools/${buildToolsVersion}/aapt2";
+            export GRADLE_OPTS="-Dorg.gradle.project.android.aapt2FromMavenOverride=${ANDROID_HOME}/build-tools/${buildToolsVersion}/aapt2"
 
             
             # Set up Java
@@ -149,6 +149,37 @@
             
             # Desktop development
             export PKG_CONFIG_PATH="${pkgs.gtk3}/lib/pkgconfig:${pkgs.glib}/lib/pkgconfig:${pkgs.sysprof}/lib/pkgconfig:${pkgs.libsecret}/lib/pkgconfig:${pkgs.libsoup_3}/lib/pkgconfig:${pkgs.gst_all_1.gstreamer}/lib/pkgconfig:${pkgs.gst_all_1.gst-plugins-base}/lib/pkgconfig:${pkgs.pulseaudio}/lib/pkgconfig:${pkgs.alsa-lib}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+              pkgs.gtk3
+              pkgs.glib
+              pkgs.at-spi2-core
+              pkgs.libxkbcommon
+              pkgs.mesa
+              pkgs.fontconfig
+              pkgs.freetype
+              pkgs.dbus
+              pkgs.libsecret
+              pkgs.libsoup_3
+              pkgs.libglvnd
+              pkgs.nss
+              pkgs.nspr
+              pkgs.cups
+              pkgs.libdrm
+              pkgs.alsa-lib
+              pkgs.pulseaudio
+              pkgs.xorg.libX11
+              pkgs.xorg.libXcomposite
+              pkgs.xorg.libXcursor
+              pkgs.xorg.libXdamage
+              pkgs.xorg.libXext
+              pkgs.xorg.libXfixes
+              pkgs.xorg.libXi
+              pkgs.xorg.libXrandr
+              pkgs.xorg.libXScrnSaver
+              pkgs.xorg.libXtst
+              pkgs.xorg.libxcb
+              pkgs.xorg.libxshmfence
+            ]}:$LD_LIBRARY_PATH"
             
             # Force GStreamer to prefer curlhttpsrc over souphttpsrc for HTTPS
             export GST_PLUGIN_FEATURE_RANK="curlhttpsrc:MAX,souphttpsrc:NONE"
