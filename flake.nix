@@ -18,7 +18,7 @@
 
         };
 
-        buildToolsVersion = "35.0.0";
+        buildToolsVersion = "36.0.0";
         cmakeVersion = "3.22.1";
         
         androidComposition = pkgs.androidenv.composeAndroidPackages {
@@ -29,7 +29,7 @@
           includeEmulator = true;
           useGoogleAPIs = true;
           includeNDK = true;
-          ndkVersions = [ "27.0.12077973" ];
+          ndkVersions = [ "27.1.12297006" ];
           includeSystemImages = true;
           includeCmake = true;
           cmakeVersions = [ cmakeVersion ];
