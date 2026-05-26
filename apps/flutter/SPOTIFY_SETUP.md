@@ -29,7 +29,7 @@ After creating the app, you'll see your app dashboard. Note down:
 
 ## Step 3: Configure Environment Variables
 
-Create a `.env` file in the backend directory (`/home/benedikt/Git/musestruct/backend/.env`) with the following content:
+Create a `.env` file in the backend directory (`/home/benedikt/Git/musestruct/apps/backend/.env`) with the following content:
 
 ```env
 # Spotify OAuth2 Configuration
@@ -59,13 +59,13 @@ In your Spotify app settings, make sure to add these redirect URIs:
 
 1. Start your backend server:
    ```bash
-   cd backend
+   cd apps/backend
    cargo run
    ```
 
 2. Start your Flutter app:
    ```bash
-   cd ../flutter-app
+   cd apps/flutter
    flutter run
    ```
 

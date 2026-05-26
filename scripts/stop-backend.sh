@@ -11,6 +11,6 @@ pkill -f 'cargo watch' && pkill -f 'cargo run'
 
 # Stop and remove database container
 echo "Stopping database..."
-docker-compose down
+docker compose down
 
 echo "Backend and database stopped"

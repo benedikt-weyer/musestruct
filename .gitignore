@@ -120,9 +120,12 @@ app.*.symbols
 
 .env
 
-backend/cache/*
+node_modules/
+.turbo/
 
-!backend/cache/.gitkeep
+apps/backend/cache/*
+
+!apps/backend/cache/.gitkeep
 
 
 
@@ -130,7 +133,7 @@ result
 
 .direnv/
 
-/backend/own_music/*
-!/backend/own_music/.gitkeep
+/apps/backend/own_music/*
+!/apps/backend/own_music/.gitkeep
 
 docker-compose.override.yaml

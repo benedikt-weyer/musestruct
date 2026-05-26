@@ -1,11 +1,13 @@
 {
-  "name": "MusestructNative",
+  "name": "@musestruct/react-native",
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "dev": "react-native start",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "check": "tsc --noEmit",
     "start": "react-native start",
     "test": "jest"
   },

@@ -69,7 +69,7 @@ A cross-platform music library management application that helps you structure a
    This will generate database credentials and create the necessary `.env` files.
 
 4. **Configure Streaming Services (Optional)**
-   Edit `backend/.env` and add your streaming service credentials:
+   Edit `apps/backend/.env` and add your streaming service credentials:
    ```bash
    # Qobuz (for hi-fi streaming)
    QOBUZ_APP_ID=your-qobuz-app-id
@@ -88,39 +88,36 @@ A cross-platform music library management application that helps you structure a
 
 6. **Start the Flutter app** (in a new terminal)
    ```bash
-   cd flutter-app && flutter run
+   cd apps/flutter && flutter run
    ```
 
 ### Available Commands
 
 - `start-backend` - Start PostgreSQL database and Rust backend with hot reload
 - `stop-backend` - Stop both the backend server and database
-- `cd flutter-app && flutter run` - Start the Flutter app
-- `cd flutter-app && flutter build <platform>` - Build the app for production
+- `cd apps/flutter && flutter run` - Start the Flutter app
+- `cd apps/flutter && flutter build <platform>` - Build the app for production
 
 ## 📁 Project Structure
 
 ```
 musestruct/
-├── backend/                 # Rust backend
-│   ├── src/
-│   │   ├── models/         # Database models
-│   │   ├── handlers/       # API route handlers
-│   │   ├── services/       # Business logic services
-│   │   └── main.rs         # Application entry point
-│   ├── migrations/         # Database migrations
-│   └── Cargo.toml         # Rust dependencies
-├── flutter-app/            # Flutter frontend
-│   ├── lib/
-│   │   ├── models/        # Data models
-│   │   ├── services/      # API and audio services
-│   │   ├── providers/     # State management
-│   │   ├── screens/       # UI screens
-│   │   ├── widgets/       # Reusable UI components
-│   │   └── main.dart      # App entry point
-│   ├── pubspec.yaml       # Flutter dependencies
-│   └── android/           # Native Android project
-├── react-native-app/       # Standalone React Native app
+├── apps/
+│   ├── backend/           # Rust backend
+│   │   ├── src/
+│   │   ├── migrations/
+│   │   └── Cargo.toml
+│   ├── flutter/           # Flutter frontend
+│   │   ├── lib/
+│   │   │   ├── models/
+│   │   │   ├── services/
+│   │   │   ├── providers/
+│   │   │   ├── screens/
+│   │   │   ├── widgets/
+│   │   │   └── main.dart
+│   │   ├── pubspec.yaml
+│   │   └── android/
+│   └── react-native/      # Standalone React Native app
 ├── docker-compose.yml     # PostgreSQL container
 ├── dev-setup.sh          # Development setup script
 ├── flake.nix             # Nix development environment
@@ -192,28 +189,28 @@ The streaming interface is designed to be extensible. To add a new service:
 start-backend
 
 # Run tests
-cd backend && cargo test
+cd apps/backend && cargo test
 
 # Check code
-cd backend && cargo clippy
+cd apps/backend && cargo clippy
 
 # Format code
-cd backend && cargo fmt
+cd apps/backend && cargo fmt
 ```
 
 ### Frontend Development
 ```bash
 # Start development with hot reload
-cd flutter-app && flutter run
+cd apps/flutter && flutter run
 
 # Run tests
-cd flutter-app && flutter test
+cd apps/flutter && flutter test
 
 # Build for production
-cd flutter-app && flutter build <platform>
+cd apps/flutter && flutter build <platform>
 
 # Generate code (for JSON serialization)
-cd flutter-app && flutter packages pub run build_runner build
+cd apps/flutter && flutter packages pub run build_runner build
 ```
 
 ### Database Management
@@ -225,7 +222,7 @@ Musestruct uses SeaORM migrations for database schema management.
 start-backend
 
 # Manual migration commands
-cd backend
+cd apps/backend
 
 # Run all pending migrations
 cargo run --bin migrate -- up
@@ -240,17 +237,17 @@ cargo run --bin migrate -- down
 cargo run --bin migrate -- generate MIGRATION_NAME
 
 # Reset database (warning: destroys all data)
-docker-compose down -v
+docker compose down -v
 start-backend
 ```
 
 ### Database Access
 ```bash
 # Connect to database directly
-docker-compose exec postgres psql -U musestruct -d musestruct
+docker compose exec postgres psql -U musestruct -d musestruct
 
 # View migration history
-docker-compose exec postgres psql -U musestruct -d musestruct -c "SELECT * FROM seaql_migrations;"
+docker compose exec postgres psql -U musestruct -d musestruct -c "SELECT * FROM seaql_migrations;"
 ```
 
 ## 🚢 Deployment
@@ -258,7 +255,7 @@ docker-compose exec postgres psql -U musestruct -d musestruct -c "SELECT * FROM 
 ### Backend Deployment
 1. Build the Rust application:
    ```bash
-   cd backend && cargo build --release
+   cd apps/backend && cargo build --release
    ```
 
 2. Set up PostgreSQL database
@@ -268,18 +265,18 @@ docker-compose exec postgres psql -U musestruct -d musestruct -c "SELECT * FROM 
 ### Frontend Deployment
 ```bash
 # Android
-cd flutter-app && flutter build apk --release
+cd apps/flutter && flutter build apk --release
 
 # iOS
-cd flutter-app && flutter build ios --release
+cd apps/flutter && flutter build ios --release
 
 # Desktop
-cd flutter-app && flutter build windows --release
-cd flutter-app && flutter build macos --release
-cd flutter-app && flutter build linux --release
+cd apps/flutter && flutter build windows --release
+cd apps/flutter && flutter build macos --release
+cd apps/flutter && flutter build linux --release
 
 # Web
-cd flutter-app && flutter build web --release
+cd apps/flutter && flutter build web --release
 ```
 
 ## 🤝 Contributing

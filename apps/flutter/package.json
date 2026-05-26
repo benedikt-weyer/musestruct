@@ -1,0 +1,11 @@
+{
+  "name": "@musestruct/flutter",
+  "private": true,
+  "scripts": {
+    "dev": "flutter run",
+    "build": "flutter build web",
+    "lint": "flutter analyze --no-fatal-infos --no-fatal-warnings",
+    "test": "flutter test",
+    "check": "flutter pub get && flutter analyze --no-fatal-infos --no-fatal-warnings"
+  }
+}

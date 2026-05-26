@@ -7,11 +7,11 @@ echo "🚀 Starting backend development environment..."
 
 # Start PostgreSQL database
 echo "Starting PostgreSQL database..."
-docker-compose up -d postgres
+docker compose up -d postgres
 
 # Wait a moment for database to be ready
 sleep 2
 
 # Start cargo watch for hot-reload development
 echo "Starting cargo watch for hot-reload development..."
-cargo watch -C backend -x run
+cargo watch -C apps/backend -x run

@@ -20,7 +20,7 @@ SESSION_SECRET=$(generate_secret)
 POSTGRES_PASSWORD="musestruct_$(openssl rand -hex 8)"
 
 # Create .env file in backend directory
-ENV_FILE="backend/.env"
+ENV_FILE="apps/backend/.env"
 
 if [ -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}⚠️  $ENV_FILE already exists. Backing up to $ENV_FILE.backup${NC}"
@@ -74,8 +74,8 @@ echo -e "  Password: $POSTGRES_PASSWORD"
 echo -e "  Session Secret: Generated"
 echo
 echo -e "${YELLOW}🔐 Remember to:${NC}"
-echo -e "  1. Update QOBUZ_APP_ID and QOBUZ_SECRET in backend/.env"
-echo -e "  2. Update SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in backend/.env"
+echo -e "  1. Update QOBUZ_APP_ID and QOBUZ_SECRET in apps/backend/.env"
+echo -e "  2. Update SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in apps/backend/.env"
 echo -e "  3. Keep your credentials secure"
 echo -e "  4. Never commit .env files to version control"
 echo

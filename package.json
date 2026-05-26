@@ -1,0 +1,18 @@
+{
+  "name": "musestruct",
+  "private": true,
+  "packageManager": "npm@10.9.8",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "check": "turbo run check"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}
