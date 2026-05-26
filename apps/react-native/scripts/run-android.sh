@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 android_dir="$project_root/android"
+react_native_cli="$project_root/node_modules/.bin/react-native"
 
 resolve_sdk_root() {
   if [[ -n "${ANDROID_HOME:-}" && -d "${ANDROID_HOME}" ]]; then
@@ -38,6 +39,11 @@ if [[ -z "$sdk_root" ]]; then
   exit 1
 fi
 
+if [[ ! -x "$react_native_cli" ]]; then
+  echo "React Native CLI not found at $react_native_cli. Run npm install first." >&2
+  exit 1
+fi
+
 cat > "$android_dir/local.properties" <<EOF
 sdk.dir=$sdk_root
 EOF
@@ -46,4 +52,4 @@ export ANDROID_HOME="${ANDROID_HOME:-$sdk_root}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$sdk_root}"
 
 cd "$project_root"
-exec react-native run-android "$@"
+exec "$react_native_cli" run-android "$@"

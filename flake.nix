@@ -19,10 +19,11 @@
         };
 
         buildToolsVersion = "36.0.0";
+        additionalBuildToolsVersion = "35.0.0";
         cmakeVersion = "3.22.1";
         
         androidComposition = pkgs.androidenv.composeAndroidPackages {
-          buildToolsVersions = [ buildToolsVersion ];
+          buildToolsVersions = [ buildToolsVersion additionalBuildToolsVersion ];
           platformVersions = [ "36" "35" "34"];
           abiVersions = [ "armeabi-v7a" "arm64-v8a" "x86_64" ];
           systemImageTypes = [ "google_apis" "google_apis_playstore" ];
