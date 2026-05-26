@@ -58,6 +58,55 @@ is_port_in_use() {
   return 1
 }
 
+dev_server_status_ready() {
+  local port="$1"
+  local status_url="http://127.0.0.1:${port}/status"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl --silent --fail "$status_url" 2>/dev/null | grep -q '^packager-status:running$'
+    return $?
+  fi
+
+  if command -v wget >/dev/null 2>&1; then
+    wget -qO- "$status_url" 2>/dev/null | grep -q '^packager-status:running$'
+    return $?
+  fi
+
+  is_port_in_use "$port"
+}
+
+start_dev_server() {
+  local port="$1"
+  local log_file="$project_root/.metro-${port}.log"
+  local pid
+  local attempt
+
+  echo "Metro is not running on port ${port}. Starting it in the background..."
+  echo "Metro log: ${log_file}"
+
+  nohup "$react_native_cli" start --port "$port" --no-interactive >"$log_file" 2>&1 &
+  pid=$!
+
+  for attempt in $(seq 1 30); do
+    if dev_server_status_ready "$port"; then
+      echo "Metro is ready on port ${port}."
+      return 0
+    fi
+
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "Metro exited before becoming ready. Recent log output:" >&2
+      tail -n 80 "$log_file" >&2 || true
+      return 1
+    fi
+
+    sleep 1
+  done
+
+  echo "Metro did not become ready within 30 seconds. Recent log output:" >&2
+  tail -n 80 "$log_file" >&2 || true
+  return 1
+}
+
 ensure_adb_reverse() {
   local port="$1"
 
@@ -148,7 +197,15 @@ run_android_args=(run-android "$@")
 
 ensure_adb_reverse "$dev_server_port"
 
-if is_port_in_use "$dev_server_port"; then
+if dev_server_status_ready "$dev_server_port"; then
+  echo "Using existing Metro server on port ${dev_server_port}."
+  run_android_args+=(--no-packager)
+elif is_port_in_use "$dev_server_port"; then
+  echo "Port ${dev_server_port} is already in use, but no React Native dev server responded at /status." >&2
+  echo "Free that port or start Metro manually with 'npm run react-native' before retrying." >&2
+  exit 1
+else
+  start_dev_server "$dev_server_port"
   run_android_args+=(--no-packager)
 fi
 
