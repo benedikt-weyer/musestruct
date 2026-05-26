@@ -88,15 +88,15 @@ A cross-platform music library management application that helps you structure a
 
 6. **Start the Flutter app** (in a new terminal)
    ```bash
-   flutter run
+   cd flutter-app && flutter run
    ```
 
 ### Available Commands
 
 - `start-backend` - Start PostgreSQL database and Rust backend with hot reload
 - `stop-backend` - Stop both the backend server and database
-- `flutter run` - Start the Flutter app
-- `flutter build` - Build the app for production
+- `cd flutter-app && flutter run` - Start the Flutter app
+- `cd flutter-app && flutter build <platform>` - Build the app for production
 
 ## 📁 Project Structure
 
@@ -110,13 +110,17 @@ musestruct/
 │   │   └── main.rs         # Application entry point
 │   ├── migrations/         # Database migrations
 │   └── Cargo.toml         # Rust dependencies
-├── lib/                    # Flutter frontend
-│   ├── models/            # Data models
-│   ├── services/          # API and audio services
-│   ├── providers/         # State management
-│   ├── screens/           # UI screens
-│   ├── widgets/           # Reusable UI components
-│   └── main.dart          # App entry point
+├── flutter-app/            # Flutter frontend
+│   ├── lib/
+│   │   ├── models/        # Data models
+│   │   ├── services/      # API and audio services
+│   │   ├── providers/     # State management
+│   │   ├── screens/       # UI screens
+│   │   ├── widgets/       # Reusable UI components
+│   │   └── main.dart      # App entry point
+│   ├── pubspec.yaml       # Flutter dependencies
+│   └── android/           # Native Android project
+├── react-native-app/       # Standalone React Native app
 ├── docker-compose.yml     # PostgreSQL container
 ├── dev-setup.sh          # Development setup script
 ├── flake.nix             # Nix development environment
@@ -200,16 +204,16 @@ cd backend && cargo fmt
 ### Frontend Development
 ```bash
 # Start development with hot reload
-flutter run
+cd flutter-app && flutter run
 
 # Run tests
-flutter test
+cd flutter-app && flutter test
 
 # Build for production
-flutter build <platform>
+cd flutter-app && flutter build <platform>
 
 # Generate code (for JSON serialization)
-flutter packages pub run build_runner build
+cd flutter-app && flutter packages pub run build_runner build
 ```
 
 ### Database Management
@@ -264,18 +268,18 @@ docker-compose exec postgres psql -U musestruct -d musestruct -c "SELECT * FROM 
 ### Frontend Deployment
 ```bash
 # Android
-flutter build apk --release
+cd flutter-app && flutter build apk --release
 
 # iOS
-flutter build ios --release
+cd flutter-app && flutter build ios --release
 
 # Desktop
-flutter build windows --release
-flutter build macos --release
-flutter build linux --release
+cd flutter-app && flutter build windows --release
+cd flutter-app && flutter build macos --release
+cd flutter-app && flutter build linux --release
 
 # Web
-flutter build web --release
+cd flutter-app && flutter build web --release
 ```
 
 ## 🤝 Contributing

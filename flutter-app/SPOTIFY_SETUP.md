@@ -65,7 +65,7 @@ In your Spotify app settings, make sure to add these redirect URIs:
 
 2. Start your Flutter app:
    ```bash
-   cd ..
+   cd ../flutter-app
    flutter run
    ```
 
