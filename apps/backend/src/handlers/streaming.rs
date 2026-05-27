@@ -3,6 +3,7 @@ use axum::{
     http::{StatusCode, HeaderMap, header},
     response::{Json, Html, Response},
 };
+use axum_extra::extract::Query as MultiValueQuery;
 use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -135,7 +136,7 @@ async fn get_authenticated_streaming_service(
 pub async fn search_music(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
-    Query(params): Query<StreamingSearchQuery>,
+    MultiValueQuery(params): MultiValueQuery<StreamingSearchQuery>,
 ) -> Result<Json<ApiResponse<SearchResults>>, (StatusCode, Json<ApiResponse<()>>)> {
     // Determine which services to search
     let services_to_search = if let Some(services) = &params.services {

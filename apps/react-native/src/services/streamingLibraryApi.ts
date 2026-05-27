@@ -60,8 +60,8 @@ function createSearchQuery(query: string, options: SearchOptions) {
     searchParams.set('offset', options.offset.toString());
   }
 
-  options.services?.forEach((serviceName, index) => {
-    searchParams.set(`services[${index}]`, serviceName);
+  options.services?.forEach((serviceName) => {
+    searchParams.append('services', serviceName);
   });
 
   return searchParams.toString();
