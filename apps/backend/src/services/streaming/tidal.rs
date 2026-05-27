@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::{
     AuthResult, SearchResults, ServiceCredentials, StreamingAlbum, StreamingPlaylist,
@@ -324,6 +324,78 @@ impl TidalService {
             .collect()
     }
 
+    fn document_resources(document: &JsonApiDocument) -> Vec<JsonApiResource> {
+        let Some(data) = &document.data else {
+            return Vec::new();
+        };
+
+        match data {
+            Value::Object(_) => serde_json::from_value::<JsonApiResource>(data.clone())
+                .map(|resource| vec![resource])
+                .unwrap_or_default(),
+            Value::Array(items) => items
+                .iter()
+                .filter_map(|item| serde_json::from_value::<JsonApiResource>(item.clone()).ok())
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn resolved_collection_values(document: &JsonApiDocument, resource_type: &str) -> Vec<JsonApiResource> {
+        let resources = Self::resource_map(document);
+        let mut resolved = Vec::new();
+        let mut seen_ids = HashSet::new();
+
+        for resource in Self::resource_values(document, resource_type) {
+            if seen_ids.insert(resource.id.clone()) {
+                resolved.push(resource);
+            }
+        }
+
+        if !resolved.is_empty() {
+            return resolved;
+        }
+
+        for resource in Self::document_resources(document) {
+            if resource.resource_type == resource_type {
+                if let Some(full_resource) = resources.get(&format!("{}:{}", resource_type, resource.id)) {
+                    if seen_ids.insert(full_resource.id.clone()) {
+                        resolved.push(full_resource.clone());
+                    }
+                }
+            }
+
+            for relationship_name in ["item", "items"] {
+                for related_id in Self::relationship_ids(&resource, relationship_name) {
+                    if let Some(full_resource) = resources.get(&format!("{}:{}", resource_type, related_id)) {
+                        if seen_ids.insert(full_resource.id.clone()) {
+                            resolved.push(full_resource.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        resolved
+    }
+
+    fn matches_query(fields: &[&str], query: &str) -> bool {
+        let normalized_query = query.trim().to_lowercase();
+        if normalized_query.is_empty() {
+            return true;
+        }
+
+        fields
+            .iter()
+            .any(|field| field.to_lowercase().contains(&normalized_query))
+    }
+
+    fn paginate_results<T>(items: Vec<T>, limit: usize, offset: usize) -> (Vec<T>, u32) {
+        let total = items.len() as u32;
+        let paginated = items.into_iter().skip(offset).take(limit).collect();
+        (paginated, total)
+    }
+
     fn first_related_name(
         resource: &JsonApiResource,
         relationship_name: &str,
@@ -443,6 +515,32 @@ impl TidalService {
         let response = self.make_request(endpoint, &params).await?;
         Ok(serde_json::from_value(response)?)
     }
+
+    async fn library_collection_resources(
+        &self,
+        endpoint: &str,
+        resource_type: &str,
+    ) -> Result<(HashMap<String, JsonApiResource>, Vec<JsonApiResource>)> {
+        let document = self.collection_document(endpoint).await?;
+        let resources = Self::resource_map(&document);
+        let items = Self::resolved_collection_values(&document, resource_type);
+
+        if !items.is_empty() || !endpoint.ends_with("/relationships/items") {
+            return Ok((resources, items));
+        }
+
+        let fallback_endpoint = endpoint.trim_end_matches("/relationships/items");
+        let fallback_document = self.collection_document(fallback_endpoint).await?;
+        let fallback_resources = Self::resource_map(&fallback_document);
+        let fallback_items = Self::resolved_collection_values(&fallback_document, resource_type);
+
+        if fallback_items.is_empty() {
+            Ok((resources, items))
+        } else {
+            Ok((fallback_resources, fallback_items))
+        }
+    }
+
 }
 
 #[async_trait]
@@ -496,20 +594,15 @@ impl StreamingService for TidalService {
 
         match search_type.unwrap_or("track") {
             "album" => {
-                let document = self.collection_document("userCollectionAlbums/me/relationships/items").await?;
-                let resources = Self::resource_map(&document);
-                let albums = Self::resource_values(&document, "albums")
+                let (resources, collection_albums) = self
+                    .library_collection_resources("userCollectionAlbums/me/relationships/items", "albums")
+                    .await?;
+                let matching_albums = collection_albums
                     .into_iter()
                     .map(|resource| Self::parse_album_resource(&resource, &resources))
-                    .filter(|album| {
-                        let normalized_query = query.to_lowercase();
-                        album.title.to_lowercase().contains(&normalized_query)
-                            || album.artist.to_lowercase().contains(&normalized_query)
-                    })
-                    .skip(offset)
-                    .take(limit)
+                    .filter(|album| Self::matches_query(&[&album.title, &album.artist], query))
                     .collect::<Vec<_>>();
-                let total = albums.len() as u32;
+                let (albums, total) = Self::paginate_results(matching_albums, limit, offset);
                 Ok(SearchResults {
                     tracks: vec![],
                     albums,
@@ -520,16 +613,24 @@ impl StreamingService for TidalService {
                 })
             }
             "playlist" => {
-                let document = self.collection_document("userCollectionPlaylists/me/relationships/items").await?;
-                let resources = Self::resource_map(&document);
-                let playlists = Self::resource_values(&document, "playlists")
+                let (resources, collection_playlists) = self
+                    .library_collection_resources("userCollectionPlaylists/me/relationships/items", "playlists")
+                    .await?;
+                let matching_playlists = collection_playlists
                     .into_iter()
                     .map(|resource| Self::parse_playlist_resource(&resource, &resources))
-                    .filter(|playlist| playlist.name.to_lowercase().contains(&query.to_lowercase()))
-                    .skip(offset)
-                    .take(limit)
+                    .filter(|playlist| {
+                        Self::matches_query(
+                            &[
+                                &playlist.name,
+                                playlist.description.as_deref().unwrap_or(""),
+                                &playlist.owner,
+                            ],
+                            query,
+                        )
+                    })
                     .collect::<Vec<_>>();
-                let total = playlists.len() as u32;
+                let (playlists, total) = Self::paginate_results(matching_playlists, limit, offset);
                 Ok(SearchResults {
                     tracks: vec![],
                     albums: vec![],
@@ -540,21 +641,15 @@ impl StreamingService for TidalService {
                 })
             }
             _ => {
-                let document = self.collection_document("userCollectionTracks/me/relationships/items").await?;
-                let resources = Self::resource_map(&document);
-                let tracks = Self::resource_values(&document, "tracks")
+                let (resources, collection_tracks) = self
+                    .library_collection_resources("userCollectionTracks/me/relationships/items", "tracks")
+                    .await?;
+                let matching_tracks = collection_tracks
                     .into_iter()
                     .map(|resource| Self::parse_track_resource(&resource, &resources))
-                    .filter(|track| {
-                        let normalized_query = query.to_lowercase();
-                        track.title.to_lowercase().contains(&normalized_query)
-                            || track.artist.to_lowercase().contains(&normalized_query)
-                            || track.album.to_lowercase().contains(&normalized_query)
-                    })
-                    .skip(offset)
-                    .take(limit)
+                    .filter(|track| Self::matches_query(&[&track.title, &track.artist, &track.album], query))
                     .collect::<Vec<_>>();
-                let total = tracks.len() as u32;
+                let (tracks, total) = Self::paginate_results(matching_tracks, limit, offset);
                 Ok(SearchResults {
                     tracks,
                     albums: vec![],

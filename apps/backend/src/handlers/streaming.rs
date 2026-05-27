@@ -124,7 +124,6 @@ async fn get_authenticated_streaming_service(
             }
 
             let (access_token, refresh_token) = get_valid_tidal_tokens(user_id, db).await?;
-
             Ok(Box::new(
                 TidalService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
             ))
@@ -269,12 +268,14 @@ pub(crate) async fn get_valid_spotify_tokens(
 }
 
 fn normalize_tidal_scopes() -> String {
-    std::env::var("TIDAL_SCOPES")
-        .unwrap_or_default()
-        .split(|character: char| character == ',' || character.is_whitespace())
-        .filter(|scope| !scope.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    [
+        "collection.read",
+        "playback",
+        "playlists.read",
+        "search.read",
+        "user.read",
+    ]
+    .join(" ")
 }
 
 fn resolve_tidal_redirect_uri(headers: &HeaderMap) -> String {

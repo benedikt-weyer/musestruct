@@ -23,10 +23,10 @@ TIDAL_CLIENT_UNIQUE_KEY=
 # optional
 TIDAL_REDIRECT_URI=http://127.0.0.1:8080/api/streaming/tidal/callback
 # optional
-TIDAL_SCOPES=
-# optional
 TIDAL_COUNTRY_CODE=US
 ```
+
+The backend now requests the required Tidal library scopes directly. You do not need a `TIDAL_SCOPES` env var.
 
 ## Tidal app configuration
 
