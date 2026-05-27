@@ -930,7 +930,7 @@ pub async fn spotify_callback(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Connection Error - Musestruct</title>
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
             margin: 0;
@@ -939,8 +939,8 @@ pub async fn spotify_callback(
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-        .container {
+        }}
+        .container {{
             background: white;
             border-radius: 16px;
             padding: 40px;
@@ -948,8 +948,8 @@ pub async fn spotify_callback(
             text-align: center;
             max-width: 400px;
             width: 90%;
-        }
-        .error-icon {
+        }}
+        .error-icon {{
             width: 80px;
             height: 80px;
             background: #ff6b6b;
@@ -960,19 +960,19 @@ pub async fn spotify_callback(
             margin: 0 auto 24px;
             font-size: 40px;
             color: white;
-        }
-        h1 {
+        }}
+        h1 {{
             color: #ff6b6b;
             margin: 0 0 16px 0;
             font-size: 28px;
             font-weight: 700;
-        }
-        p {
+        }}
+        p {{
             color: #666;
             margin: 0 0 24px 0;
             line-height: 1.5;
-        }
-        .close-btn {
+        }}
+        .close-btn {{
             background: #ff6b6b;
             color: white;
             border: none;
@@ -981,7 +981,7 @@ pub async fn spotify_callback(
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-        }
+        }}
     </style>
 </head>
 <body>
