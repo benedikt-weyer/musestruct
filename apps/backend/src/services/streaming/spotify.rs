@@ -3,7 +3,10 @@ use anyhow::{Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use super::{StreamingService, SearchResults, StreamingTrack, StreamingAlbum, ServiceCredentials, AuthResult};
+use super::{StreamingAlbum, StreamingPlaylist, StreamingService, SearchResults, StreamingTrack, ServiceCredentials, AuthResult};
+
+const SPOTIFY_LIBRARY_PAGE_SIZE: u32 = 50;
+const SPOTIFY_LIBRARY_MAX_ITEMS: u32 = 500;
 
 pub struct SpotifyService {
     client: Client,
@@ -81,6 +84,161 @@ impl SpotifyService {
 
         let result = response.json::<T>().await?;
         Ok(result)
+    }
+
+    fn matches_query(fields: &[&str], query: &str) -> bool {
+        let normalized_query = query.trim().to_lowercase();
+
+        if normalized_query.is_empty() {
+            return true;
+        }
+
+        fields
+            .iter()
+            .any(|field| field.to_lowercase().contains(&normalized_query))
+    }
+
+    fn paginate_results<T>(items: Vec<T>, limit: u32, offset: u32) -> (Vec<T>, u32) {
+        let total = items.len() as u32;
+        let paginated_items = items
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect();
+
+        (paginated_items, total)
+    }
+
+    async fn get_saved_tracks(&self) -> Result<Vec<StreamingTrack>> {
+        let mut saved_tracks = Vec::new();
+        let mut offset = 0;
+
+        loop {
+            let mut params = HashMap::new();
+            params.insert("limit".to_string(), SPOTIFY_LIBRARY_PAGE_SIZE.to_string());
+            params.insert("offset".to_string(), offset.to_string());
+
+            let response: SpotifySavedTracksResponse = self.make_request("me/tracks", &params).await?;
+
+            if response.items.is_empty() {
+                break;
+            }
+
+            let page_count = response.items.len() as u32;
+            saved_tracks.extend(response.items.into_iter().map(|item| {
+                let track = item.track;
+                let artist_name = track
+                    .artists
+                    .first()
+                    .map(|artist| artist.name.clone())
+                    .unwrap_or_else(|| "Unknown Artist".to_string());
+                let cover_url = track.album.images.first().map(|image| image.url.clone());
+
+                StreamingTrack {
+                    id: track.id,
+                    title: track.name,
+                    artist: artist_name,
+                    album: track.album.name,
+                    duration: Some((track.duration_ms / 1000) as i32),
+                    stream_url: track.preview_url,
+                    cover_url,
+                    quality: Some("preview".to_string()),
+                    source: "spotify".to_string(),
+                    bitrate: Some(160),
+                    sample_rate: Some(44100),
+                    bit_depth: None,
+                }
+            }));
+
+            offset += page_count;
+            if offset >= response.total || offset >= SPOTIFY_LIBRARY_MAX_ITEMS {
+                break;
+            }
+        }
+
+        Ok(saved_tracks)
+    }
+
+    async fn get_saved_albums(&self) -> Result<Vec<StreamingAlbum>> {
+        let mut saved_albums = Vec::new();
+        let mut offset = 0;
+
+        loop {
+            let mut params = HashMap::new();
+            params.insert("limit".to_string(), SPOTIFY_LIBRARY_PAGE_SIZE.to_string());
+            params.insert("offset".to_string(), offset.to_string());
+
+            let response: SpotifySavedAlbumsResponse = self.make_request("me/albums", &params).await?;
+
+            if response.items.is_empty() {
+                break;
+            }
+
+            let page_count = response.items.len() as u32;
+            saved_albums.extend(response.items.into_iter().map(|item| {
+                let album = item.album;
+                let artist_name = album
+                    .artists
+                    .first()
+                    .map(|artist| artist.name.clone())
+                    .unwrap_or_else(|| "Unknown Artist".to_string());
+                let cover_url = album.images.first().map(|image| image.url.clone());
+
+                StreamingAlbum {
+                    id: album.id,
+                    title: album.name,
+                    artist: artist_name,
+                    release_date: Some(album.release_date),
+                    cover_url,
+                    tracks: vec![],
+                    source: "spotify".to_string(),
+                }
+            }));
+
+            offset += page_count;
+            if offset >= response.total || offset >= SPOTIFY_LIBRARY_MAX_ITEMS {
+                break;
+            }
+        }
+
+        Ok(saved_albums)
+    }
+
+    async fn get_saved_playlists(&self) -> Result<Vec<StreamingPlaylist>> {
+        let mut saved_playlists = Vec::new();
+        let mut offset = 0;
+
+        loop {
+            let mut params = HashMap::new();
+            params.insert("limit".to_string(), SPOTIFY_LIBRARY_PAGE_SIZE.to_string());
+            params.insert("offset".to_string(), offset.to_string());
+
+            let response: SpotifyCurrentUserPlaylistsResponse = self.make_request("me/playlists", &params).await?;
+
+            if response.items.is_empty() {
+                break;
+            }
+
+            let page_count = response.items.len() as u32;
+            saved_playlists.extend(response.items.into_iter().map(|playlist| StreamingPlaylist {
+                id: playlist.id,
+                name: playlist.name,
+                description: playlist.description,
+                owner: playlist.owner.display_name.unwrap_or_else(|| "Unknown".to_string()),
+                source: "spotify".to_string(),
+                cover_url: playlist.images.first().map(|image| image.url.clone()),
+                track_count: playlist.tracks.total,
+                is_public: playlist.public,
+                external_url: Some(playlist.external_urls.spotify),
+            }));
+
+            offset += page_count;
+            if offset >= response.total || offset >= SPOTIFY_LIBRARY_MAX_ITEMS {
+                break;
+            }
+        }
+
+        Ok(saved_playlists)
     }
 }
 
@@ -296,16 +454,74 @@ impl StreamingService for SpotifyService {
     }
 
     async fn search_library(&self, query: &str, search_type: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<SearchResults> {
-        // Spotify library search would require additional API calls to get saved tracks, albums, and playlists
-        // For now, return empty results as Spotify library access requires more complex implementation
-        Ok(SearchResults {
-            tracks: vec![],
-            albums: vec![],
-            playlists: vec![],
-            total: 0,
-            offset: offset.unwrap_or(0),
-            limit: limit.unwrap_or(20),
-        })
+        let limit = limit.unwrap_or(20);
+        let offset = offset.unwrap_or(0);
+
+        match search_type.unwrap_or("track") {
+            "album" => {
+                let matching_albums = self
+                    .get_saved_albums()
+                    .await?
+                    .into_iter()
+                    .filter(|album| Self::matches_query(&[&album.title, &album.artist], query))
+                    .collect::<Vec<_>>();
+                let (albums, total) = Self::paginate_results(matching_albums, limit, offset);
+
+                Ok(SearchResults {
+                    tracks: vec![],
+                    albums,
+                    playlists: vec![],
+                    total,
+                    offset,
+                    limit,
+                })
+            }
+            "playlist" => {
+                let matching_playlists = self
+                    .get_saved_playlists()
+                    .await?
+                    .into_iter()
+                    .filter(|playlist| {
+                        Self::matches_query(
+                            &[
+                                &playlist.name,
+                                playlist.description.as_deref().unwrap_or(""),
+                                &playlist.owner,
+                            ],
+                            query,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let (playlists, total) = Self::paginate_results(matching_playlists, limit, offset);
+
+                Ok(SearchResults {
+                    tracks: vec![],
+                    albums: vec![],
+                    playlists,
+                    total,
+                    offset,
+                    limit,
+                })
+            }
+            _ => {
+                let matching_tracks = self
+                    .get_saved_tracks()
+                    .await?
+                    .into_iter()
+                    .filter(|track| Self::matches_query(&[&track.title, &track.artist, &track.album], query))
+                    .collect::<Vec<_>>();
+                let (tracks, total) = Self::paginate_results(matching_tracks, limit, offset);
+
+                Ok(SearchResults {
+                    tracks,
+                    albums: vec![],
+                    playlists: vec![],
+                    total,
+                    offset,
+                    limit,
+                })
+            }
+        }
     }
 }
 
@@ -353,6 +569,34 @@ struct SpotifyTrack {
     album: SpotifyAlbum,
     duration_ms: u32,
     preview_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifySavedTracksResponse {
+    items: Vec<SpotifySavedTrackItem>,
+    total: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifySavedTrackItem {
+    track: SpotifyTrack,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifySavedAlbumsResponse {
+    items: Vec<SpotifySavedAlbumItem>,
+    total: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifySavedAlbumItem {
+    album: SpotifyAlbum,
+}
+
+#[derive(Debug, Deserialize)]
+struct SpotifyCurrentUserPlaylistsResponse {
+    items: Vec<SpotifyPlaylist>,
+    total: u32,
 }
 
 #[derive(Debug, Deserialize)]

@@ -227,13 +227,39 @@ pub async fn search_music(
         ));
     }
 
+    match search_type {
+        "album" => {
+            all_tracks.clear();
+            all_playlists.clear();
+        }
+        "playlist" => {
+            all_tracks.clear();
+            all_albums.clear();
+        }
+        _ => {
+            all_albums.clear();
+            all_playlists.clear();
+        }
+    }
+
+    total_results = match search_type {
+        "album" => all_albums.len() as u32,
+        "playlist" => all_playlists.len() as u32,
+        _ => all_tracks.len() as u32,
+    };
+
     // Sort tracks by relevance (you could implement more sophisticated sorting)
     all_tracks.sort_by(|a, b| a.title.cmp(&b.title));
+    all_albums.sort_by(|a, b| a.title.cmp(&b.title));
+    all_playlists.sort_by(|a, b| a.name.cmp(&b.name));
     
     // Limit results if needed
     let limit = params.limit.unwrap_or(20) as usize;
     if all_tracks.len() > limit {
         all_tracks.truncate(limit);
+    }
+    if all_albums.len() > limit {
+        all_albums.truncate(limit);
     }
     if all_playlists.len() > limit {
         all_playlists.truncate(limit);
