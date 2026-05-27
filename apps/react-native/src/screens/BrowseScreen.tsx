@@ -66,31 +66,31 @@ function BrowseTrackCard({
   track: StreamingTrack;
 }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
         {track.cover_url ? (
           <Image
-            className="h-16 w-16 rounded-[18px] bg-slate-100"
+            className="h-16 w-16 rounded-[18px] bg-slate-100 dark:bg-slate-800"
             resizeMode="cover"
             source={{ uri: track.cover_url }}
           />
         ) : (
-          <View className="h-16 w-16 items-center justify-center rounded-[18px] bg-slate-100">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500">
+          <View className="h-16 w-16 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
               {track.source}
             </Text>
           </View>
         )}
 
         <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900">{track.title}</Text>
-          <Text className="mt-1 text-sm text-slate-600">{track.artist}</Text>
-          <Text className="mt-1 text-sm text-slate-500">{track.album}</Text>
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{track.title}</Text>
+          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{track.artist}</Text>
+          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{track.album}</Text>
           <View className="mt-3 flex-row items-center justify-between">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
               {track.source}
             </Text>
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
               {formatDuration(track.duration)}
             </Text>
           </View>
@@ -112,12 +112,12 @@ function BrowseTrackCard({
 
         <Pressable
           accessibilityRole="button"
-          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
           onPress={() => {
             onSave(track);
           }}
         >
-          <Text className="text-center text-sm font-semibold text-slate-700">Add track to library</Text>
+          <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add track to library</Text>
         </Pressable>
       </View>
     </View>
@@ -132,29 +132,29 @@ function BrowseAlbumCard({
   onSave: (album: StreamingAlbum) => void;
 }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
         {album.cover_url ? (
           <Image
-            className="h-20 w-20 rounded-[18px] bg-slate-100"
+            className="h-20 w-20 rounded-[18px] bg-slate-100 dark:bg-slate-800"
             resizeMode="cover"
             source={{ uri: album.cover_url }}
           />
         ) : (
-          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500">
+          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
               {album.source}
             </Text>
           </View>
         )}
 
         <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900">{album.title}</Text>
-          <Text className="mt-1 text-sm text-slate-600">{album.artist}</Text>
-          <Text className="mt-1 text-sm text-slate-500">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{album.title}</Text>
+          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{album.artist}</Text>
+          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {album.release_date ?? 'Unknown release'}
           </Text>
-          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
             {album.source} • {album.tracks.length} tracks
           </Text>
         </View>
@@ -162,12 +162,12 @@ function BrowseAlbumCard({
 
       <Pressable
         accessibilityRole="button"
-        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
         onPress={() => {
           onSave(album);
         }}
       >
-        <Text className="text-center text-sm font-semibold text-slate-700">Add album to library</Text>
+        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add album to library</Text>
       </Pressable>
     </View>
   );
@@ -384,14 +384,14 @@ export function BrowseScreen() {
 
   if (!authSession) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-50" edges={['left', 'right']}>
+      <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
         <View className="flex-1 px-5 pb-6 pt-4">
-          <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200">
-            <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500">
+          <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+            <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
               Browse
             </Text>
-            <Text className="mt-2 text-3xl font-bold text-slate-900">External Providers</Text>
-            <Text className="mt-3 text-sm leading-6 text-slate-600">
+            <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">External Providers</Text>
+            <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
               Sign in first so the app can search connected providers and add tracks or albums to
               your library.
             </Text>
@@ -412,30 +412,30 @@ export function BrowseScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 16 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500">
+        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
             Browse
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900">External Providers</Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600">
+          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">External Providers</Text>
+          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Search connected providers and add tracks or albums to your personal library.
           </Text>
         </View>
 
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
             Search
           </Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             onChangeText={setQuery}
             onSubmitEditing={() => {
               void handleSearch();
@@ -452,11 +452,11 @@ export function BrowseScreen() {
               const isSelected = selectedServices.includes(service.name);
               const isConnected = status?.is_connected === true;
               const chipClassName = isSelected
-                ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2'
-                : 'rounded-full border border-slate-200 bg-white px-3 py-2';
+                ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:bg-teal-950/40'
+                : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950';
               const textClassName = isSelected
                 ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700'
-                : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700';
+                : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200';
 
               return (
                 <Pressable
@@ -492,8 +492,8 @@ export function BrowseScreen() {
           </Pressable>
         </View>
 
-        <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500">
+        <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
             Connected Providers
           </Text>
           {connectedProvidersContent}
@@ -507,7 +507,7 @@ export function BrowseScreen() {
         ) : null}
 
         <View className="mt-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
             Tracks
           </Text>
           {tracks.length > 0 ? (
@@ -524,8 +524,8 @@ export function BrowseScreen() {
               ))}
             </View>
           ) : (
-            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5">
-              <Text className="text-sm leading-6 text-slate-600">
+            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
+              <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
                 Search a connected provider to see matching tracks.
               </Text>
             </View>
@@ -533,7 +533,7 @@ export function BrowseScreen() {
         </View>
 
         <View className="mt-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
             Albums
           </Text>
           {albums.length > 0 ? (
@@ -543,8 +543,8 @@ export function BrowseScreen() {
               ))}
             </View>
           ) : (
-            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5">
-              <Text className="text-sm leading-6 text-slate-600">
+            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
+              <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
                 Search a connected provider to see matching albums.
               </Text>
             </View>

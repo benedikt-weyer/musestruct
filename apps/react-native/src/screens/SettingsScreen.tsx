@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   ToastAndroid,
@@ -60,11 +61,11 @@ function ProviderActionButton({ busy, label, onPress, tone }: Readonly<ProviderA
   const buttonClassName =
     tone === 'primary'
       ? 'mt-4 rounded-full bg-slate-900 px-5 py-4 active:bg-slate-700'
-      : 'mt-4 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100';
+      : 'mt-4 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:active:bg-slate-800';
   const textClassName =
     tone === 'primary'
       ? 'text-center text-base font-semibold text-white'
-      : 'text-center text-base font-semibold text-slate-700';
+      : 'text-center text-base font-semibold text-slate-700 dark:text-slate-200';
   const indicatorColor = tone === 'primary' ? '#ffffff' : '#0f766e';
 
   return (
@@ -107,9 +108,9 @@ function QobuzProviderCard({
     : 'Connect with your Qobuz account credentials.';
 
   return (
-    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
-      <Text className="text-base font-semibold text-slate-900">Qobuz</Text>
-      <Text className="mt-1 text-sm leading-6 text-slate-600">{description}</Text>
+    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950">
+      <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">Qobuz</Text>
+      <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</Text>
 
       {isConnected ? (
         <ProviderActionButton
@@ -124,7 +125,7 @@ function QobuzProviderCard({
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
-            className="mt-4 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+            className="mt-4 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             importantForAutofill="yes"
             onChangeText={onUsernameChange}
             placeholder="Qobuz username"
@@ -136,7 +137,7 @@ function QobuzProviderCard({
             autoCapitalize="none"
             autoComplete="current-password"
             autoCorrect={false}
-            className="mt-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+            className="mt-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             importantForAutofill="yes"
             onChangeText={onPasswordChange}
             placeholder="Qobuz password"
@@ -178,9 +179,9 @@ function SpotifyProviderCard({
     : 'Open Spotify authorization in your browser, then return here and refresh status.';
 
   return (
-    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
-      <Text className="text-base font-semibold text-slate-900">Spotify</Text>
-      <Text className="mt-1 text-sm leading-6 text-slate-600">{description}</Text>
+    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950">
+      <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">Spotify</Text>
+      <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</Text>
 
       {isConnected ? (
         <ProviderActionButton
@@ -400,11 +401,11 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
   const spotifyProvider = providerStatus.find((service) => service.name === 'spotify') ?? null;
 
   return (
-    <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
         Providers
       </Text>
-      <Text className="mt-2 text-sm leading-6 text-slate-600">
+      <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
         Connect external services the same way the Flutter app does, then refresh status after
         completing browser-based authorization.
       </Text>
@@ -456,7 +457,7 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
           ) : null}
         </>
       ) : (
-        <Text className="mt-3 text-sm leading-6 text-slate-600">
+        <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
           Log in first to connect or disconnect music providers.
         </Text>
       )}
@@ -473,6 +474,8 @@ export function SettingsScreen() {
     setBackendUrl,
     authSession,
     setAuthSession,
+    themePreference,
+    setThemePreference,
   } = useSettings();
   const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [folderErrorMessage, setFolderErrorMessage] = useState<string | null>(null);
@@ -480,6 +483,7 @@ export function SettingsScreen() {
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [connectionTone, setConnectionTone] = useState<'success' | 'error' | null>(null);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const isDarkMode = themePreference === 'dark';
   let folderButtonLabel = 'Choose music folder';
 
   useEffect(() => {
@@ -558,37 +562,60 @@ export function SettingsScreen() {
     connectionTone === 'error' ? 'mt-1 text-sm text-rose-700' : 'mt-1 text-sm text-teal-700';
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={["left", "right"]}>
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={["left", "right"]}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 16 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500">
+        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
             Settings
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900">
+          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">
             App Settings
           </Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600">
+          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Configure the backend connection, manage your account, and choose the local folder
             that should be scanned recursively for playable audio files.
           </Text>
         </View>
 
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
+            Appearance
+          </Text>
+          <View className="mt-4 flex-row items-center justify-between gap-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950">
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">Dark mode</Text>
+              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Switch the main app surfaces, navigation, and player chrome to a darker palette.
+              </Text>
+            </View>
+            <Switch
+              ios_backgroundColor={isDarkMode ? '#334155' : '#cbd5e1'}
+              onValueChange={(value) => {
+                setThemePreference(value ? 'dark' : 'light');
+              }}
+              thumbColor={isDarkMode ? '#ffffff' : '#f8fafc'}
+              trackColor={{ false: '#cbd5e1', true: '#0f766e' }}
+              value={isDarkMode}
+            />
+          </View>
+        </View>
+
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
             Backend
           </Text>
-          <Text className="mt-2 text-sm leading-6 text-slate-600">
+          <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Choose a quick preset or enter a custom backend URL.
           </Text>
 
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
-            className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             keyboardType="url"
             onChangeText={setBackendUrlInput}
             placeholder="https://your-backend.example"
@@ -611,24 +638,24 @@ export function SettingsScreen() {
 
             <Pressable
               accessibilityRole="button"
-              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
               onPress={() => {
                 saveBackendUrl(REMOTE_BACKEND_URL);
               }}
             >
-              <Text className="text-center text-base font-semibold text-slate-700">
+              <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
                 Use hosted backend
               </Text>
             </Pressable>
 
             <Pressable
               accessibilityRole="button"
-              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
               onPress={() => {
                 saveBackendUrl(backendUrlInput);
               }}
             >
-              <Text className="text-center text-base font-semibold text-slate-700">
+              <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
                 Save custom URL
               </Text>
             </Pressable>
@@ -651,27 +678,27 @@ export function SettingsScreen() {
             </Pressable>
           </View>
 
-          <Text className="mt-4 text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+          <Text className="mt-4 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
             Saved backend
           </Text>
-          <Text className="mt-1 text-sm leading-6 text-slate-600">{backendUrl}</Text>
+          <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{backendUrl}</Text>
         </View>
 
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
             Account
           </Text>
           {authSession ? (
             <>
-              <Text className="mt-2 text-lg font-semibold text-slate-900">
+              <Text className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {authSession.user.username}
               </Text>
-              <Text className="mt-1 text-sm leading-6 text-slate-500">
+              <Text className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 {authSession.user.email}
               </Text>
             </>
           ) : (
-            <Text className="mt-2 text-sm leading-6 text-slate-600">
+            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
               No backend session is stored yet.
             </Text>
           )}
@@ -689,12 +716,12 @@ export function SettingsScreen() {
 
             <Pressable
               accessibilityRole="button"
-              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+              className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
               onPress={() => {
                 navigation.navigate('Register');
               }}
             >
-              <Text className="text-center text-base font-semibold text-slate-700">
+              <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
                 Register
               </Text>
             </Pressable>
@@ -702,14 +729,14 @@ export function SettingsScreen() {
             {authSession ? (
               <Pressable
                 accessibilityRole="button"
-                className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+                className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
                 onPress={() => {
                   setAuthSession(null);
                   setConnectionTone('success');
                   setConnectionMessage('Stored session cleared.');
                 }}
               >
-                <Text className="text-center text-base font-semibold text-slate-700">
+                <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
                   Clear saved session
                 </Text>
               </Pressable>
@@ -719,21 +746,21 @@ export function SettingsScreen() {
 
         <ProviderSettingsCard authSession={authSession} backendUrl={backendUrl} />
 
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
             Folder Access
           </Text>
           {selectedFolder ? (
             <>
-              <Text className="mt-2 text-lg font-semibold text-slate-900">
+              <Text className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {selectedFolder.name}
               </Text>
-              <Text className="mt-1 text-sm leading-6 text-slate-500">
+              <Text className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
                 {selectedFolder.pathLabel}
               </Text>
             </>
           ) : (
-            <Text className="mt-2 text-sm leading-6 text-slate-600">
+            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
               No folder has been selected yet.
             </Text>
           )}
@@ -755,13 +782,13 @@ export function SettingsScreen() {
             {selectedFolder ? (
               <Pressable
                 accessibilityRole="button"
-                className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+                className="rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
                 onPress={() => {
                   setSelectedFolder(null);
                   setFolderErrorMessage(null);
                 }}
               >
-                <Text className="text-center text-base font-semibold text-slate-700">
+                <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
                   Clear selection
                 </Text>
               </Pressable>
@@ -769,17 +796,17 @@ export function SettingsScreen() {
           </View>
         </View>
 
-        <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500">
+        <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
             Supported Formats
           </Text>
-          <Text className="mt-2 text-sm leading-6 text-slate-600">
+          <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Files are treated as playable when their extension matches:
           </Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             {PLAYABLE_AUDIO_EXTENSIONS.map((extension) => (
-              <View key={extension} className="rounded-full bg-slate-100 px-3 py-2">
-                <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-700">
+              <View key={extension} className="rounded-full bg-slate-100 px-3 py-2 dark:bg-slate-800">
+                <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200">
                   {extension}
                 </Text>
               </View>

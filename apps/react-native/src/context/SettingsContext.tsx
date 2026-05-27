@@ -10,9 +10,12 @@ import {
   getStoredAuthSession,
   getStoredBackendUrl,
   getStoredMusicFolder,
+  getStoredThemePreference,
   persistAuthSession,
   persistBackendUrl,
   persistMusicFolder,
+  persistThemePreference,
+  type ThemePreference,
 } from '../storage/settingsStorage';
 import type { AuthSession } from '../types/auth';
 import type { MusicFolder } from '../types/music';
@@ -24,6 +27,8 @@ type SettingsContextValue = {
   setBackendUrl: (backendUrl: string) => void;
   authSession: AuthSession | null;
   setAuthSession: (session: AuthSession | null) => void;
+  themePreference: ThemePreference;
+  setThemePreference: (themePreference: ThemePreference) => void;
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -35,6 +40,9 @@ export function SettingsProvider({ children }: Readonly<PropsWithChildren>) {
   const [storedBackendUrl, setStoredBackendUrl] = useState<string>(() => getStoredBackendUrl());
   const [storedAuthSession, setStoredAuthSession] = useState<AuthSession | null>(() =>
     getStoredAuthSession(),
+  );
+  const [storedThemePreference, setStoredThemePreference] = useState<ThemePreference>(() =>
+    getStoredThemePreference(),
   );
 
   function setSelectedFolder(folder: MusicFolder | null) {
@@ -52,6 +60,11 @@ export function SettingsProvider({ children }: Readonly<PropsWithChildren>) {
     setStoredAuthSession(session);
   }
 
+  function setThemePreference(themePreference: ThemePreference) {
+    persistThemePreference(themePreference);
+    setStoredThemePreference(themePreference);
+  }
+
   const value = useMemo(
     () => ({
       selectedFolder: storedSelectedFolder,
@@ -60,8 +73,10 @@ export function SettingsProvider({ children }: Readonly<PropsWithChildren>) {
       setBackendUrl,
       authSession: storedAuthSession,
       setAuthSession,
+      themePreference: storedThemePreference,
+      setThemePreference,
     }),
-    [storedAuthSession, storedBackendUrl, storedSelectedFolder],
+    [storedAuthSession, storedBackendUrl, storedSelectedFolder, storedThemePreference],
   );
 
   return (

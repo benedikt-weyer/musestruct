@@ -7,6 +7,9 @@ import type { MusicFolder } from '../types/music';
 const SELECTED_FOLDER_KEY = 'settings.selectedMusicFolder';
 const BACKEND_URL_KEY = 'settings.backendUrl';
 const AUTH_SESSION_KEY = 'settings.authSession';
+const THEME_PREFERENCE_KEY = 'settings.themePreference';
+
+export type ThemePreference = 'light' | 'dark';
 
 export const settingsStorage = createMMKV({
   id: 'musestruct-native-settings',
@@ -66,4 +69,18 @@ export function persistAuthSession(session: AuthSession | null) {
   }
 
   settingsStorage.set(AUTH_SESSION_KEY, JSON.stringify(session));
+}
+
+export function getStoredThemePreference(): ThemePreference {
+  const themePreference = settingsStorage.getString(THEME_PREFERENCE_KEY);
+
+  if (themePreference === 'dark') {
+    return 'dark';
+  }
+
+  return 'light';
+}
+
+export function persistThemePreference(themePreference: ThemePreference) {
+  settingsStorage.set(THEME_PREFERENCE_KEY, themePreference);
 }

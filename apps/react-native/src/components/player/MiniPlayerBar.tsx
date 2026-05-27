@@ -20,8 +20,8 @@ export function MiniPlayerBar() {
   }
 
   return (
-    <View className="border-t border-slate-200 bg-white px-4 pt-2 shadow-sm shadow-slate-200">
-      <View className="h-1 overflow-hidden rounded-full bg-slate-200">
+    <View className="border-t border-slate-200 bg-white px-4 pt-2 shadow-sm shadow-slate-200 dark:border-slate-800 dark:bg-slate-950 dark:shadow-none">
+      <View className="h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
         <View
           className="h-1 rounded-full bg-teal-600"
           style={{ width: `${duration > 0 ? Math.min(100, (position / duration) * 100) : 0}%` }}
@@ -36,21 +36,21 @@ export function MiniPlayerBar() {
         >
           {currentTrack.artworkUrl ? (
             <Image
-              className="h-12 w-12 rounded-[14px] bg-slate-100"
+              className="h-12 w-12 rounded-[14px] bg-slate-100 dark:bg-slate-800"
               resizeMode="cover"
               source={{ uri: currentTrack.artworkUrl }}
             />
           ) : (
-            <View className="h-12 w-12 items-center justify-center rounded-[14px] bg-slate-100">
+            <View className="h-12 w-12 items-center justify-center rounded-[14px] bg-slate-100 dark:bg-slate-800">
               <Ionicons color="#475569" name="musical-notes-outline" size={22} />
             </View>
           )}
 
           <View className="ml-3 flex-1">
-            <Text className="text-sm font-semibold text-slate-900" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-slate-900 dark:text-slate-100" numberOfLines={1}>
               {currentTrack.title}
             </Text>
-            <Text className="mt-1 text-xs text-slate-500" numberOfLines={1}>
+            <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400" numberOfLines={1}>
               {currentTrack.artist}
             </Text>
           </View>
@@ -70,7 +70,7 @@ export function MiniPlayerBar() {
 
         <Pressable
           accessibilityRole="button"
-          className="h-11 w-11 items-center justify-center rounded-full bg-slate-100 active:bg-slate-200"
+          className="h-11 w-11 items-center justify-center rounded-full bg-slate-100 active:bg-slate-200 dark:bg-slate-800 dark:active:bg-slate-700"
           onPress={closeTrack}
         >
           <Ionicons color="#334155" name="close" size={18} />

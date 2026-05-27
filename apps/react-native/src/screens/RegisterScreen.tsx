@@ -47,14 +47,14 @@ export function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
       <View className="flex-1 px-5 pb-6 pt-4">
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500">
+        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
             Account
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900">Register</Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600">
+          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Register</Text>
+          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Create a new account against the configured Musestruct backend.
           </Text>
           <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-teal-700">
@@ -62,13 +62,13 @@ export function RegisterScreen() {
           </Text>
         </View>
 
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
-          <Text className="text-sm font-semibold text-slate-700">Email</Text>
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-sm font-semibold text-slate-700 dark:text-slate-200">Email</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="username"
             autoCorrect={false}
-            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             importantForAutofill="yes"
             keyboardType="email-address"
             onChangeText={setEmail}
@@ -79,12 +79,12 @@ export function RegisterScreen() {
             value={email}
           />
 
-          <Text className="mt-4 text-sm font-semibold text-slate-700">Username</Text>
+          <Text className="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Username</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="nickname"
             autoCorrect={false}
-            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             importantForAutofill="yes"
             onChangeText={setUsername}
             placeholder="your-name"
@@ -94,12 +94,12 @@ export function RegisterScreen() {
             value={username}
           />
 
-          <Text className="mt-4 text-sm font-semibold text-slate-700">Password</Text>
+          <Text className="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">Password</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="new-password"
             autoCorrect={false}
-            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             importantForAutofill="yes"
             onChangeText={setPassword}
             placeholder="Password"

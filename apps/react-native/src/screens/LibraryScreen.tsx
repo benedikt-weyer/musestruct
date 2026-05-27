@@ -88,14 +88,14 @@ function LibrarySectionButton({
   onPress: () => void;
 }>) {
   const containerClassName = active
-    ? 'mr-3 rounded-full bg-slate-900 px-4 py-3'
-    : 'mr-3 rounded-full border border-slate-200 bg-white px-4 py-3';
+    ? 'mr-3 rounded-full bg-slate-900 px-4 py-3 dark:bg-teal-700'
+    : 'mr-3 rounded-full border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900';
   const labelClassName = active
     ? 'text-sm font-semibold text-white'
-    : 'text-sm font-semibold text-slate-700';
+    : 'text-sm font-semibold text-slate-700 dark:text-slate-200';
   const countClassName = active
     ? 'mt-1 text-xs font-semibold uppercase tracking-[1px] text-slate-300'
-    : 'mt-1 text-xs font-semibold uppercase tracking-[1px] text-slate-400';
+    : 'mt-1 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500';
 
   return (
     <Pressable accessibilityRole="button" className={containerClassName} onPress={onPress}>
@@ -113,9 +113,9 @@ function EmptyLibraryState({
   title: string;
 }>) {
   return (
-    <View className="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8">
-      <Text className="text-lg font-semibold text-slate-900">{title}</Text>
-      <Text className="mt-2 text-sm leading-6 text-slate-600">{description}</Text>
+    <View className="rounded-[24px] border border-dashed border-slate-300 bg-white px-5 py-8 dark:border-slate-700 dark:bg-slate-900">
+      <Text className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</Text>
+      <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</Text>
     </View>
   );
 }
@@ -138,17 +138,17 @@ function TrackLibraryCard({
   track: SavedTrack;
 }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
         {track.cover_url ? (
           <Image
-            className="h-16 w-16 rounded-[18px] bg-slate-100"
+            className="h-16 w-16 rounded-[18px] bg-slate-100 dark:bg-slate-800"
             resizeMode="cover"
             source={{ uri: track.cover_url }}
           />
         ) : (
-          <View className="h-16 w-16 items-center justify-center rounded-[18px] bg-slate-100">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500">
+          <View className="h-16 w-16 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
               {track.source}
             </Text>
           </View>
@@ -156,7 +156,7 @@ function TrackLibraryCard({
 
         <View className="flex-1">
           <View className="flex-row items-start justify-between gap-3">
-            <Text className="flex-1 text-base font-semibold text-slate-900">{track.title}</Text>
+            <Text className="flex-1 text-base font-semibold text-slate-900 dark:text-slate-100">{track.title}</Text>
             {showFavouriteBadge ? (
               <View className="rounded-full bg-rose-100 px-3 py-1">
                 <Text className="text-xs font-semibold uppercase tracking-[1px] text-rose-700">
@@ -165,29 +165,29 @@ function TrackLibraryCard({
               </View>
             ) : null}
           </View>
-          <Text className="mt-1 text-sm text-slate-600">{track.artist}</Text>
-          <Text className="mt-1 text-sm text-slate-500">{track.album}</Text>
+          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{track.artist}</Text>
+          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{track.album}</Text>
           <View className="mt-3 flex-row items-center justify-between">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
               {track.source}
             </Text>
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
               {formatDuration(track.duration)}
             </Text>
           </View>
-          <Text className="mt-2 text-xs text-slate-400">Saved {formatDate(track.created_at)}</Text>
+          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">Saved {formatDate(track.created_at)}</Text>
         </View>
       </View>
 
       <View className="mt-4 flex-row gap-3">
         <Pressable
           accessibilityRole="button"
-          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
           onPress={() => {
             onPlay(track);
           }}
         >
-          <Text className="text-center text-sm font-semibold text-slate-700">
+          <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
             {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
           </Text>
         </Pressable>
@@ -219,32 +219,32 @@ function AlbumLibraryCard({
   onRemove: (album: SavedAlbum) => void;
 }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
         {album.cover_url ? (
           <Image
-            className="h-20 w-20 rounded-[18px] bg-slate-100"
+            className="h-20 w-20 rounded-[18px] bg-slate-100 dark:bg-slate-800"
             resizeMode="cover"
             source={{ uri: album.cover_url }}
           />
         ) : (
-          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500">
+          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
               {album.source}
             </Text>
           </View>
         )}
 
         <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900">{album.title}</Text>
-          <Text className="mt-1 text-sm text-slate-600">{album.artist}</Text>
-          <Text className="mt-1 text-sm text-slate-500">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{album.title}</Text>
+          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{album.artist}</Text>
+          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {album.release_date ?? 'Unknown release date'}
           </Text>
-          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
             {album.source} • {album.track_count} tracks
           </Text>
-          <Text className="mt-2 text-xs text-slate-400">Saved {formatDate(album.created_at)}</Text>
+          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">Saved {formatDate(album.created_at)}</Text>
         </View>
       </View>
 
@@ -274,22 +274,22 @@ function PlaylistLibraryCard({
   playlist: LibraryPlaylist;
 }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row items-start justify-between gap-4">
         <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900">{playlist.name}</Text>
-          <Text className="mt-1 text-sm leading-6 text-slate-600">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
+          <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
             {playlist.description ?? 'No description yet.'}
           </Text>
-          <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+          <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
             {playlist.item_count} items • {playlist.is_public ? 'Public' : 'Private'}
           </Text>
-          <Text className="mt-2 text-xs text-slate-400">
+          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">
             Updated {formatDate(playlist.updated_at)}
           </Text>
         </View>
-        <View className="rounded-full bg-slate-100 px-3 py-2">
-          <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-600">
+        <View className="rounded-full bg-slate-100 px-3 py-2 dark:bg-slate-800">
+          <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
             Playlist
           </Text>
         </View>
@@ -319,9 +319,9 @@ function LibraryLoginState({
   onRegister: () => void;
 }>) {
   return (
-    <View className="mt-4 rounded-[24px] bg-white px-4 py-5 shadow-sm shadow-slate-200">
-      <Text className="text-lg font-semibold text-slate-900">Login required</Text>
-      <Text className="mt-2 text-sm leading-6 text-slate-600">
+    <View className="mt-4 rounded-[24px] bg-white px-4 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+      <Text className="text-lg font-semibold text-slate-900 dark:text-slate-100">Login required</Text>
+      <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
         Your playlists, albums, tracks, and favourites are loaded from the backend account.
       </Text>
 
@@ -335,10 +335,10 @@ function LibraryLoginState({
 
       <Pressable
         accessibilityRole="button"
-        className="mt-3 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100"
+        className="mt-3 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
         onPress={onRegister}
       >
-        <Text className="text-center text-base font-semibold text-slate-700">Register</Text>
+        <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">Register</Text>
       </Pressable>
     </View>
   );
@@ -646,24 +646,24 @@ export function LibraryScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['left', 'right']}>
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 16 }}
       >
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500">
+        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
             Library
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900">Your Music Library</Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600">
+          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Your Music Library</Text>
+          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Switch between playlists, albums, tracks, and favourites without leaving the page.
           </Text>
         </View>
 
         {authSession ? (
           <>
-            <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+            <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
               <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
                 Sections
               </Text>
@@ -682,21 +682,21 @@ export function LibraryScreen() {
                 ))}
               </ScrollView>
 
-              <View className="mt-4 rounded-[20px] bg-slate-50 px-4 py-4">
-                <Text className="text-base font-semibold text-slate-900">{activeSectionMeta.label}</Text>
-                <Text className="mt-1 text-sm leading-6 text-slate-600">
+              <View className="mt-4 rounded-[20px] bg-slate-50 px-4 py-4 dark:bg-slate-950">
+                <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{activeSectionMeta.label}</Text>
+                <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
                   {activeSectionMeta.subtitle}
                 </Text>
 
                 <Pressable
                   accessibilityRole="button"
-                  className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+                  className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:active:bg-slate-800"
                   disabled={isLoading}
                   onPress={() => {
                     void loadLibrary();
                   }}
                 >
-                  <Text className="text-center text-sm font-semibold text-slate-700">
+                  <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
                     Refresh library
                   </Text>
                 </Pressable>

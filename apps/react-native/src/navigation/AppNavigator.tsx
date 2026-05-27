@@ -12,6 +12,7 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList, RootTabParamList } from './types';
 import { BrowseScreen } from '../screens/BrowseScreen';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -41,23 +42,26 @@ function getTabIconName(routeName: keyof RootTabParamList, focused: boolean) {
 }
 
 function createScreenOptions({
+  isDarkMode,
   route,
 }: {
+  isDarkMode: boolean;
   route: { name: keyof RootTabParamList };
 }): BottomTabNavigationOptions {
   return {
     headerShadowVisible: false,
     headerStyle: {
-      backgroundColor: '#f8fafc',
+      backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
     },
     headerTitleStyle: {
+      color: isDarkMode ? '#e2e8f0' : '#0f172a',
       fontWeight: '700',
     },
     tabBarActiveTintColor: '#0f766e',
-    tabBarInactiveTintColor: '#64748b',
+    tabBarInactiveTintColor: isDarkMode ? '#94a3b8' : '#64748b',
     tabBarStyle: {
-      backgroundColor: '#ffffff',
-      borderTopColor: '#e2e8f0',
+      backgroundColor: isDarkMode ? '#0f172a' : '#ffffff',
+      borderTopColor: isDarkMode ? '#1e293b' : '#e2e8f0',
       height: 68,
       paddingBottom: 8,
       paddingTop: 8,
@@ -81,9 +85,12 @@ function PlayerAwareTabBar(props: BottomTabBarProps) {
   );
 }
 
-function RootTabs() {
+function RootTabs({ isDarkMode }: Readonly<{ isDarkMode: boolean }>) {
   return (
-    <Tab.Navigator screenOptions={createScreenOptions} tabBar={(props) => <PlayerAwareTabBar {...props} />}>
+    <Tab.Navigator
+      screenOptions={({ route }) => createScreenOptions({ isDarkMode, route })}
+      tabBar={(props) => <PlayerAwareTabBar {...props} />}
+    >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Library" component={LibraryScreen} options={{ title: 'Library' }} />
       <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse' }} />
@@ -92,23 +99,27 @@ function RootTabs() {
   );
 }
 
-const navigationTheme: Theme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: '#f8fafc',
-    card: '#ffffff',
-    primary: '#0f766e',
-    border: '#e2e8f0',
-    text: '#0f172a',
-  },
-};
-
 export function AppNavigator() {
+  const { themePreference } = useSettings();
+  const isDarkMode = themePreference === 'dark';
+  const navigationTheme: Theme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      background: isDarkMode ? '#020617' : '#f8fafc',
+      card: isDarkMode ? '#0f172a' : '#ffffff',
+      primary: '#0f766e',
+      border: isDarkMode ? '#1e293b' : '#e2e8f0',
+      text: isDarkMode ? '#e2e8f0' : '#0f172a',
+    },
+  };
+
   return (
     <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator>
-        <Stack.Screen component={RootTabs} name="Tabs" options={{ headerShown: false }} />
+        <Stack.Screen name="Tabs" options={{ headerShown: false }}>
+          {() => <RootTabs isDarkMode={isDarkMode} />}
+        </Stack.Screen>
         <Stack.Screen component={LoginScreen} name="Login" options={{ title: 'Login' }} />
         <Stack.Screen
           component={RegisterScreen}
