@@ -29,6 +29,24 @@ async function parseApiResponse<T>(response: Response) {
   return payload.data;
 }
 
+async function parseMutationResponse(response: Response) {
+  const payload = (await response.json()) as ApiResponse<unknown>;
+
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.message ?? `Request failed with status ${response.status}.`);
+  }
+
+  if (typeof payload.data === 'string' && payload.data.length > 0) {
+    return payload.data;
+  }
+
+  if (payload.message) {
+    return payload.message;
+  }
+
+  return null;
+}
+
 export async function fetchSavedTracks(
   backendUrl: string,
   authSession: AuthSession,
@@ -81,4 +99,46 @@ export async function fetchLibraryPlaylists(
   });
 
   return parseApiResponse<LibraryPlaylistListResponse>(response);
+}
+
+export async function deleteSavedTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  id: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/saved-tracks/${id}`, {
+    method: 'DELETE',
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseMutationResponse(response);
+}
+
+export async function deleteSavedAlbum(
+  backendUrl: string,
+  authSession: AuthSession,
+  id: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/albums/saved/${id}`, {
+    method: 'DELETE',
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseMutationResponse(response);
+}
+
+export async function deleteLibraryPlaylist(
+  backendUrl: string,
+  authSession: AuthSession,
+  id: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${id}`, {
+    method: 'DELETE',
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseMutationResponse(response);
 }

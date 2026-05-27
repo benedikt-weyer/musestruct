@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -15,6 +16,9 @@ import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import {
+  deleteLibraryPlaylist,
+  deleteSavedAlbum,
+  deleteSavedTrack,
   fetchLibraryPlaylists,
   fetchSavedAlbums,
   fetchSavedTracks,
@@ -117,15 +121,19 @@ function EmptyLibraryState({
 }
 
 function TrackLibraryCard({
+  isRemoving,
   isCurrentTrack,
   isPlaying,
   onPlay,
+  onRemove,
   showFavouriteBadge,
   track,
 }: Readonly<{
+  isRemoving: boolean;
   isCurrentTrack: boolean;
   isPlaying: boolean;
   onPlay: (track: SavedTrack) => void;
+  onRemove: (track: SavedTrack) => void;
   showFavouriteBadge: boolean;
   track: SavedTrack;
 }>) {
@@ -171,22 +179,45 @@ function TrackLibraryCard({
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
-        onPress={() => {
-          onPlay(track);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-slate-700">
-          {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
-        </Text>
-      </Pressable>
+      <View className="mt-4 flex-row gap-3">
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+          onPress={() => {
+            onPlay(track);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-slate-700">
+            {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+          disabled={isRemoving}
+          onPress={() => {
+            onRemove(track);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-rose-700">
+            {isRemoving ? 'Removing...' : 'Remove'}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-function AlbumLibraryCard({ album }: Readonly<{ album: SavedAlbum }>) {
+function AlbumLibraryCard({
+  album,
+  isRemoving,
+  onRemove,
+}: Readonly<{
+  album: SavedAlbum;
+  isRemoving: boolean;
+  onRemove: (album: SavedAlbum) => void;
+}>) {
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
       <View className="flex-row gap-4">
@@ -216,11 +247,32 @@ function AlbumLibraryCard({ album }: Readonly<{ album: SavedAlbum }>) {
           <Text className="mt-2 text-xs text-slate-400">Saved {formatDate(album.created_at)}</Text>
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        className="mt-4 rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+        disabled={isRemoving}
+        onPress={() => {
+          onRemove(album);
+        }}
+      >
+        <Text className="text-center text-sm font-semibold text-rose-700">
+          {isRemoving ? 'Removing album...' : 'Remove album'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
-function PlaylistLibraryCard({ playlist }: Readonly<{ playlist: LibraryPlaylist }>) {
+function PlaylistLibraryCard({
+  isRemoving,
+  onRemove,
+  playlist,
+}: Readonly<{
+  isRemoving: boolean;
+  onRemove: (playlist: LibraryPlaylist) => void;
+  playlist: LibraryPlaylist;
+}>) {
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
       <View className="flex-row items-start justify-between gap-4">
@@ -242,6 +294,19 @@ function PlaylistLibraryCard({ playlist }: Readonly<{ playlist: LibraryPlaylist 
           </Text>
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        className="mt-4 rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+        disabled={isRemoving}
+        onPress={() => {
+          onRemove(playlist);
+        }}
+      >
+        <Text className="text-center text-sm font-semibold text-rose-700">
+          {isRemoving ? 'Deleting playlist...' : 'Delete playlist'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -282,18 +347,26 @@ function LibraryLoginState({
 function ActiveLibrarySection({
   activeSection,
   albums,
+  deletingItemKey,
   favouriteTracks,
   isPlaying,
   onPlayTrack,
+  onRemoveAlbum,
+  onRemovePlaylist,
+  onRemoveTrack,
   playlists,
   tracks,
   currentTrackKey,
 }: Readonly<{
   activeSection: LibrarySection;
   albums: SavedAlbum[];
+  deletingItemKey: string | null;
   favouriteTracks: SavedTrack[];
   isPlaying: boolean;
   onPlayTrack: (track: SavedTrack) => void;
+  onRemoveAlbum: (album: SavedAlbum) => void;
+  onRemovePlaylist: (playlist: LibraryPlaylist) => void;
+  onRemoveTrack: (track: SavedTrack) => void;
   playlists: LibraryPlaylist[];
   tracks: SavedTrack[];
   currentTrackKey: string | null;
@@ -305,7 +378,16 @@ function ActiveLibrarySection({
         title="No playlists yet"
       />
     ) : (
-      <>{playlists.map((playlist) => <PlaylistLibraryCard key={playlist.id} playlist={playlist} />)}</>
+      <>
+        {playlists.map((playlist) => (
+          <PlaylistLibraryCard
+            isRemoving={deletingItemKey === `playlist:${playlist.id}`}
+            key={playlist.id}
+            onRemove={onRemovePlaylist}
+            playlist={playlist}
+          />
+        ))}
+      </>
     );
   }
 
@@ -316,7 +398,16 @@ function ActiveLibrarySection({
         title="No albums in your library"
       />
     ) : (
-      <>{albums.map((album) => <AlbumLibraryCard key={album.id} album={album} />)}</>
+      <>
+        {albums.map((album) => (
+          <AlbumLibraryCard
+            album={album}
+            isRemoving={deletingItemKey === `album:${album.id}`}
+            key={album.id}
+            onRemove={onRemoveAlbum}
+          />
+        ))}
+      </>
     );
   }
 
@@ -330,10 +421,12 @@ function ActiveLibrarySection({
       <>
         {tracks.map((track) => (
           <TrackLibraryCard
+            isRemoving={deletingItemKey === `track:${track.id}`}
             isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
             isPlaying={isPlaying}
             key={track.id}
             onPlay={onPlayTrack}
+            onRemove={onRemoveTrack}
             showFavouriteBadge={false}
             track={track}
           />
@@ -351,10 +444,12 @@ function ActiveLibrarySection({
     <>
       {favouriteTracks.map((track) => (
         <TrackLibraryCard
+          isRemoving={deletingItemKey === `track:${track.id}`}
           isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
           isPlaying={isPlaying}
           key={track.id}
           onPlay={onPlayTrack}
+          onRemove={onRemoveTrack}
           showFavouriteBadge
           track={track}
         />
@@ -372,6 +467,7 @@ export function LibraryScreen() {
   const [albums, setAlbums] = useState<SavedAlbum[]>([]);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function loadLibrary() {
@@ -446,6 +542,107 @@ export function LibraryScreen() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to play track.');
     }
+  }
+
+  function handleRemoveTrack(track: SavedTrack) {
+    if (!authSession) {
+      return;
+    }
+
+    Alert.alert('Remove track', `Remove "${track.title}" from your library?`, [
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+      {
+        style: 'destructive',
+        text: 'Remove',
+        onPress: () => {
+          void (async () => {
+            const itemKey = `track:${track.id}`;
+            setDeletingItemKey(itemKey);
+
+            try {
+              await deleteSavedTrack(backendUrl, authSession, track.id);
+              setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id));
+              setErrorMessage(null);
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
+            } finally {
+              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+            }
+          })();
+        },
+      },
+    ]);
+  }
+
+  function handleRemoveAlbum(album: SavedAlbum) {
+    if (!authSession) {
+      return;
+    }
+
+    Alert.alert('Remove album', `Remove "${album.title}" from your library?`, [
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+      {
+        style: 'destructive',
+        text: 'Remove',
+        onPress: () => {
+          void (async () => {
+            const itemKey = `album:${album.id}`;
+            setDeletingItemKey(itemKey);
+
+            try {
+              await deleteSavedAlbum(backendUrl, authSession, album.id);
+              setAlbums((currentAlbums) => currentAlbums.filter((item) => item.id !== album.id));
+              setErrorMessage(null);
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : 'Failed to remove album.');
+            } finally {
+              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+            }
+          })();
+        },
+      },
+    ]);
+  }
+
+  function handleRemovePlaylist(playlist: LibraryPlaylist) {
+    if (!authSession) {
+      return;
+    }
+
+    Alert.alert('Delete playlist', `Delete playlist "${playlist.name}"?`, [
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+      {
+        style: 'destructive',
+        text: 'Delete',
+        onPress: () => {
+          void (async () => {
+            const itemKey = `playlist:${playlist.id}`;
+            setDeletingItemKey(itemKey);
+
+            try {
+              await deleteLibraryPlaylist(backendUrl, authSession, playlist.id);
+              setPlaylists((currentPlaylists) =>
+                currentPlaylists.filter((item) => item.id !== playlist.id),
+              );
+              setErrorMessage(null);
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : 'Failed to delete playlist.');
+            } finally {
+              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+            }
+          })();
+        },
+      },
+    ]);
   }
 
   return (
@@ -523,9 +720,13 @@ export function LibraryScreen() {
                   activeSection={activeSection}
                   albums={albums}
                   currentTrackKey={currentTrackKey}
+                  deletingItemKey={deletingItemKey}
                   favouriteTracks={favouriteTracks}
                   isPlaying={isPlaying}
                   onPlayTrack={handlePlayTrack}
+                  onRemoveAlbum={handleRemoveAlbum}
+                  onRemovePlaylist={handleRemovePlaylist}
+                  onRemoveTrack={handleRemoveTrack}
                   playlists={playlists}
                   tracks={tracks}
                 />
