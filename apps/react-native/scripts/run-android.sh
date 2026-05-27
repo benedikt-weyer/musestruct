@@ -6,6 +6,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 workspace_root="$(cd "$project_root/../.." && pwd)"
 android_dir="$project_root/android"
+local_backend_port="8080"
 
 resolve_dev_server_port() {
   local arg
@@ -196,6 +197,7 @@ cd "$project_root"
 run_android_args=(run-android "$@")
 
 ensure_adb_reverse "$dev_server_port"
+ensure_adb_reverse "$local_backend_port"
 
 if dev_server_status_ready "$dev_server_port"; then
   echo "Using existing Metro server on port ${dev_server_port}."

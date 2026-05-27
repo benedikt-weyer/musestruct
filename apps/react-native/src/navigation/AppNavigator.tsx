@@ -1,24 +1,23 @@
 import {
   DefaultTheme,
   NavigationContainer,
-  type RouteProp,
   type Theme,
 } from '@react-navigation/native';
 import {
   createBottomTabNavigator,
   type BottomTabNavigationOptions,
 } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+import type { RootStackParamList, RootTabParamList } from './types';
 import { HomeScreen } from '../screens/HomeScreen';
+import { LoginScreen } from '../screens/LoginScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
-type RootTabParamList = {
-  Home: undefined;
-  Settings: undefined;
-};
-
 const Tab = createBottomTabNavigator<RootTabParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function getTabIconName(routeName: keyof RootTabParamList, focused: boolean) {
   if (routeName === 'Home') {
@@ -31,7 +30,7 @@ function getTabIconName(routeName: keyof RootTabParamList, focused: boolean) {
 function createScreenOptions({
   route,
 }: {
-  route: RouteProp<RootTabParamList, keyof RootTabParamList>;
+  route: { name: keyof RootTabParamList };
 }): BottomTabNavigationOptions {
   return {
     headerShadowVisible: false,
@@ -60,6 +59,15 @@ function createScreenOptions({
   };
 }
 
+function RootTabs() {
+  return (
+    <Tab.Navigator screenOptions={createScreenOptions}>
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+    </Tab.Navigator>
+  );
+}
+
 const navigationTheme: Theme = {
   ...DefaultTheme,
   colors: {
@@ -75,16 +83,15 @@ const navigationTheme: Theme = {
 export function AppNavigator() {
   return (
     <NavigationContainer theme={navigationTheme}>
-      <Tab.Navigator
-        screenOptions={createScreenOptions}
-      >
-        <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: 'Settings' }}
+      <Stack.Navigator>
+        <Stack.Screen component={RootTabs} name="Tabs" options={{ headerShown: false }} />
+        <Stack.Screen component={LoginScreen} name="Login" options={{ title: 'Login' }} />
+        <Stack.Screen
+          component={RegisterScreen}
+          name="Register"
+          options={{ title: 'Register' }}
         />
-      </Tab.Navigator>
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }
