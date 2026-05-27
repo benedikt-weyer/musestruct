@@ -1,0 +1,9 @@
+{
+  "name": "@musestruct/docs",
+  "private": true,
+  "scripts": {
+    "dev": "uv run --with-requirements requirements.txt mkdocs serve -f mkdocs.yml -a 127.0.0.1:8000",
+    "build": "uv run --with-requirements requirements.txt mkdocs build --strict -f mkdocs.yml",
+    "check": "uv run --with-requirements requirements.txt mkdocs build --strict -f mkdocs.yml"
+  }
+}

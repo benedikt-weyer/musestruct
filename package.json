@@ -10,9 +10,11 @@
     "backend": "turbo run dev --filter=@musestruct/backend",
     "flutter": "turbo run dev --filter=@musestruct/flutter",
     "react-native": "turbo run dev --filter=@musestruct/react-native",
+    "docs": "turbo run dev --filter=@musestruct/docs",
     "android": "turbo run android --filter=@musestruct/react-native",
     "ios": "turbo run ios --filter=@musestruct/react-native",
     "build": "turbo run build",
+    "docs:build": "turbo run build --filter=@musestruct/docs",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "check": "turbo run check"

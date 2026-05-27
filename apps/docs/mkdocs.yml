@@ -1,0 +1,25 @@
+site_name: Musestruct Docs
+site_description: Setup and integration guides for the Musestruct workspace.
+site_url: https://benedikt-weyer.github.io/musestruct/
+repo_name: musestruct
+repo_url: https://github.com/benedikt-weyer/musestruct
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+nav:
+  - Overview: index.md
+  - Setup Overview: setup-overview.md
+  - Providers:
+      - Spotify: providers/spotify.md
+      - Tidal: providers/tidal.md
+  - Sources:
+      - Server / Local Source: sources/server-local.md
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true

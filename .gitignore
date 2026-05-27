@@ -122,6 +122,7 @@ app.*.symbols
 
 node_modules/
 .turbo/
+apps/docs/site/
 
 apps/backend/cache/*
 
