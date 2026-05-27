@@ -217,8 +217,8 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   override fun onAudioFocusChange(focusChange: Int) {
     when (focusChange) {
       AudioManager.AUDIOFOCUS_LOSS,
-      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> pausePlayback()
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pausePlayback()
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> Unit
     }
   }
 
@@ -408,12 +408,6 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   private fun playPlayback() {
-    if (!requestAudioFocus()) {
-      errorMessage = "Playback could not start."
-      publishStatus()
-      return
-    }
-
     tidalPlaybackSession?.let { tidalSession ->
       try {
         tidalSession.play()
@@ -434,6 +428,12 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
         updateNotification()
         publishStatus()
       }
+      return
+    }
+
+    if (!requestAudioFocus()) {
+      errorMessage = "Playback could not start."
+      publishStatus()
       return
     }
 
