@@ -177,10 +177,32 @@ export async function fetchSpotifyAuthUrl(
   return parseApiResponse<SpotifyAuthUrlResponse>(response);
 }
 
+export async function fetchTidalAuthUrl(
+  backendUrl: string,
+  authSession: AuthSession,
+  redirectUrl?: string,
+): Promise<SpotifyAuthUrlResponse> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams();
+
+  if (redirectUrl) {
+    searchParams.set('redirect_url', redirectUrl);
+  }
+
+  const requestUrl = searchParams.size
+    ? `${normalizedUrl}/api/streaming/tidal/auth-url?${searchParams.toString()}`
+    : `${normalizedUrl}/api/streaming/tidal/auth-url`;
+  const response = await fetch(requestUrl, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<SpotifyAuthUrlResponse>(response);
+}
+
 export async function disconnectStreamingProvider(
   backendUrl: string,
   authSession: AuthSession,
-  serviceName: 'qobuz' | 'spotify',
+  serviceName: 'qobuz' | 'spotify' | 'tidal',
 ) {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
   const response = await fetch(`${normalizedUrl}/api/streaming/disconnect`, {

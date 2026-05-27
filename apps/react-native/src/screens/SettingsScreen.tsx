@@ -27,11 +27,13 @@ import {
   disconnectStreamingProvider,
   fetchServiceStatus,
   fetchSpotifyAuthUrl,
+  fetchTidalAuthUrl,
 } from '../services/streamingLibraryApi';
 import type { AuthSession } from '../types/auth';
 import type { ConnectedServiceInfo } from '../types/streaming';
 
 const SPOTIFY_APP_REDIRECT_URL = 'musestruct://spotify';
+const TIDAL_APP_REDIRECT_URL = 'musestruct://tidal';
 
 type NativeError = Error & {
   code?: string;
@@ -48,6 +50,18 @@ function showConnectionToast(message: string, isError: boolean) {
   }
 
   Alert.alert(isError ? 'Connection failed' : 'Connection successful', message);
+}
+
+function getFolderButtonLabel(isPickingFolder: boolean, selectedFolder: unknown) {
+  if (isPickingFolder) {
+    return 'Opening folder picker…';
+  }
+
+  if (selectedFolder) {
+    return 'Change music folder';
+  }
+
+  return 'Choose music folder';
 }
 
 type ProviderActionButtonProps = {
@@ -202,6 +216,50 @@ function SpotifyProviderCard({
   );
 }
 
+type TidalProviderCardProps = {
+  busyConnecting: boolean;
+  busyDisconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  provider: ConnectedServiceInfo | null;
+};
+
+function TidalProviderCard({
+  busyConnecting,
+  busyDisconnecting,
+  onConnect,
+  onDisconnect,
+  provider,
+}: Readonly<TidalProviderCardProps>) {
+  const isConnected = provider?.is_connected === true;
+  const description = isConnected
+    ? provider?.account_username ?? 'Connected'
+    : 'Open Tidal authorization in your browser, then return here and refresh status.';
+
+  return (
+    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950">
+      <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">Tidal</Text>
+      <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</Text>
+
+      {isConnected ? (
+        <ProviderActionButton
+          busy={busyDisconnecting}
+          label="Disconnect Tidal"
+          onPress={onDisconnect}
+          tone="secondary"
+        />
+      ) : (
+        <ProviderActionButton
+          busy={busyConnecting}
+          label="Connect Tidal"
+          onPress={onConnect}
+          tone="primary"
+        />
+      )}
+    </View>
+  );
+}
+
 type ProviderSettingsCardProps = {
   authSession: AuthSession | null;
   backendUrl: string;
@@ -213,7 +271,7 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
   const [qobuzUsername, setQobuzUsername] = useState('');
   const [qobuzPassword, setQobuzPassword] = useState('');
   const [providerAction, setProviderAction] = useState<string | null>(null);
-  const lastHandledSpotifyUrlRef = useRef<string | null>(null);
+  const lastHandledProviderUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!authSession) {
@@ -226,8 +284,8 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
   }, [authSession, backendUrl]);
 
   useEffect(() => {
-    async function handleSpotifyRedirect(url: string | null) {
-      if (!url || lastHandledSpotifyUrlRef.current === url) {
+    async function handleProviderRedirect(url: string | null) {
+      if (!url || lastHandledProviderUrlRef.current === url) {
         return;
       }
 
@@ -239,33 +297,40 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
         return;
       }
 
-      if (parsedUrl.protocol !== 'musestruct:' || parsedUrl.hostname !== 'spotify') {
+      if (parsedUrl.protocol !== 'musestruct:') {
         return;
       }
 
-      lastHandledSpotifyUrlRef.current = url;
+      const providerName = parsedUrl.hostname;
+
+      if (providerName !== 'spotify' && providerName !== 'tidal') {
+        return;
+      }
+
+      lastHandledProviderUrlRef.current = url;
       const status = parsedUrl.searchParams.get('status');
       const message = parsedUrl.searchParams.get('message');
+      const providerLabel = providerName === 'tidal' ? 'Tidal' : 'Spotify';
 
       if (status === 'success') {
         await loadProviderStatus(false);
-        showConnectionToast(message ?? 'Spotify connected successfully.', false);
+        showConnectionToast(message ?? `${providerLabel} connected successfully.`, false);
         return;
       }
 
       if (status === 'error') {
-        const errorMessage = message ?? 'Spotify authorization failed.';
+        const errorMessage = message ?? `${providerLabel} authorization failed.`;
         setProviderErrorMessage(errorMessage);
         showConnectionToast(errorMessage, true);
       }
     }
 
     const subscription = Linking.addEventListener('url', (event) => {
-      void handleSpotifyRedirect(event.url);
+      void handleProviderRedirect(event.url);
     });
 
     void Linking.getInitialURL().then((initialUrl) => {
-      void handleSpotifyRedirect(initialUrl);
+      void handleProviderRedirect(initialUrl);
     });
 
     return () => {
@@ -372,7 +437,35 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
     }
   }
 
-  async function handleDisconnectProvider(serviceName: 'qobuz' | 'spotify') {
+  async function handleConnectTidal() {
+    if (!authSession) {
+      showConnectionToast('Please log in before connecting a provider.', true);
+      return;
+    }
+
+    const actionName = 'connect-tidal';
+    setProviderAction(actionName);
+    setProviderErrorMessage(null);
+
+    try {
+      const response = await fetchTidalAuthUrl(backendUrl, authSession, TIDAL_APP_REDIRECT_URL);
+      await Linking.openURL(response.auth_url);
+      showConnectionToast(
+        'Complete Tidal authorization in your browser. The app will reopen automatically.',
+        false,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start Tidal authorization.';
+      setProviderErrorMessage(message);
+      showConnectionToast(message, true);
+    } finally {
+      setProviderAction((currentAction) =>
+        currentAction === actionName ? null : currentAction,
+      );
+    }
+  }
+
+  async function handleDisconnectProvider(serviceName: 'qobuz' | 'spotify' | 'tidal') {
     if (!authSession) {
       showConnectionToast('Please log in before disconnecting a provider.', true);
       return;
@@ -399,6 +492,7 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
 
   const qobuzProvider = providerStatus.find((service) => service.name === 'qobuz') ?? null;
   const spotifyProvider = providerStatus.find((service) => service.name === 'spotify') ?? null;
+  const tidalProvider = providerStatus.find((service) => service.name === 'tidal') ?? null;
 
   return (
     <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
@@ -449,6 +543,18 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
             provider={spotifyProvider}
           />
 
+          <TidalProviderCard
+            busyConnecting={providerAction === 'connect-tidal'}
+            busyDisconnecting={providerAction === 'disconnect-tidal'}
+            onConnect={() => {
+              void handleConnectTidal();
+            }}
+            onDisconnect={() => {
+              void handleDisconnectProvider('tidal');
+            }}
+            provider={tidalProvider}
+          />
+
           {providerErrorMessage ? (
             <View className="mt-4 rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4">
               <Text className="text-sm font-semibold text-rose-900">Provider connection failed</Text>
@@ -484,17 +590,11 @@ export function SettingsScreen() {
   const [connectionTone, setConnectionTone] = useState<'success' | 'error' | null>(null);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const isDarkMode = themePreference === 'dark';
-  let folderButtonLabel = 'Choose music folder';
+  const folderButtonLabel = getFolderButtonLabel(isPickingFolder, selectedFolder);
 
   useEffect(() => {
     setBackendUrlInput(backendUrl);
   }, [backendUrl]);
-
-  if (isPickingFolder) {
-    folderButtonLabel = 'Opening folder picker…';
-  } else if (selectedFolder) {
-    folderButtonLabel = 'Change music folder';
-  }
 
   async function handleSelectFolder() {
     setIsPickingFolder(true);

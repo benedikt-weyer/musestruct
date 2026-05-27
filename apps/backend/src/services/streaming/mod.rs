@@ -1,11 +1,13 @@
 pub mod qobuz;
 pub mod spotify;
+pub mod tidal;
 pub mod local;
 pub mod interface;
 
 pub use interface::*;
 pub use qobuz::*;
 pub use spotify::*;
+pub use tidal::*;
 pub use local::*;
 
 use serde::{Deserialize, Serialize};

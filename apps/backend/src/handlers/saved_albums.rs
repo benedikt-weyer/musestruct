@@ -10,10 +10,10 @@ use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::{
-    handlers::streaming::get_valid_spotify_tokens,
+    handlers::streaming::{get_valid_spotify_tokens, get_valid_tidal_tokens},
     handlers::auth::{AppState, ApiResponse},
     models::{SavedAlbumEntity, UserResponseDto, StreamingServiceEntity, StreamingServiceColumn},
-    services::streaming::{StreamingTrack, QobuzService, SpotifyService, LocalMusicService, StreamingService},
+    services::streaming::{LocalMusicService, QobuzService, SpotifyService, StreamingService, StreamingTrack, TidalService},
 };
 
 #[derive(Deserialize, Debug)]
@@ -102,6 +102,20 @@ async fn get_authenticated_streaming_service(
 
             Ok(Box::new(
                 SpotifyService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
+            ))
+        },
+        "tidal" => {
+            let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+            let client_secret = std::env::var("TIDAL_CLIENT_SECRET").unwrap_or_default();
+
+            if client_id.is_empty() {
+                return Err("Tidal client ID not configured".to_string());
+            }
+
+            let (access_token, refresh_token) = get_valid_tidal_tokens(user_id, db).await?;
+
+            Ok(Box::new(
+                TidalService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
             ))
         },
         "server" => {

@@ -22,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token, get_playlist_tracks, stream_local_file, stream_local_cover};
+use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_tidal_auth_url, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, tidal_callback, transfer_spotify_playback};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, get_playlist as get_new_playlist, update_playlist, delete_playlist, get_playlist_items, add_playlist_item, remove_playlist_item, reorder_playlist_item};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
@@ -174,6 +174,7 @@ async fn main() -> Result<()> {
         .route("/api/streaming/connect/qobuz", post(connect_qobuz))
         .route("/api/streaming/connect/spotify", post(connect_spotify))
         .route("/api/streaming/spotify/auth-url", get(get_spotify_auth_url))
+        .route("/api/streaming/tidal/auth-url", get(get_tidal_auth_url))
         .route("/api/streaming/spotify/transfer", post(transfer_spotify_playback))
         .route("/api/streaming/spotify/token", get(get_spotify_access_token))
         .route("/api/streaming/spotify/refresh", post(refresh_spotify_token))
@@ -224,6 +225,7 @@ async fn main() -> Result<()> {
         .route("/api/auth/register", post(register))
         .route("/api/auth/login", post(login))
         .route("/api/streaming/spotify/callback", get(spotify_callback))
+        .route("/api/streaming/tidal/callback", get(tidal_callback))
         .route("/health", get(health_check))
         // Local file streaming (public for audio streaming)
         .route("/api/stream/local/{*file_path}", get(stream_local_file))

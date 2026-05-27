@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
 
-use crate::services::streaming::{QobuzService, SpotifyService, LocalMusicService, StreamingService, SearchResults, StreamingTrack};
+use crate::services::streaming::{LocalMusicService, QobuzService, SearchResults, SpotifyService, StreamingService, StreamingTrack, TidalService};
 use crate::services::streaming_service::StreamingService as BackendStreamingService;
 use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
 use crate::handlers::auth::{AppState, ApiResponse};
@@ -46,6 +46,13 @@ fn get_streaming_service(service_name: &str) -> Result<Box<dyn StreamingService>
             let service = SpotifyService::new(
                 std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default(),
                 std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default(),
+            );
+            Ok(Box::new(service))
+        },
+        "tidal" => {
+            let service = TidalService::new(
+                std::env::var("TIDAL_CLIENT_ID").unwrap_or_default(),
+                std::env::var("TIDAL_CLIENT_SECRET").unwrap_or_default(),
             );
             Ok(Box::new(service))
         },
@@ -108,6 +115,20 @@ async fn get_authenticated_streaming_service(
                 SpotifyService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
             ))
         },
+        "tidal" => {
+            let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+            let client_secret = std::env::var("TIDAL_CLIENT_SECRET").unwrap_or_default();
+
+            if client_id.is_empty() {
+                return Err("Tidal client ID not configured".to_string());
+            }
+
+            let (access_token, refresh_token) = get_valid_tidal_tokens(user_id, db).await?;
+
+            Ok(Box::new(
+                TidalService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
+            ))
+        },
         "server" => {
             // Server service doesn't require authentication, just return the service
             let music_dir = std::env::current_dir()
@@ -124,6 +145,20 @@ struct SpotifyTokenRefreshResult {
     access_token: String,
     refresh_token: Option<String>,
     expires_in: i64,
+}
+
+struct TidalTokenRefreshResult {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TidalTokenExchangeResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: Option<i64>,
+    user_id: Option<serde_json::Value>,
 }
 
 async fn request_spotify_token_refresh(refresh_token: &str) -> Result<SpotifyTokenRefreshResult, String> {
@@ -229,6 +264,333 @@ pub(crate) async fn get_valid_spotify_tokens(
         .update(db)
         .await
         .map_err(|error| format!("Failed to update Spotify credentials: {}", error))?;
+
+    Ok((refreshed_tokens.access_token, next_refresh_token))
+}
+
+fn normalize_tidal_scopes() -> String {
+    std::env::var("TIDAL_SCOPES")
+        .unwrap_or_default()
+        .split(|character: char| character == ',' || character.is_whitespace())
+        .filter(|scope| !scope.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn resolve_tidal_redirect_uri(headers: &HeaderMap) -> String {
+    match std::env::var("TIDAL_REDIRECT_URI") {
+        Ok(redirect_uri) if !redirect_uri.trim().is_empty() => redirect_uri,
+        _ => {
+            let host = header_string(headers, "x-forwarded-host")
+                .or_else(|| headers.get(header::HOST).and_then(|value| value.to_str().ok()).map(|value| value.to_string()))
+                .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+            let scheme = header_string(headers, "x-forwarded-proto")
+                .unwrap_or_else(|| infer_request_scheme(&host).to_string());
+
+            format!("{}://{}/api/streaming/tidal/callback", scheme, host)
+        }
+    }
+}
+
+fn encode_tidal_state(
+    user_id: uuid::Uuid,
+    code_verifier: &str,
+    client_redirect_url: Option<&str>,
+) -> String {
+    let nonce = uuid::Uuid::new_v4();
+    let encoded_verifier = base64::encode(code_verifier);
+    let encoded_redirect_url = client_redirect_url.map(base64::encode).unwrap_or_default();
+
+    format!("{}:{}:{}:{}", nonce, user_id, encoded_verifier, encoded_redirect_url)
+}
+
+fn decode_tidal_state(state: &str) -> Result<(uuid::Uuid, String, Option<String>), String> {
+    let mut parts = state.splitn(4, ':');
+
+    let _nonce = parts
+        .next()
+        .ok_or_else(|| "Invalid state parameter format received from Tidal.".to_string())?;
+
+    let user_id = parts
+        .next()
+        .ok_or_else(|| "Invalid state parameter format received from Tidal.".to_string())
+        .and_then(|user_id_str| {
+            uuid::Uuid::parse_str(user_id_str)
+                .map_err(|_| "Invalid state parameter received from Tidal.".to_string())
+        })?;
+
+    let encoded_verifier = parts
+        .next()
+        .ok_or_else(|| "Invalid state parameter format received from Tidal.".to_string())?;
+    let verifier_bytes = base64::decode(encoded_verifier)
+        .map_err(|_| "Invalid state parameter format received from Tidal.".to_string())?;
+    let code_verifier = String::from_utf8(verifier_bytes)
+        .map_err(|_| "Invalid state parameter format received from Tidal.".to_string())?;
+
+    let client_redirect_url = match parts.next() {
+        Some(encoded_redirect_url) if !encoded_redirect_url.is_empty() => {
+            let decoded_bytes = base64::decode(encoded_redirect_url)
+                .map_err(|_| "Invalid state parameter format received from Tidal.".to_string())?;
+            let decoded_redirect_url = String::from_utf8(decoded_bytes)
+                .map_err(|_| "Invalid state parameter format received from Tidal.".to_string())?;
+            normalize_client_redirect_url(Some(decoded_redirect_url))?
+        }
+        _ => None,
+    };
+
+    Ok((user_id, code_verifier, client_redirect_url))
+}
+
+fn build_tidal_app_redirect_url(base_redirect_url: &str, status: &str, message: &str) -> String {
+    let separator = if base_redirect_url.contains('?') { '&' } else { '?' };
+    format!(
+        "{}{separator}status={}&message={}&service=tidal",
+        base_redirect_url,
+        urlencoding::encode(status),
+        urlencoding::encode(message),
+    )
+}
+
+fn build_tidal_app_redirect_html(target_url: &str, title: &str, message: &str, accent_color: &str) -> String {
+    format!(
+        r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+    <meta http-equiv="refresh" content="0;url={}">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, {} 0%, #0f172a 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .container {{
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+        }}
+        h1 {{
+            color: #0f172a;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #475569;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }}
+        .open-btn {{
+            display: inline-block;
+            background: {};
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+        }}
+    </style>
+    <script>
+        window.location.replace({});
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>{}</h1>
+        <p>{}</p>
+        <a class="open-btn" href="{}">Return to the app</a>
+    </div>
+</body>
+</html>
+        "#,
+        title,
+        target_url,
+        accent_color,
+        accent_color,
+        serde_json::to_string(target_url).unwrap_or_else(|_| "\"\"".to_string()),
+        title,
+        message,
+        target_url,
+    )
+}
+
+fn tidal_error_page(title: &str, message: &str, accent_color: &str) -> String {
+    format!(
+        r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, {} 0%, #0f172a 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .container {{
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+        }}
+        h1 {{
+            color: {};
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #475569;
+            margin: 0;
+            line-height: 1.5;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{}</h1>
+        <p>{}</p>
+    </div>
+</body>
+</html>
+        "#,
+        title,
+        accent_color,
+        accent_color,
+        title,
+        message,
+    )
+}
+
+async fn request_tidal_token_refresh(refresh_token: &str) -> Result<TidalTokenRefreshResult, String> {
+    let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+    let client_secret = std::env::var("TIDAL_CLIENT_SECRET").unwrap_or_default();
+    let client_unique_key = std::env::var("TIDAL_CLIENT_UNIQUE_KEY").unwrap_or_default();
+    let scopes = normalize_tidal_scopes();
+
+    if client_id.is_empty() {
+        return Err("Tidal client ID not configured".to_string());
+    }
+
+    let mut form = vec![
+        ("client_id", client_id.clone()),
+        ("grant_type", "refresh_token".to_string()),
+        ("refresh_token", refresh_token.to_string()),
+    ];
+
+    if !client_secret.is_empty() {
+        form.push(("client_secret", client_secret));
+    }
+
+    if !client_unique_key.is_empty() {
+        form.push(("client_unique_key", client_unique_key));
+    }
+
+    if !scopes.is_empty() {
+        form.push(("scope", scopes));
+    }
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://auth.tidal.com/v1/oauth2/token")
+        .form(&form)
+        .send()
+        .await
+        .map_err(|error| format!("Failed to refresh Tidal token: {}", error))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("Tidal token refresh error: {}", error_text));
+    }
+
+    let token_response: TidalTokenExchangeResponse = response
+        .json()
+        .await
+        .map_err(|error| format!("Failed to parse Tidal token refresh response: {}", error))?;
+
+    Ok(TidalTokenRefreshResult {
+        access_token: token_response.access_token,
+        refresh_token: token_response.refresh_token,
+        expires_in: token_response.expires_in.unwrap_or(3600),
+    })
+}
+
+pub(crate) async fn get_valid_tidal_tokens(
+    user_id: uuid::Uuid,
+    db: &sea_orm::DatabaseConnection,
+) -> Result<(String, Option<String>), String> {
+    let user_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user_id))
+        .filter(StreamingServiceColumn::ServiceName.eq("tidal"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(db)
+        .await
+        .map_err(|error| format!("Database error: {}", error))?;
+
+    let service = user_service.ok_or_else(|| {
+        "Tidal service not connected for this user. Please connect to Tidal first.".to_string()
+    })?;
+
+    let should_refresh = service.access_token.is_none()
+        || service
+            .expires_at
+            .map(|expires_at| expires_at <= (chrono::Utc::now() + chrono::Duration::seconds(60)).naive_utc())
+            .unwrap_or(false);
+
+    if !should_refresh {
+        return Ok((
+            service
+                .access_token
+                .ok_or_else(|| "No access token found for Tidal service".to_string())?,
+            service.refresh_token,
+        ));
+    }
+
+    let existing_refresh_token = service
+        .refresh_token
+        .clone()
+        .ok_or_else(|| "Tidal access token expired and no refresh token is available. Please reconnect Tidal.".to_string())?;
+    let refreshed_tokens = request_tidal_token_refresh(&existing_refresh_token).await?;
+    let next_refresh_token = refreshed_tokens
+        .refresh_token
+        .clone()
+        .or_else(|| Some(existing_refresh_token.clone()));
+    let expires_at = Some(
+        (chrono::Utc::now() + chrono::Duration::seconds(refreshed_tokens.expires_in)).naive_utc(),
+    );
+
+    let mut active_service: StreamingServiceActiveModel = service.into();
+    active_service.access_token = Set(Some(refreshed_tokens.access_token.clone()));
+    active_service.refresh_token = Set(next_refresh_token.clone());
+    active_service.expires_at = Set(expires_at);
+    active_service.is_active = Set(true);
+    active_service
+        .update(db)
+        .await
+        .map_err(|error| format!("Failed to update Tidal credentials: {}", error))?;
 
     Ok((refreshed_tokens.access_token, next_refresh_token))
 }
@@ -437,7 +799,19 @@ pub struct SpotifyAuthUrlQuery {
 }
 
 #[derive(Deserialize)]
+pub struct TidalAuthUrlQuery {
+    pub redirect_url: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct SpotifyCallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct TidalCallbackQuery {
     pub code: Option<String>,
     pub state: Option<String>,
     pub error: Option<String>,
@@ -788,6 +1162,70 @@ pub async fn get_spotify_auth_url(
 
     Ok(Json(ApiResponse::success(SpotifyAuthUrlResponse {
         auth_url,
+        state,
+    })))
+}
+
+pub async fn get_tidal_auth_url(
+    State(_state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Query(query): Query<TidalAuthUrlQuery>,
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<SpotifyAuthUrlResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+    let redirect_uri = resolve_tidal_redirect_uri(&headers);
+    let client_unique_key = std::env::var("TIDAL_CLIENT_UNIQUE_KEY").unwrap_or_default();
+    let scopes = normalize_tidal_scopes();
+    let client_redirect_url = normalize_client_redirect_url(query.redirect_url).map_err(|error| {
+        (StatusCode::BAD_REQUEST, Json(ApiResponse::<()>::error(error)))
+    })?;
+
+    if client_id.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error("Tidal client ID not configured".to_string())),
+        ));
+    }
+
+    let code_verifier = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let code_challenge = {
+        use base64::Engine as _;
+        use sha2::{Digest, Sha256};
+
+        let digest = Sha256::digest(code_verifier.as_bytes());
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
+    };
+    let state = encode_tidal_state(user.id, &code_verifier, client_redirect_url.as_deref());
+
+    let mut params = vec![
+        ("response_type".to_string(), "code".to_string()),
+        ("client_id".to_string(), client_id),
+        ("redirect_uri".to_string(), redirect_uri),
+        ("code_challenge".to_string(), code_challenge),
+        ("code_challenge_method".to_string(), "S256".to_string()),
+        ("state".to_string(), state.clone()),
+    ];
+
+    if !client_unique_key.is_empty() {
+        params.push(("client_unique_key".to_string(), client_unique_key));
+    }
+
+    if !scopes.is_empty() {
+        params.push(("scope".to_string(), scopes));
+    }
+
+    let auth_query = params
+        .into_iter()
+        .map(|(key, value)| format!("{}={}", key, urlencoding::encode(&value)))
+        .collect::<Vec<_>>()
+        .join("&");
+
+    Ok(Json(ApiResponse::success(SpotifyAuthUrlResponse {
+        auth_url: format!("https://login.tidal.com/authorize?{}", auth_query),
         state,
     })))
 }
@@ -1335,6 +1773,220 @@ pub async fn spotify_callback(
     }
 }
 
+pub async fn tidal_callback(
+    State(state): State<AppState>,
+    Query(params): Query<TidalCallbackQuery>,
+    headers: HeaderMap,
+) -> Result<Html<String>, (StatusCode, Html<String>)> {
+    if let Some(error) = params.error {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Html(tidal_error_page(
+                "Tidal Authorization Error",
+                &format!("Tidal authorization failed: {}", error),
+                "#0f766e",
+            )),
+        ));
+    }
+
+    let code = params.code.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Html(tidal_error_page(
+                "Tidal Connection Error",
+                "No authorization code was returned by Tidal.",
+                "#ef4444",
+            )),
+        )
+    })?;
+
+    let state_param = params.state.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Html(tidal_error_page(
+                "Tidal Connection Error",
+                "No state parameter was returned by Tidal.",
+                "#ef4444",
+            )),
+        )
+    })?;
+
+    let (user_id, code_verifier, client_redirect_url) = decode_tidal_state(&state_param).map_err(|error| {
+        (
+            StatusCode::BAD_REQUEST,
+            Html(tidal_error_page("Tidal Connection Error", &error, "#ef4444")),
+        )
+    })?;
+
+    let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+    let client_secret = std::env::var("TIDAL_CLIENT_SECRET").unwrap_or_default();
+    let client_unique_key = std::env::var("TIDAL_CLIENT_UNIQUE_KEY").unwrap_or_default();
+    let scopes = normalize_tidal_scopes();
+    let redirect_uri = resolve_tidal_redirect_uri(&headers);
+
+    if client_id.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html(tidal_error_page(
+                "Tidal Configuration Error",
+                "Tidal client ID is not configured on the backend.",
+                "#ef4444",
+            )),
+        ));
+    }
+
+    let mut form = vec![
+        ("client_id", client_id),
+        ("code", code),
+        ("code_verifier", code_verifier),
+        ("grant_type", "authorization_code".to_string()),
+        ("redirect_uri", redirect_uri),
+    ];
+
+    if !client_secret.is_empty() {
+        form.push(("client_secret", client_secret));
+    }
+
+    if !client_unique_key.is_empty() {
+        form.push(("client_unique_key", client_unique_key));
+    }
+
+    if !scopes.is_empty() {
+        form.push(("scope", scopes));
+    }
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://auth.tidal.com/v1/oauth2/token")
+        .form(&form)
+        .send()
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(tidal_error_page(
+                    "Tidal Connection Error",
+                    &format!("Failed to exchange Tidal authorization code: {}", error),
+                    "#ef4444",
+                )),
+            )
+        })?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Html(tidal_error_page(
+                "Tidal Connection Error",
+                &format!("Tidal token exchange failed: {}", error_text),
+                "#ef4444",
+            )),
+        ));
+    }
+
+    let token_response: TidalTokenExchangeResponse = response.json().await.map_err(|error| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Html(tidal_error_page(
+                "Tidal Connection Error",
+                &format!("Failed to parse Tidal token response: {}", error),
+                "#ef4444",
+            )),
+        )
+    })?;
+
+    let account_username = token_response.user_id.as_ref().and_then(|value| {
+        value
+            .as_str()
+            .map(|text| text.to_string())
+            .or_else(|| value.as_i64().map(|number| number.to_string()))
+    });
+    let expires_at = token_response
+        .expires_in
+        .map(|expires_in| (chrono::Utc::now() + chrono::Duration::seconds(expires_in)).naive_utc());
+
+    let existing_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user_id))
+        .filter(StreamingServiceColumn::ServiceName.eq("tidal"))
+        .one(state.db())
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(tidal_error_page(
+                    "Tidal Connection Error",
+                    &format!("Database error: {}", error),
+                    "#ef4444",
+                )),
+            )
+        })?;
+
+    match existing_service {
+        Some(existing) => {
+            let mut service: StreamingServiceActiveModel = existing.into();
+            service.access_token = Set(Some(token_response.access_token.clone()));
+            service.refresh_token = Set(token_response.refresh_token.clone());
+            service.expires_at = Set(expires_at);
+            service.account_username = Set(account_username.clone());
+            service.is_active = Set(true);
+            service.update(state.db()).await.map_err(|error| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Html(tidal_error_page(
+                        "Tidal Connection Error",
+                        &format!("Failed to update Tidal connection: {}", error),
+                        "#ef4444",
+                    )),
+                )
+            })?;
+        }
+        None => {
+            let new_service = StreamingServiceActiveModel {
+                user_id: Set(user_id),
+                service_name: Set("tidal".to_string()),
+                access_token: Set(Some(token_response.access_token.clone())),
+                refresh_token: Set(token_response.refresh_token.clone()),
+                expires_at: Set(expires_at),
+                account_username: Set(account_username.clone()),
+                is_active: Set(true),
+                ..Default::default()
+            };
+
+            new_service.insert(state.db()).await.map_err(|error| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Html(tidal_error_page(
+                        "Tidal Connection Error",
+                        &format!("Failed to save Tidal connection: {}", error),
+                        "#ef4444",
+                    )),
+                )
+            })?;
+        }
+    }
+
+    if let Some(app_redirect_url) = client_redirect_url {
+        let target_url = build_tidal_app_redirect_url(
+            &app_redirect_url,
+            "success",
+            "Tidal connected successfully.",
+        );
+        let html = build_tidal_app_redirect_html(
+            &target_url,
+            "Tidal Connected",
+            "Tidal authorization succeeded. Returning to the app.",
+            "#0f766e",
+        );
+        return Ok(Html(html));
+    }
+
+    Ok(Html(tidal_error_page(
+        "Tidal Connected",
+        "Tidal authorization completed successfully. You can close this window.",
+        "#0f766e",
+    )))
+}
+
 async fn exchange_spotify_code(
     code: &str,
     redirect_uri: &str,
@@ -1599,6 +2251,12 @@ pub async fn get_available_services(
             requires_premium: false,
         },
         ServiceInfo {
+            name: "tidal".to_string(),
+            display_name: "Tidal".to_string(),
+            supports_full_tracks: false,
+            requires_premium: true,
+        },
+        ServiceInfo {
             name: "server".to_string(),
             display_name: "Server".to_string(),
             supports_full_tracks: true,
@@ -1639,6 +2297,11 @@ pub async fn get_service_status(
         Err(_) => false,
     };
 
+    let tidal_connected = match get_authenticated_streaming_service("tidal", user.id, state.db()).await {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
     // Get connection timestamps from database
     let qobuz_service = StreamingServiceEntity::find()
         .filter(StreamingServiceColumn::UserId.eq(user.id))
@@ -1662,6 +2325,17 @@ pub async fn get_service_status(
             Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
         ))?;
 
+    let tidal_service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("tidal"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|e| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e)))
+        ))?;
+
     let services = vec![
         ConnectedServiceInfo {
             name: "qobuz".to_string(),
@@ -1676,6 +2350,13 @@ pub async fn get_service_status(
             is_connected: spotify_connected,
             connected_at: spotify_service.as_ref().map(|s| s.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
             account_username: spotify_service.as_ref().and_then(|s| s.account_username.clone()),
+        },
+        ConnectedServiceInfo {
+            name: "tidal".to_string(),
+            display_name: "Tidal".to_string(),
+            is_connected: tidal_connected,
+            connected_at: tidal_service.as_ref().map(|s| s.created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
+            account_username: tidal_service.as_ref().and_then(|s| s.account_username.clone()),
         },
         ConnectedServiceInfo {
             name: "server".to_string(),
@@ -1702,7 +2383,7 @@ pub async fn disconnect_service(
     let service_name = &request.service_name;
     
     // Validate service name
-    if service_name != "qobuz" && service_name != "spotify" {
+    if service_name != "qobuz" && service_name != "spotify" && service_name != "tidal" {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::<()>::error("Invalid service name".to_string())),
