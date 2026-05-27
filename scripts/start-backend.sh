@@ -14,4 +14,4 @@ sleep 2
 
 # Start cargo watch for hot-reload development
 echo "Starting cargo watch for hot-reload development..."
-cargo watch -C apps/backend -x run
+cargo-watch -C apps/backend -x run

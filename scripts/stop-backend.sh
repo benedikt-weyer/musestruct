@@ -7,7 +7,9 @@ echo "🛑 Stopping backend development environment..."
 
 # Kill cargo watch and cargo run processes
 echo "Stopping cargo processes..."
-pkill -f 'cargo watch' && pkill -f 'cargo run'
+pkill -f 'cargo-watch' || true
+pkill -f 'cargo watch' || true
+pkill -f 'cargo run' || true
 
 # Stop and remove database container
 echo "Stopping database..."

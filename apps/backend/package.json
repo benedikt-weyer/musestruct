@@ -2,7 +2,7 @@
   "name": "@musestruct/backend",
   "private": true,
   "scripts": {
-    "dev": "cargo watch -x run",
+    "dev": "cargo-watch -x run",
     "build": "cargo build",
     "lint": "cargo check",
     "test": "cargo test",
