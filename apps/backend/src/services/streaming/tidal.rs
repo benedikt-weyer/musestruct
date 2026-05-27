@@ -4,6 +4,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
 
 use super::{
     AuthResult, SearchResults, ServiceCredentials, StreamingAlbum, StreamingPlaylist,
@@ -287,6 +288,10 @@ impl TidalService {
         }
     }
 
+    fn first_related_id(resource: &JsonApiResource, relationship_name: &str) -> Option<String> {
+        Self::relationship_ids(resource, relationship_name).into_iter().next()
+    }
+
     fn resource_map(document: &JsonApiDocument) -> HashMap<String, JsonApiResource> {
         let mut resources = HashMap::new();
 
@@ -499,7 +504,10 @@ impl TidalService {
     async fn search_document(&self, query: &str) -> Result<JsonApiDocument> {
         let mut params = HashMap::new();
         params.insert("countryCode".to_string(), self.country_code());
-        params.insert("include".to_string(), "tracks,albums,playlists,artists,ownerProfiles,profiles".to_string());
+        params.insert(
+            "include".to_string(),
+            "tracks,tracks.albums,tracks.artists,albums,albums.artists,playlists,artists,ownerProfiles,profiles".to_string(),
+        );
 
         let response = self
             .make_request(&format!("searchResults/{}", urlencoding::encode(query)), &params)
@@ -510,7 +518,10 @@ impl TidalService {
     async fn collection_document(&self, endpoint: &str) -> Result<JsonApiDocument> {
         let mut params = HashMap::new();
         params.insert("countryCode".to_string(), self.country_code());
-        params.insert("include".to_string(), "items".to_string());
+        params.insert(
+            "include".to_string(),
+            "items,items.albums,items.artists,items.ownerProfiles,items.owners".to_string(),
+        );
 
         let response = self.make_request(endpoint, &params).await?;
         Ok(serde_json::from_value(response)?)
@@ -541,6 +552,107 @@ impl TidalService {
         }
     }
 
+    async fn album_cover_url(&self, album_id: &str) -> Option<String> {
+        let cache = tidal_album_cover_cache();
+        if let Ok(cache) = cache.lock() {
+            if let Some(cached) = cache.get(album_id) {
+                return cached.clone();
+            }
+        }
+
+        let cover_url = self.fetch_album_cover_url(album_id).await;
+
+        if let Ok(mut cache) = cache.lock() {
+            cache.insert(album_id.to_string(), cover_url.clone());
+        }
+
+        cover_url
+    }
+
+    async fn fetch_album_cover_url(&self, album_id: &str) -> Option<String> {
+        let html = self
+            .client
+            .get(format!("https://tidal.com/browse/album/{}", album_id))
+            .header(
+                reqwest::header::USER_AGENT,
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+            )
+            .send()
+            .await
+            .ok()?
+            .text()
+            .await
+            .ok()?;
+
+        Self::extract_meta_content(&html, "og:image")
+    }
+
+    fn extract_meta_content(html: &str, property: &str) -> Option<String> {
+        for marker in [
+            format!("property=\"{}\"", property),
+            format!("property='{}'", property),
+            format!("name=\"{}\"", property),
+            format!("name='{}'", property),
+        ] {
+            let Some(index) = html.find(&marker) else {
+                continue;
+            };
+            let tail = &html[index..html.len().min(index + 512)];
+
+            for content_marker in ["content=\"", "content='"] {
+                if let Some(content_index) = tail.find(content_marker) {
+                    let content_start = content_index + content_marker.len();
+                    let rest = &tail[content_start..];
+                    let quote = if content_marker.ends_with('"') { '"' } else { '\'' };
+                    if let Some(content_end) = rest.find(quote) {
+                        let content = &rest[..content_end];
+                        if !content.is_empty() {
+                            return Some(content.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    async fn enrich_tracks_with_cover_urls(
+        &self,
+        tracks: &mut [StreamingTrack],
+        album_ids: &[Option<String>],
+    ) {
+        let mut cover_urls = HashMap::new();
+
+        for album_id in album_ids.iter().flatten().cloned().collect::<HashSet<_>>() {
+            cover_urls.insert(album_id.clone(), self.album_cover_url(&album_id).await);
+        }
+
+        for (track, album_id) in tracks.iter_mut().zip(album_ids.iter()) {
+            track.cover_url = album_id
+                .as_ref()
+                .and_then(|id| cover_urls.get(id))
+                .cloned()
+                .flatten();
+        }
+    }
+
+    async fn enrich_albums_with_cover_urls(
+        &self,
+        albums: &mut [StreamingAlbum],
+        album_ids: &[String],
+    ) {
+        let mut cover_urls = HashMap::new();
+
+        for album_id in album_ids.iter().cloned().collect::<HashSet<_>>() {
+            cover_urls.insert(album_id.clone(), self.album_cover_url(&album_id).await);
+        }
+
+        for (album, album_id) in albums.iter_mut().zip(album_ids.iter()) {
+            album.cover_url = cover_urls.get(album_id).cloned().flatten();
+        }
+    }
+
 }
 
 #[async_trait]
@@ -551,14 +663,24 @@ impl StreamingService for TidalService {
         let offset = offset.unwrap_or(0) as usize;
         let limit = limit.unwrap_or(20) as usize;
 
-        let mut tracks = Self::resource_values(&document, "tracks")
-            .into_iter()
-            .map(|resource| Self::parse_track_resource(&resource, &resources))
+        let track_resources = Self::resource_values(&document, "tracks");
+        let track_album_ids = track_resources
+            .iter()
+            .map(|resource| Self::first_related_id(resource, "albums"))
             .collect::<Vec<_>>();
-        let mut albums = Self::resource_values(&document, "albums")
-            .into_iter()
-            .map(|resource| Self::parse_album_resource(&resource, &resources))
+        let mut tracks = track_resources
+            .iter()
+            .map(|resource| Self::parse_track_resource(resource, &resources))
             .collect::<Vec<_>>();
+        self.enrich_tracks_with_cover_urls(&mut tracks, &track_album_ids).await;
+
+        let album_resources = Self::resource_values(&document, "albums");
+        let album_ids = album_resources.iter().map(|resource| resource.id.clone()).collect::<Vec<_>>();
+        let mut albums = album_resources
+            .iter()
+            .map(|resource| Self::parse_album_resource(resource, &resources))
+            .collect::<Vec<_>>();
+        self.enrich_albums_with_cover_urls(&mut albums, &album_ids).await;
 
         let total = tracks.len().max(albums.len()) as u32;
         tracks = tracks.into_iter().skip(offset).take(limit).collect();
@@ -597,11 +719,20 @@ impl StreamingService for TidalService {
                 let (resources, collection_albums) = self
                     .library_collection_resources("userCollectionAlbums/me/relationships/items", "albums")
                     .await?;
-                let matching_albums = collection_albums
-                    .into_iter()
-                    .map(|resource| Self::parse_album_resource(&resource, &resources))
-                    .filter(|album| Self::matches_query(&[&album.title, &album.artist], query))
+                let matching_album_pairs = collection_albums
+                    .iter()
+                    .map(|resource| (resource.id.clone(), Self::parse_album_resource(resource, &resources)))
+                    .filter(|(_, album)| Self::matches_query(&[&album.title, &album.artist], query))
                     .collect::<Vec<_>>();
+                let album_ids = matching_album_pairs
+                    .iter()
+                    .map(|(album_id, _)| album_id.clone())
+                    .collect::<Vec<_>>();
+                let mut matching_albums = matching_album_pairs
+                    .into_iter()
+                    .map(|(_, album)| album)
+                    .collect::<Vec<_>>();
+                self.enrich_albums_with_cover_urls(&mut matching_albums, &album_ids).await;
                 let (albums, total) = Self::paginate_results(matching_albums, limit, offset);
                 Ok(SearchResults {
                     tracks: vec![],
@@ -644,11 +775,27 @@ impl StreamingService for TidalService {
                 let (resources, collection_tracks) = self
                     .library_collection_resources("userCollectionTracks/me/relationships/items", "tracks")
                     .await?;
-                let matching_tracks = collection_tracks
-                    .into_iter()
-                    .map(|resource| Self::parse_track_resource(&resource, &resources))
-                    .filter(|track| Self::matches_query(&[&track.title, &track.artist, &track.album], query))
+                let matching_track_pairs = collection_tracks
+                    .iter()
+                    .map(|resource| {
+                        (
+                            Self::first_related_id(resource, "albums"),
+                            Self::parse_track_resource(resource, &resources),
+                        )
+                    })
+                    .filter(|(_, track)| {
+                        Self::matches_query(&[&track.title, &track.artist, &track.album], query)
+                    })
                     .collect::<Vec<_>>();
+                let track_album_ids = matching_track_pairs
+                    .iter()
+                    .map(|(album_id, _)| album_id.clone())
+                    .collect::<Vec<_>>();
+                let mut matching_tracks = matching_track_pairs
+                    .into_iter()
+                    .map(|(_, track)| track)
+                    .collect::<Vec<_>>();
+                self.enrich_tracks_with_cover_urls(&mut matching_tracks, &track_album_ids).await;
                 let (tracks, total) = Self::paginate_results(matching_tracks, limit, offset);
                 Ok(SearchResults {
                     tracks,
@@ -668,22 +815,36 @@ impl StreamingService for TidalService {
         let offset = offset.unwrap_or(0) as usize;
         let limit = limit.unwrap_or(50) as usize;
 
-        Ok(Self::resource_values(&document, "tracks")
-            .into_iter()
-            .map(|resource| Self::parse_track_resource(&resource, &resources))
-            .skip(offset)
-            .take(limit)
-            .collect())
+        let track_resources = Self::resource_values(&document, "tracks");
+        let track_album_ids = track_resources
+            .iter()
+            .map(|resource| Self::first_related_id(resource, "albums"))
+            .collect::<Vec<_>>();
+        let mut tracks = track_resources
+            .iter()
+            .map(|resource| Self::parse_track_resource(resource, &resources))
+            .collect::<Vec<_>>();
+        self.enrich_tracks_with_cover_urls(&mut tracks, &track_album_ids).await;
+
+        Ok(tracks.into_iter().skip(offset).take(limit).collect())
     }
 
     async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<StreamingTrack>> {
         let document = self.collection_document(&format!("albums/{}/relationships/items", album_id)).await?;
         let resources = Self::resource_map(&document);
 
-        Ok(Self::resource_values(&document, "tracks")
-            .into_iter()
-            .map(|resource| Self::parse_track_resource(&resource, &resources))
-            .collect())
+        let track_resources = Self::resource_values(&document, "tracks");
+        let track_album_ids = track_resources
+            .iter()
+            .map(|resource| Self::first_related_id(resource, "albums").or_else(|| Some(album_id.to_string())))
+            .collect::<Vec<_>>();
+        let mut tracks = track_resources
+            .iter()
+            .map(|resource| Self::parse_track_resource(resource, &resources))
+            .collect::<Vec<_>>();
+        self.enrich_tracks_with_cover_urls(&mut tracks, &track_album_ids).await;
+
+        Ok(tracks)
     }
 
     async fn get_stream_url(&self, track_id: &str, quality: Option<&str>) -> Result<String> {
@@ -708,7 +869,11 @@ impl StreamingService for TidalService {
         let resource = resources
             .get(&format!("tracks:{}", track_id))
             .ok_or_else(|| anyhow!("Track not found"))?;
-        Ok(Self::parse_track_resource(resource, &resources))
+        let mut track = Self::parse_track_resource(resource, &resources);
+        if let Some(album_id) = Self::first_related_id(resource, "albums") {
+            track.cover_url = self.album_cover_url(&album_id).await;
+        }
+        Ok(track)
     }
 
     async fn authenticate(&self, credentials: &ServiceCredentials) -> Result<AuthResult> {
@@ -756,4 +921,9 @@ struct JsonApiRelationship {
 #[derive(Debug, Deserialize)]
 struct TidalTokenResponse {
     access_token: String,
+}
+
+fn tidal_album_cover_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }

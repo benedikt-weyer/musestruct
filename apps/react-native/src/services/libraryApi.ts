@@ -4,9 +4,11 @@ import type {
   LibraryPlaylist,
   LibraryPlaylistItem,
   SavedAlbum,
+  SavedTrack,
   SavedTracksListResponse,
 } from '../types/library';
 import { normalizeBackendUrl } from './backendApi';
+import { fetchStreamingTrack } from './streamingLibraryApi';
 
 type ApiResponse<T> = {
   success: boolean;
@@ -49,6 +51,66 @@ async function parseMutationResponse(response: Response) {
   return null;
 }
 
+function hasStaleTidalMetadata(track: {
+  artist?: string | null;
+  album?: string | null;
+  cover_url?: string | null;
+  source?: string | null;
+}) {
+  return (
+    track.source === 'tidal' &&
+    (track.artist === 'Unknown Artist' || track.album === 'Unknown Album' || !track.cover_url)
+  );
+}
+
+async function refreshSavedTidalTrackMetadata(
+  backendUrl: string,
+  authSession: AuthSession,
+  track: SavedTrack,
+): Promise<SavedTrack> {
+  if (!hasStaleTidalMetadata(track)) {
+    return track;
+  }
+
+  try {
+    const liveTrack = await fetchStreamingTrack(backendUrl, authSession, track.track_id, 'tidal');
+    return {
+      ...track,
+      title: liveTrack.title || track.title,
+      artist: liveTrack.artist || track.artist,
+      album: liveTrack.album || track.album,
+      duration: liveTrack.duration ?? track.duration,
+      cover_url: liveTrack.cover_url ?? track.cover_url,
+    };
+  } catch {
+    return track;
+  }
+}
+
+async function refreshPlaylistItemTidalMetadata(
+  backendUrl: string,
+  authSession: AuthSession,
+  item: LibraryPlaylistItem,
+): Promise<LibraryPlaylistItem> {
+  if (item.is_playlist || item.source !== 'tidal' || !hasStaleTidalMetadata(item)) {
+    return item;
+  }
+
+  try {
+    const liveTrack = await fetchStreamingTrack(backendUrl, authSession, item.item_id, 'tidal');
+    return {
+      ...item,
+      title: liveTrack.title || item.title,
+      artist: liveTrack.artist || item.artist,
+      album: liveTrack.album || item.album,
+      duration: liveTrack.duration ?? item.duration,
+      cover_url: liveTrack.cover_url ?? item.cover_url,
+    };
+  } catch {
+    return item;
+  }
+}
+
 export async function fetchSavedTracks(
   backendUrl: string,
   authSession: AuthSession,
@@ -64,7 +126,14 @@ export async function fetchSavedTracks(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<SavedTracksListResponse>(response);
+  const payload = await parseApiResponse<SavedTracksListResponse>(response);
+
+  return {
+    ...payload,
+    tracks: await Promise.all(
+      payload.tracks.map((track) => refreshSavedTidalTrackMetadata(backendUrl, authSession, track)),
+    ),
+  };
 }
 
 export async function fetchSavedAlbums(
@@ -113,7 +182,10 @@ export async function fetchLibraryPlaylistItems(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<LibraryPlaylistItem[]>(response);
+  const items = await parseApiResponse<LibraryPlaylistItem[]>(response);
+  return Promise.all(
+    items.map((item) => refreshPlaylistItemTidalMetadata(backendUrl, authSession, item)),
+  );
 }
 
 export async function createLibraryPlaylist(

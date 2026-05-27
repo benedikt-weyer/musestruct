@@ -33,6 +33,12 @@ pub struct GetStreamUrlQuery {
     pub service: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct GetStreamingTrackQuery {
+    pub track_id: String,
+    pub service: Option<String>,
+}
+
 fn get_streaming_service(service_name: &str) -> Result<Box<dyn StreamingService>, String> {
     match service_name {
         "qobuz" => {
@@ -772,6 +778,32 @@ pub async fn get_stream_url(
         Err(err) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::error(format!("Failed to get stream URL: {}", err))),
+        )),
+    }
+}
+
+pub async fn get_streaming_track(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Query(params): Query<GetStreamingTrackQuery>,
+) -> Result<Json<ApiResponse<StreamingTrack>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let service_name = params.service.as_deref().unwrap_or("qobuz");
+
+    let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
+        Ok(service) => service,
+        Err(err) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error(err)),
+            ));
+        }
+    };
+
+    match service.get_track(&params.track_id).await {
+        Ok(track) => Ok(Json(ApiResponse::success(track))),
+        Err(err) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to get track: {}", err))),
         )),
     }
 }

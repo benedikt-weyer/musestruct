@@ -24,7 +24,7 @@ import {
   fetchSavedAlbums,
   fetchSavedTracks,
 } from '../services/libraryApi';
-import { fetchTrackStreamUrl } from '../services/streamingLibraryApi';
+import { fetchStreamingTrack, fetchTrackStreamUrl } from '../services/streamingLibraryApi';
 import type {
   LibraryPlaylist,
   LibraryPlaylistItem,
@@ -627,14 +627,19 @@ export function LibraryScreen() {
     }
 
     try {
+      const playbackTrack =
+        track.source === 'tidal'
+          ? await fetchStreamingTrack(backendUrl, authSession, track.track_id, track.source)
+          : null;
+
       playTrack({
         id: track.track_id,
         key: playerKey,
-        title: track.title,
-        artist: track.artist,
-        album: track.album,
-        artworkUrl: track.cover_url,
-        duration: track.duration,
+        title: playbackTrack?.title ?? track.title,
+        artist: playbackTrack?.artist ?? track.artist,
+        album: playbackTrack?.album ?? track.album,
+        artworkUrl: playbackTrack?.cover_url ?? track.cover_url,
+        duration: playbackTrack?.duration ?? track.duration,
         source: track.source,
         url:
           track.source === 'tidal'
@@ -695,8 +700,18 @@ export function LibraryScreen() {
           playlistId: playlist.id,
           playlistName: playlist.name,
           resolveTrack: async (queuedTrack) => {
+            const playbackTrack =
+              queuedTrack.source === 'tidal'
+                ? await fetchStreamingTrack(backendUrl, authSession, queuedTrack.id, queuedTrack.source)
+                : null;
+
             return {
               ...queuedTrack,
+              title: playbackTrack?.title ?? queuedTrack.title,
+              artist: playbackTrack?.artist ?? queuedTrack.artist,
+              album: playbackTrack?.album ?? queuedTrack.album,
+              artworkUrl: playbackTrack?.cover_url ?? queuedTrack.artworkUrl,
+              duration: playbackTrack?.duration ?? queuedTrack.duration,
               url:
                 queuedTrack.source === 'tidal'
                   ? ''

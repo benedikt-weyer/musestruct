@@ -22,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_tidal_auth_url, get_tidal_sdk_credentials, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, tidal_callback, transfer_spotify_playback};
+use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_streaming_track, get_tidal_auth_url, get_tidal_sdk_credentials, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, tidal_callback, transfer_spotify_playback};
 use handlers::music::{get_user_playlists, create_playlist, get_playlist};
 use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, get_playlist as get_new_playlist, update_playlist, delete_playlist, get_playlist_items, add_playlist_item, remove_playlist_item, reorder_playlist_item};
 use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
@@ -168,6 +168,7 @@ async fn main() -> Result<()> {
         .route("/api/auth/me", get(me))
         .route("/api/streaming/search", get(search_music))
         .route("/api/streaming/stream-url", get(get_stream_url))
+        .route("/api/streaming/track", get(get_streaming_track))
         .route("/api/streaming/backend-stream-url", get(get_backend_stream_url))
         .route("/api/streaming/services", get(get_available_services))
         .route("/api/streaming/status", get(get_service_status))

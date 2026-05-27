@@ -244,6 +244,25 @@ export async function fetchTrackStreamUrl(
   return parseApiResponse<string>(response);
 }
 
+export async function fetchStreamingTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  trackId: string,
+  service: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams({
+    track_id: trackId,
+    service,
+  });
+
+  const response = await fetch(`${normalizedUrl}/api/streaming/track?${searchParams.toString()}`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<StreamingTrack>(response);
+}
+
 export async function fetchStreamingPlaylistTracks(
   backendUrl: string,
   authSession: AuthSession,
