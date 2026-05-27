@@ -10,6 +10,7 @@ use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::{
+    handlers::streaming::get_valid_spotify_tokens,
     handlers::auth::{AppState, ApiResponse},
     models::{SavedAlbumEntity, UserResponseDto, StreamingServiceEntity, StreamingServiceColumn},
     services::streaming::{StreamingTrack, QobuzService, SpotifyService, LocalMusicService, StreamingService},
@@ -96,26 +97,12 @@ async fn get_authenticated_streaming_service(
             if client_id.is_empty() || client_secret.is_empty() {
                 return Err("Spotify credentials not configured".to_string());
             }
-            
-            // Look up stored user credentials
-            let user_service = StreamingServiceEntity::find()
-                .filter(StreamingServiceColumn::UserId.eq(user_id))
-                .filter(StreamingServiceColumn::ServiceName.eq("spotify"))
-                .filter(StreamingServiceColumn::IsActive.eq(true))
-                .one(db)
-                .await
-                .map_err(|e| format!("Database error: {}", e))?;
-                
-            if let Some(service) = user_service {
-                if let (Some(access_token), refresh_token) = (service.access_token, service.refresh_token) {
-                    Ok(Box::new(SpotifyService::new(client_id, client_secret)
-                        .with_tokens(access_token, refresh_token)))
-                } else {
-                    Err("No access token found for Spotify service".to_string())
-                }
-            } else {
-                Err("Spotify service not connected for this user. Please connect to Spotify first.".to_string())
-            }
+
+            let (access_token, refresh_token) = get_valid_spotify_tokens(user_id, db).await?;
+
+            Ok(Box::new(
+                SpotifyService::new(client_id, client_secret).with_tokens(access_token, refresh_token),
+            ))
         },
         "server" => {
             // Server service doesn't require authentication, just return the service
