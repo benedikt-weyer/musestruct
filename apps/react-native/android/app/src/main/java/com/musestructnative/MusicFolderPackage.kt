@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class MusicFolderPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-      listOf(MusicFolderModule(reactContext))
+      listOf(MusicFolderModule(reactContext), PlaybackModule(reactContext))
 
   override fun createViewManagers(
       reactContext: ReactApplicationContext

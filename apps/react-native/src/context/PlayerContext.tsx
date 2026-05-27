@@ -1,12 +1,18 @@
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useEffectEvent, useState } from 'react';
 import type { PropsWithChildren } from 'react';
-import Video, {
-  type OnBufferData,
-  type OnLoadData,
-  type OnProgressData,
-  type VideoRef,
-} from 'react-native-video';
 
+import {
+  getPlaybackStatus,
+  isNativePlaybackAvailable,
+  loadPlaybackTrack,
+  pausePlayback,
+  playbackEventEmitter,
+  playbackEventName,
+  playPlayback,
+  seekPlayback,
+  stopPlayback,
+  type PlaybackStatus,
+} from '../native/playback';
 import type { PlayerTrack } from '../types/player';
 
 type PlayerContextValue = {
@@ -28,7 +34,6 @@ type PlayerContextValue = {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
-  const playerRef = useRef<VideoRef | null>(null);
   const [currentTrack, setCurrentTrack] = useState<PlayerTrack | null>(null);
   const [isPaused, setIsPaused] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -37,13 +42,73 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
   const [duration, setDuration] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const applyStatus = useEffectEvent((status: PlaybackStatus) => {
+    setIsBuffering(status.isBuffering);
+    setIsPaused(!status.isPlaying);
+    setPosition(status.position);
+    setDuration(status.duration);
+    setErrorMessage(status.errorMessage);
+
+    if (status.track) {
+      setCurrentTrack(status.track);
+      return;
+    }
+
+    setCurrentTrack(null);
+    setIsExpanded(false);
+    setPosition(0);
+    setDuration(0);
+  });
+
+  const syncStatus = useEffectEvent(async () => {
+    if (!isNativePlaybackAvailable()) {
+      return;
+    }
+
+    try {
+      applyStatus(await getPlaybackStatus());
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Playback status could not be loaded.',
+      );
+    }
+  });
+
+  useEffect(() => {
+    if (!isNativePlaybackAvailable() || !playbackEventEmitter) {
+      return;
+    }
+
+    const subscription = playbackEventEmitter.addListener(playbackEventName, (status) => {
+      applyStatus(status as PlaybackStatus);
+    });
+
+    void syncStatus();
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   function playTrack(track: PlayerTrack) {
     const isSameTrack = currentTrack?.key === track.key && currentTrack.url === track.url;
     setErrorMessage(null);
     setIsBuffering(true);
 
+    if (!isNativePlaybackAvailable()) {
+      setIsBuffering(false);
+      setErrorMessage('Playback is only available on Android right now.');
+      return;
+    }
+
     if (isSameTrack) {
+      setCurrentTrack(track);
       setIsPaused(false);
+      void playPlayback().catch((error) => {
+        setIsPaused(true);
+        setIsBuffering(false);
+        setErrorMessage(error instanceof Error ? error.message : 'Playback could not resume.');
+      });
       return;
     }
 
@@ -52,6 +117,16 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     setDuration(track.duration ?? 0);
     setIsPaused(false);
     setIsExpanded(false);
+
+    void loadPlaybackTrack(track)
+      .then((status) => {
+        applyStatus(status);
+      })
+      .catch((error) => {
+        setIsPaused(true);
+        setIsBuffering(false);
+        setErrorMessage(error instanceof Error ? error.message : 'This track could not be played.');
+      });
   }
 
   function togglePlayPause() {
@@ -59,7 +134,20 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
       return;
     }
 
-    setIsPaused((value) => !value);
+    if (!isNativePlaybackAvailable()) {
+      setErrorMessage('Playback is only available on Android right now.');
+      return;
+    }
+
+    const shouldPause = !isPaused;
+    setIsPaused(shouldPause);
+
+    void (shouldPause ? pausePlayback() : playPlayback()).catch((error) => {
+      setIsPaused(!shouldPause);
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Playback state could not be updated.',
+      );
+    });
   }
 
   function seekTo(timeInSeconds: number) {
@@ -67,8 +155,16 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
       return;
     }
 
-    playerRef.current?.seek(timeInSeconds);
     setPosition(timeInSeconds);
+
+    if (!isNativePlaybackAvailable()) {
+      setErrorMessage('Playback is only available on Android right now.');
+      return;
+    }
+
+    void seekPlayback(timeInSeconds).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : 'Playback could not seek.');
+    });
   }
 
   function closeTrack() {
@@ -79,21 +175,14 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     setDuration(0);
     setIsBuffering(false);
     setErrorMessage(null);
-  }
 
-  function handleLoad(event: OnLoadData) {
-    setDuration(event.duration || currentTrack?.duration || 0);
-    setPosition(event.currentTime || 0);
-    setIsBuffering(false);
-    setErrorMessage(null);
-  }
+    if (!isNativePlaybackAvailable()) {
+      return;
+    }
 
-  function handleProgress(event: OnProgressData) {
-    setPosition(event.currentTime);
-  }
-
-  function handleBuffer(event: OnBufferData) {
-    setIsBuffering(event.isBuffering);
+    void stopPlayback().catch(() => {
+      setErrorMessage('Playback could not be stopped.');
+    });
   }
 
   const value: PlayerContextValue = {
@@ -121,31 +210,6 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      {currentTrack ? (
-        <Video
-          ignoreSilentSwitch="ignore"
-          onBuffer={handleBuffer}
-          onEnd={() => {
-            setIsPaused(true);
-            setPosition(0);
-            setIsBuffering(false);
-          }}
-          onError={() => {
-            setIsPaused(true);
-            setIsBuffering(false);
-            setErrorMessage('This track could not be played.');
-          }}
-          onLoad={handleLoad}
-          onProgress={handleProgress}
-          paused={isPaused}
-          playInBackground={false}
-          playWhenInactive={false}
-          progressUpdateInterval={500}
-          ref={playerRef}
-          source={{ uri: currentTrack.url }}
-          style={{ height: 0, width: 0 }}
-        />
-      ) : null}
     </PlayerContext.Provider>
   );
 }
