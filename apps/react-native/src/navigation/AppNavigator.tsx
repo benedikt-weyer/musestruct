@@ -13,6 +13,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import type { RootStackParamList, RootTabParamList } from './types';
 import { BrowseScreen } from '../screens/BrowseScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { LibraryScreen } from '../screens/LibraryScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
@@ -27,6 +28,10 @@ function getTabIconName(routeName: keyof RootTabParamList, focused: boolean) {
 
   if (routeName === 'Browse') {
     return focused ? 'search' : 'search-outline';
+  }
+
+  if (routeName === 'Library') {
+    return focused ? 'library' : 'library-outline';
   }
 
   return focused ? 'settings' : 'settings-outline';
@@ -68,6 +73,7 @@ function RootTabs() {
   return (
     <Tab.Navigator screenOptions={createScreenOptions}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Library" component={LibraryScreen} options={{ title: 'Library' }} />
       <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
