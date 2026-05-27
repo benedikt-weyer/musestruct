@@ -522,11 +522,6 @@ export function LibraryScreen() {
       return;
     }
 
-    if (track.source === 'tidal') {
-      setErrorMessage('Tidal playback is not implemented yet.');
-      return;
-    }
-
     if (track.source === 'spotify') {
       setErrorMessage(
         'Spotify playback from saved tracks is only available for tracks with a preview clip.',

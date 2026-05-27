@@ -438,11 +438,6 @@ export function BrowseScreen() {
       return;
     }
 
-    if (track.source === 'tidal') {
-      showToast('Tidal playback is not implemented yet. Search and library support are available.');
-      return;
-    }
-
     if (track.source === 'spotify' && !track.stream_url) {
       showToast('Spotify playback is only available when a preview clip is provided for the track.');
       return;

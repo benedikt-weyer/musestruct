@@ -70,6 +70,17 @@ impl TidalService {
     }
 
     async fn make_request(&self, endpoint: &str, params: &HashMap<String, String>) -> Result<Value> {
+        self.make_request_pairs(
+            endpoint,
+            &params
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str()))
+                .collect::<Vec<_>>(),
+        )
+        .await
+    }
+
+    async fn make_request_pairs(&self, endpoint: &str, params: &[(&str, &str)]) -> Result<Value> {
         let token = if let Some(token) = &self.access_token {
             token.clone()
         } else {
@@ -94,6 +105,91 @@ impl TidalService {
         }
 
         Ok(response.json::<Value>().await?)
+    }
+
+    fn playback_formats(quality: Option<&str>) -> Vec<&'static str> {
+        match quality.unwrap_or_default().to_ascii_lowercase().as_str() {
+            "low" | "lossy" | "he-aac" => vec!["HEAACV1", "AACLC"],
+            _ => vec!["AACLC", "HEAACV1"],
+        }
+    }
+
+    async fn get_track_file_relationship(&self, track_id: &str) -> Result<Option<(String, String)>> {
+        let response = self
+            .make_request_pairs(
+                &format!("tracks/{}/relationships/sourceFile", track_id),
+                &[("include", "sourceFile")],
+            )
+            .await?;
+
+        let Some(data) = response.get("data") else {
+            return Ok(None);
+        };
+
+        let Some(id) = data.get("id").and_then(Value::as_str) else {
+            return Ok(None);
+        };
+        let resource_type = data
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+
+        if resource_type.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some((id.to_string(), resource_type)))
+    }
+
+    async fn get_track_file_url(&self, track_file_id: &str, quality: Option<&str>) -> Result<Option<String>> {
+        let formats = Self::playback_formats(quality);
+        let mut params = vec![("usage", "PLAYBACK")];
+        for format in &formats {
+            params.push(("formats", *format));
+        }
+
+        let response = self
+            .make_request_pairs(&format!("trackFiles/{}", track_file_id), &params)
+            .await?;
+
+        Ok(response
+            .get("data")
+            .and_then(|data| data.get("attributes"))
+            .and_then(|attributes| attributes.get("url"))
+            .and_then(Value::as_str)
+            .map(|value| value.to_string()))
+    }
+
+    async fn get_track_manifest_url(&self, track_id: &str, quality: Option<&str>) -> Result<String> {
+        let formats = Self::playback_formats(quality);
+        let mut params = vec![
+            ("manifestType", "HLS"),
+            ("uriScheme", "HTTPS"),
+            ("usage", "PLAYBACK"),
+            ("adaptive", "true"),
+        ];
+        for format in &formats {
+            params.push(("formats", *format));
+        }
+
+        let response = self
+            .make_request_pairs(&format!("trackManifests/{}", track_id), &params)
+            .await?;
+        let attributes = response
+            .get("data")
+            .and_then(|data| data.get("attributes"))
+            .ok_or_else(|| anyhow!("Tidal did not return playback metadata for this track"))?;
+
+        if attributes.get("drmData").is_some() {
+            return Err(anyhow!("Tidal returned DRM-protected playback that the current player cannot handle"));
+        }
+
+        attributes
+            .get("uri")
+            .and_then(Value::as_str)
+            .map(|value| value.to_string())
+            .ok_or_else(|| anyhow!("Tidal did not return a playable manifest URL"))
     }
 
     fn parse_duration(duration: Option<&str>) -> Option<i32> {
@@ -495,8 +591,16 @@ impl StreamingService for TidalService {
             .collect())
     }
 
-    async fn get_stream_url(&self, _track_id: &str, _quality: Option<&str>) -> Result<String> {
-        Err(anyhow!("Tidal playback is not implemented yet"))
+    async fn get_stream_url(&self, track_id: &str, quality: Option<&str>) -> Result<String> {
+        if let Some((track_file_id, resource_type)) = self.get_track_file_relationship(track_id).await? {
+            if resource_type == "trackFiles" {
+                if let Some(url) = self.get_track_file_url(&track_file_id, quality).await? {
+                    return Ok(url);
+                }
+            }
+        }
+
+        self.get_track_manifest_url(track_id, quality).await
     }
 
     async fn get_track(&self, track_id: &str) -> Result<StreamingTrack> {
