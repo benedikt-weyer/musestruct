@@ -64,16 +64,25 @@ internal class TidalPlaybackSession(
   init {
     scope.launch {
       playbackEngine.events.collect { event ->
+        val snapshot = snapshot()
+        Log.d(
+            TAG,
+            "Tidal event=${event.javaClass.simpleName} state=${snapshot.playbackStateName} position=${snapshot.positionSeconds} duration=${snapshot.durationSeconds}",
+        )
         when (event) {
           is Event.Error -> {
             Log.e(TAG, "Tidal playback error code=${event.errorCode}", event)
             onError(event.toReadableMessage())
           }
           is Event.MediaProductEnded -> {
-            onSnapshot(snapshot())
+            Log.w(
+                TAG,
+                "Tidal media product ended at position=${snapshot.positionSeconds} duration=${snapshot.durationSeconds}",
+            )
+            onSnapshot(snapshot)
             onCompletion()
           }
-          else -> onSnapshot(snapshot())
+          else -> onSnapshot(snapshot)
         }
       }
     }
@@ -82,15 +91,7 @@ internal class TidalPlaybackSession(
   fun load(track: PlaybackTrack) {
     val productId = track.id?.takeIf { it.isNotBlank() }
         ?: throw IllegalArgumentException("The track is missing a Tidal product id.")
-    playbackEngine.load(
-        MediaProduct(
-            productType = ProductType.TRACK,
-            productId = productId,
-            sourceType = track.source,
-            sourceId = track.key,
-            referenceId = track.key,
-        )
-    )
+    playbackEngine.load(MediaProduct(ProductType.TRACK, productId))
     playbackEngine.play()
     onSnapshot(snapshot())
   }
@@ -153,11 +154,17 @@ private class BackendTidalCredentialsProvider(
 
   override suspend fun getCredentials(apiErrorSubStatus: String?): AuthResult<Credentials> {
     return try {
+      Log.d(TAG, "Fetching Tidal credentials retrySubStatus=$apiErrorSubStatus")
       val credentials = fetchCredentials(forceRefresh = !apiErrorSubStatus.isNullOrBlank())
       cachedCredentials = credentials
+      Log.d(
+          TAG,
+          "Received Tidal credentials level=${credentials.level} userId=${credentials.userId} grantedScopes=${credentials.grantedScopes} hasClientUniqueKey=${!credentials.clientUniqueKey.isNullOrBlank()} expires=${credentials.expires}",
+      )
       messageBus.tryEmit(CredentialsUpdatedMessage(credentials))
       AuthResult.Success(credentials)
-    } catch (_: Exception) {
+    } catch (error: Exception) {
+      Log.e(TAG, "Failed to fetch Tidal credentials", error)
       AuthResult.Failure(null)
     }
   }
