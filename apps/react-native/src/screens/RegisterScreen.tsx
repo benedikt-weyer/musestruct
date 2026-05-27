@@ -66,34 +66,47 @@ export function RegisterScreen() {
           <Text className="text-sm font-semibold text-slate-700">Email</Text>
           <TextInput
             autoCapitalize="none"
+            autoComplete="username"
             autoCorrect={false}
             className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            importantForAutofill="yes"
             keyboardType="email-address"
             onChangeText={setEmail}
             placeholder="you@example.com"
             placeholderTextColor="#94a3b8"
+            returnKeyType="next"
+            textContentType="username"
             value={email}
           />
 
           <Text className="mt-4 text-sm font-semibold text-slate-700">Username</Text>
           <TextInput
             autoCapitalize="none"
+            autoComplete="nickname"
             autoCorrect={false}
             className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            importantForAutofill="yes"
             onChangeText={setUsername}
             placeholder="your-name"
             placeholderTextColor="#94a3b8"
+            returnKeyType="next"
+            textContentType="nickname"
             value={username}
           />
 
           <Text className="mt-4 text-sm font-semibold text-slate-700">Password</Text>
           <TextInput
             autoCapitalize="none"
+            autoComplete="new-password"
             autoCorrect={false}
             className="mt-2 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900"
+            importantForAutofill="yes"
             onChangeText={setPassword}
             placeholder="Password"
             placeholderTextColor="#94a3b8"
+            passwordRules="minlength: 8;"
+            returnKeyType="done"
+            textContentType="newPassword"
             secureTextEntry
             value={password}
           />
