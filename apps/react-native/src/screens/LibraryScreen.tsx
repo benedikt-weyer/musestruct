@@ -627,7 +627,6 @@ export function LibraryScreen() {
     }
 
     try {
-      const streamUrl = await fetchTrackStreamUrl(backendUrl, authSession, track.track_id, track.source);
       playTrack({
         id: track.track_id,
         key: playerKey,
@@ -637,7 +636,12 @@ export function LibraryScreen() {
         artworkUrl: track.cover_url,
         duration: track.duration,
         source: track.source,
-        url: streamUrl,
+        url:
+          track.source === 'tidal'
+            ? ''
+            : await fetchTrackStreamUrl(backendUrl, authSession, track.track_id, track.source),
+        backendUrl: track.source === 'tidal' ? backendUrl : undefined,
+        sessionToken: track.source === 'tidal' ? authSession.sessionToken : undefined,
       });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to play track.');
@@ -691,16 +695,19 @@ export function LibraryScreen() {
           playlistId: playlist.id,
           playlistName: playlist.name,
           resolveTrack: async (queuedTrack) => {
-            const streamUrl = await fetchTrackStreamUrl(
-              backendUrl,
-              authSession,
-              queuedTrack.id,
-              queuedTrack.source,
-            );
-
             return {
               ...queuedTrack,
-              url: streamUrl,
+              url:
+                queuedTrack.source === 'tidal'
+                  ? ''
+                  : await fetchTrackStreamUrl(
+                      backendUrl,
+                      authSession,
+                      queuedTrack.id,
+                      queuedTrack.source,
+                    ),
+              backendUrl: queuedTrack.source === 'tidal' ? backendUrl : undefined,
+              sessionToken: queuedTrack.source === 'tidal' ? authSession.sessionToken : undefined,
             };
           },
           tracks: queueTracks,

@@ -10,6 +10,7 @@ echo "Stopping cargo processes..."
 pkill -f 'cargo-watch' || true
 pkill -f 'cargo watch' || true
 pkill -f 'cargo run' || true
+pkill -f 'target/debug/musestruct_backend' || true
 
 # Stop and remove database container
 echo "Stopping database..."

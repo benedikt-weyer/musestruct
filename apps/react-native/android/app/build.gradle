@@ -112,6 +112,10 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("androidx.media:media:1.7.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("com.tidal.sdk:auth:0.11.3")
+    implementation("com.tidal.sdk:eventproducer:0.3.2")
+    implementation("com.tidal.sdk:player:0.0.64")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

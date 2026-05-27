@@ -50,7 +50,8 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod
   fun load(track: ReadableMap, promise: Promise) {
     val trackUrl = optionalString(track, "url")
-    if (trackUrl.isNullOrBlank()) {
+    val trackSource = optionalString(track, "source")
+    if (trackSource != "tidal" && trackUrl.isNullOrBlank()) {
       promise.reject("E_INVALID_TRACK", "The track is missing a playable URL.")
       return
     }
@@ -67,6 +68,8 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
           putExtra(PlaybackService.EXTRA_TRACK_DESCRIPTION, optionalString(track, "description"))
           putExtra(PlaybackService.EXTRA_TRACK_SOURCE, optionalString(track, "source"))
           putExtra(PlaybackService.EXTRA_TRACK_URL, trackUrl)
+          putExtra(PlaybackService.EXTRA_TRACK_BACKEND_URL, optionalString(track, "backendUrl"))
+          putExtra(PlaybackService.EXTRA_TRACK_SESSION_TOKEN, optionalString(track, "sessionToken"))
         }
 
     ContextCompat.startForegroundService(reactApplicationContext, intent)

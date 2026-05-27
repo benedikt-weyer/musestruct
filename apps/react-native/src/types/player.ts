@@ -9,6 +9,8 @@ export type PlayerTrack = {
   duration?: number;
   source: string;
   url: string;
+  backendUrl?: string;
+  sessionToken?: string;
 };
 
 export type QueueTrack = Omit<PlayerTrack, 'url'>;

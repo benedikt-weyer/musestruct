@@ -2149,6 +2149,81 @@ pub async fn get_spotify_access_token(
     Ok(Json(ApiResponse::success(access_token)))
 }
 
+#[derive(Serialize)]
+pub struct TidalSdkCredentialsResponse {
+    pub access_token: String,
+    pub client_id: String,
+    pub client_unique_key: Option<String>,
+    pub requested_scopes: Vec<String>,
+    pub granted_scopes: Vec<String>,
+    pub user_id: Option<String>,
+    pub expires_at: Option<String>,
+}
+
+pub async fn get_tidal_sdk_credentials(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<TidalSdkCredentialsResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let client_id = std::env::var("TIDAL_CLIENT_ID").unwrap_or_default();
+    if client_id.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error("Tidal client ID not configured".to_string())),
+        ));
+    }
+
+    let (access_token, _) = get_valid_tidal_tokens(user.id, state.db()).await.map_err(|error| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::<()>::error(error)),
+        )
+    })?;
+
+    let service = StreamingServiceEntity::find()
+        .filter(StreamingServiceColumn::UserId.eq(user.id))
+        .filter(StreamingServiceColumn::ServiceName.eq("tidal"))
+        .filter(StreamingServiceColumn::IsActive.eq(true))
+        .one(state.db())
+        .await
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!("Database error: {}", error))),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiResponse::<()>::error(
+                    "Tidal service not connected for this user. Please connect to Tidal first."
+                        .to_string(),
+                )),
+            )
+        })?;
+
+    let scopes = normalize_tidal_scopes()
+        .split_whitespace()
+        .filter(|scope| !scope.is_empty())
+        .map(|scope| scope.to_string())
+        .collect::<Vec<_>>();
+    let expires_at = service
+        .expires_at
+        .map(|timestamp| timestamp.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
+    let client_unique_key = std::env::var("TIDAL_CLIENT_UNIQUE_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+
+    Ok(Json(ApiResponse::success(TidalSdkCredentialsResponse {
+        access_token,
+        client_id,
+        client_unique_key,
+        requested_scopes: scopes.clone(),
+        granted_scopes: scopes,
+        user_id: service.account_username,
+        expires_at,
+    })))
+}
+
 #[derive(Deserialize)]
 pub struct RefreshSpotifyTokenRequest {
     pub refresh_token: String,

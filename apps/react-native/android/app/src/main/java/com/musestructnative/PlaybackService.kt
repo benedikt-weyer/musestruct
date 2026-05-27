@@ -26,6 +26,7 @@ import android.support.v4.media.session.PlaybackStateCompat
 import kotlin.math.roundToInt
 
 internal data class PlaybackTrack(
+  val backendUrl: String?,
     val id: String?,
     val key: String?,
     val title: String?,
@@ -33,6 +34,7 @@ internal data class PlaybackTrack(
     val album: String?,
     val artworkUrl: String?,
     val description: String?,
+    val sessionToken: String?,
     val source: String?,
     val url: String?,
 ) {
@@ -52,6 +54,7 @@ internal data class PlaybackTrack(
   companion object {
     fun fromIntent(intent: Intent): PlaybackTrack =
         PlaybackTrack(
+        backendUrl = intent.getStringExtra(PlaybackService.EXTRA_TRACK_BACKEND_URL),
             id = intent.getStringExtra(PlaybackService.EXTRA_TRACK_ID),
             key = intent.getStringExtra(PlaybackService.EXTRA_TRACK_KEY),
             title = intent.getStringExtra(PlaybackService.EXTRA_TRACK_TITLE),
@@ -59,6 +62,7 @@ internal data class PlaybackTrack(
             album = intent.getStringExtra(PlaybackService.EXTRA_TRACK_ALBUM),
             artworkUrl = intent.getStringExtra(PlaybackService.EXTRA_TRACK_ARTWORK_URL),
             description = intent.getStringExtra(PlaybackService.EXTRA_TRACK_DESCRIPTION),
+        sessionToken = intent.getStringExtra(PlaybackService.EXTRA_TRACK_SESSION_TOKEN),
             source = intent.getStringExtra(PlaybackService.EXTRA_TRACK_SOURCE),
             url = intent.getStringExtra(PlaybackService.EXTRA_TRACK_URL),
         )
@@ -69,6 +73,7 @@ internal data class PlaybackTrack(
       }
 
       return PlaybackTrack(
+          backendUrl = null,
           id = bundle.getString("id"),
           key = bundle.getString("key"),
           title = bundle.getString("title"),
@@ -76,6 +81,7 @@ internal data class PlaybackTrack(
           album = bundle.getString("album"),
           artworkUrl = bundle.getString("artworkUrl"),
           description = bundle.getString("description"),
+          sessionToken = null,
           source = bundle.getString("source"),
           url = bundle.getString("url"),
       )
@@ -146,6 +152,7 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   private var isPlaying = false
   private var lastKnownDurationMs = 0
   private var mediaPlayer: MediaPlayer? = null
+  private var tidalPlaybackSession: TidalPlaybackSession? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -217,13 +224,22 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
 
   private fun handleLoad(intent: Intent) {
     val requestedTrack = PlaybackTrack.fromIntent(intent)
-    if (requestedTrack.url.isNullOrBlank()) {
+    if (requestedTrack.source == "tidal") {
+      if (requestedTrack.id.isNullOrBlank() ||
+          requestedTrack.backendUrl.isNullOrBlank() ||
+          requestedTrack.sessionToken.isNullOrBlank()) {
+        errorMessage = "Tidal playback could not start. Please reconnect Tidal and try again."
+        publishStatus()
+        return
+      }
+    } else if (requestedTrack.url.isNullOrBlank()) {
       errorMessage = "This track could not be played."
       publishStatus()
       return
     }
 
-    if (currentTrack?.key == requestedTrack.key && currentTrack?.url == requestedTrack.url) {
+    if (currentTrack?.key == requestedTrack.key &&
+        (requestedTrack.source == "tidal" || currentTrack?.url == requestedTrack.url)) {
       currentTrack = requestedTrack
       errorMessage = null
       publishStatus()
@@ -244,6 +260,11 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     updatePlaybackState()
     ensureForeground()
     publishStatus()
+
+    if (requestedTrack.source == "tidal") {
+      loadTidalTrack(requestedTrack)
+      return
+    }
 
     val player = MediaPlayer()
     mediaPlayer = player
@@ -321,13 +342,102 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     }
   }
 
+  private fun loadTidalTrack(requestedTrack: PlaybackTrack) {
+    val application = application as? android.app.Application
+    if (application == null) {
+      errorMessage = "Tidal playback could not start."
+      isBuffering = false
+      updatePlaybackState()
+      updateNotification()
+      publishStatus()
+      return
+    }
+
+    try {
+      val session =
+          TidalPlaybackSession(
+              application = application,
+              track = requestedTrack,
+              onCompletion = {
+                isPlaying = false
+                isBuffering = false
+                errorMessage = null
+                stopProgressUpdates()
+                updatePlaybackState()
+                updateNotification()
+                publishStatus()
+              },
+              onError = { message ->
+                errorMessage = message
+                isPlaying = false
+                isBuffering = false
+                stopProgressUpdates()
+                updatePlaybackState()
+                updateNotification()
+                publishStatus()
+              },
+              onSnapshot = { snapshot ->
+                lastKnownDurationMs = (snapshot.durationSeconds * 1000.0).roundToInt().coerceAtLeast(0)
+                isPlaying = snapshot.isPlaying
+                isBuffering = snapshot.isBuffering
+                if (snapshot.errorMessage != null) {
+                  errorMessage = snapshot.errorMessage
+                }
+                if (isPlaying || isBuffering) {
+                  startProgressUpdates()
+                } else {
+                  stopProgressUpdates()
+                }
+                updateMetadata()
+                updatePlaybackState()
+                updateNotification()
+                publishStatus()
+              },
+          )
+      tidalPlaybackSession = session
+      session.load(requestedTrack)
+    } catch (_: Exception) {
+      errorMessage = "This track could not be played."
+      isBuffering = false
+      isPlaying = false
+      stopProgressUpdates()
+      updatePlaybackState()
+      updateNotification()
+      publishStatus()
+    }
+  }
+
   private fun playPlayback() {
-    val player = mediaPlayer ?: return
     if (!requestAudioFocus()) {
       errorMessage = "Playback could not start."
       publishStatus()
       return
     }
+
+    tidalPlaybackSession?.let { tidalSession ->
+      try {
+        tidalSession.play()
+        errorMessage = null
+        isPlaying = true
+        isBuffering = false
+        ensureForeground()
+        startProgressUpdates()
+        updatePlaybackState()
+        updateNotification()
+        publishStatus()
+      } catch (_: Exception) {
+        errorMessage = "Playback could not start."
+        isPlaying = false
+        isBuffering = false
+        stopProgressUpdates()
+        updatePlaybackState()
+        updateNotification()
+        publishStatus()
+      }
+      return
+    }
+
+    val player = mediaPlayer ?: return
 
     try {
       if (!player.isPlaying) {
@@ -353,6 +463,21 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   private fun pausePlayback() {
+    tidalPlaybackSession?.let { tidalSession ->
+      try {
+        tidalSession.pause()
+      } catch (_: Exception) {
+      }
+
+      isPlaying = false
+      isBuffering = false
+      stopProgressUpdates()
+      updatePlaybackState()
+      updateNotification()
+      publishStatus()
+      return
+    }
+
     val player = mediaPlayer ?: return
 
     try {
@@ -371,6 +496,15 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   private fun seekToPlayback(positionSeconds: Double) {
+    tidalPlaybackSession?.let { tidalSession ->
+      try {
+        tidalSession.seek(positionSeconds)
+        publishStatus()
+      } catch (_: Exception) {
+      }
+      return
+    }
+
     val player = mediaPlayer ?: return
     val maxDurationMs =
         if (lastKnownDurationMs > 0) {
@@ -411,6 +545,9 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   private fun releasePlayer() {
+    tidalPlaybackSession?.release()
+    tidalPlaybackSession = null
+
     val player = mediaPlayer ?: return
     try {
       player.reset()
@@ -614,24 +751,29 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   private fun currentDurationSeconds(): Double {
+    val tidalDurationMs = tidalPlaybackSession?.snapshot()?.let { (it.durationSeconds * 1000.0).roundToInt() }
     val durationMs =
-        if (lastKnownDurationMs > 0) {
-          lastKnownDurationMs
-        } else {
-          currentTrack?.let { ((it.url != null) && (it.url.isNotBlank())) }
-          mediaPlayer?.let {
-            try {
-              it.duration
-            } catch (_: IllegalStateException) {
-              0
-            }
-          } ?: 0
+        when {
+          tidalDurationMs != null -> tidalDurationMs
+          lastKnownDurationMs > 0 -> lastKnownDurationMs
+          else ->
+              mediaPlayer?.let {
+                try {
+                  it.duration
+                } catch (_: IllegalStateException) {
+                  0
+                }
+              } ?: 0
         }
 
     return durationMs.coerceAtLeast(0) / 1000.0
   }
 
   private fun currentPositionMs(): Int {
+    tidalPlaybackSession?.let { tidalSession ->
+      return (tidalSession.snapshot().positionSeconds * 1000.0).roundToInt().coerceAtLeast(0)
+    }
+
     val player = mediaPlayer ?: return 0
     return try {
       player.currentPosition.coerceAtLeast(0)
@@ -675,12 +817,14 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     const val ACTION_STOP = "com.musestructnative.playback.STOP"
 
     const val EXTRA_POSITION = "position"
+    const val EXTRA_TRACK_BACKEND_URL = "trackBackendUrl"
     const val EXTRA_TRACK_ALBUM = "trackAlbum"
     const val EXTRA_TRACK_ARTIST = "trackArtist"
     const val EXTRA_TRACK_ARTWORK_URL = "trackArtworkUrl"
     const val EXTRA_TRACK_DESCRIPTION = "trackDescription"
     const val EXTRA_TRACK_ID = "trackId"
     const val EXTRA_TRACK_KEY = "trackKey"
+    const val EXTRA_TRACK_SESSION_TOKEN = "trackSessionToken"
     const val EXTRA_TRACK_SOURCE = "trackSource"
     const val EXTRA_TRACK_TITLE = "trackTitle"
     const val EXTRA_TRACK_URL = "trackUrl"

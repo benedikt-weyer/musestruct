@@ -452,10 +452,6 @@ export function BrowseScreen() {
     }
 
     try {
-      const streamUrl = track.stream_url
-        ? track.stream_url
-        : await fetchTrackStreamUrl(backendUrl, authSession, track.id, track.source);
-
       playTrack({
         id: track.id,
         key: playerKey,
@@ -465,7 +461,14 @@ export function BrowseScreen() {
         artworkUrl: track.cover_url,
         duration: track.duration,
         source: track.source,
-        url: streamUrl,
+        url:
+          track.source === 'tidal'
+            ? ''
+            : track.stream_url
+              ? track.stream_url
+              : await fetchTrackStreamUrl(backendUrl, authSession, track.id, track.source),
+        backendUrl: track.source === 'tidal' ? backendUrl : undefined,
+        sessionToken: track.source === 'tidal' ? authSession.sessionToken : undefined,
       });
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to play track.');
