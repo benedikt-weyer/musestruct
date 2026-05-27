@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import {
@@ -18,6 +19,7 @@ import {
   fetchSavedAlbums,
   fetchSavedTracks,
 } from '../services/libraryApi';
+import { fetchTrackStreamUrl } from '../services/streamingLibraryApi';
 import type {
   LibraryPlaylist,
   LibrarySection,
@@ -115,9 +117,15 @@ function EmptyLibraryState({
 }
 
 function TrackLibraryCard({
+  isCurrentTrack,
+  isPlaying,
+  onPlay,
   showFavouriteBadge,
   track,
 }: Readonly<{
+  isCurrentTrack: boolean;
+  isPlaying: boolean;
+  onPlay: (track: SavedTrack) => void;
   showFavouriteBadge: boolean;
   track: SavedTrack;
 }>) {
@@ -162,6 +170,18 @@ function TrackLibraryCard({
           <Text className="mt-2 text-xs text-slate-400">Saved {formatDate(track.created_at)}</Text>
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+        onPress={() => {
+          onPlay(track);
+        }}
+      >
+        <Text className="text-center text-sm font-semibold text-slate-700">
+          {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -263,14 +283,20 @@ function ActiveLibrarySection({
   activeSection,
   albums,
   favouriteTracks,
+  isPlaying,
+  onPlayTrack,
   playlists,
   tracks,
+  currentTrackKey,
 }: Readonly<{
   activeSection: LibrarySection;
   albums: SavedAlbum[];
   favouriteTracks: SavedTrack[];
+  isPlaying: boolean;
+  onPlayTrack: (track: SavedTrack) => void;
   playlists: LibraryPlaylist[];
   tracks: SavedTrack[];
+  currentTrackKey: string | null;
 }>) {
   if (activeSection === 'playlists') {
     return playlists.length === 0 ? (
@@ -301,7 +327,18 @@ function ActiveLibrarySection({
         title="No library tracks yet"
       />
     ) : (
-      <>{tracks.map((track) => <TrackLibraryCard key={track.id} showFavouriteBadge={false} track={track} />)}</>
+      <>
+        {tracks.map((track) => (
+          <TrackLibraryCard
+            isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
+            isPlaying={isPlaying}
+            key={track.id}
+            onPlay={onPlayTrack}
+            showFavouriteBadge={false}
+            track={track}
+          />
+        ))}
+      </>
     );
   }
 
@@ -313,7 +350,14 @@ function ActiveLibrarySection({
   ) : (
     <>
       {favouriteTracks.map((track) => (
-        <TrackLibraryCard key={track.id} showFavouriteBadge track={track} />
+        <TrackLibraryCard
+          isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
+          isPlaying={isPlaying}
+          key={track.id}
+          onPlay={onPlayTrack}
+          showFavouriteBadge
+          track={track}
+        />
       ))}
     </>
   );
@@ -322,6 +366,7 @@ function ActiveLibrarySection({
 export function LibraryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { authSession, backendUrl } = useSettings();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [activeSection, setActiveSection] = useState<LibrarySection>('tracks');
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [albums, setAlbums] = useState<SavedAlbum[]>([]);
@@ -363,6 +408,7 @@ export function LibraryScreen() {
   }, [authSession, backendUrl]);
 
   const favouriteTracks = useMemo(() => tracks, [tracks]);
+  const currentTrackKey = currentTrack?.key ?? null;
   const sectionCounts: Record<LibrarySection, number> = {
     playlists: playlists.length,
     albums: albums.length,
@@ -371,6 +417,36 @@ export function LibraryScreen() {
   };
   const activeSectionMeta =
     LIBRARY_SECTIONS.find((section) => section.key === activeSection) ?? LIBRARY_SECTIONS[0];
+
+  async function handlePlayTrack(track: SavedTrack) {
+    const playerKey = `${track.source}:${track.track_id}`;
+
+    if (currentTrack?.key === playerKey) {
+      togglePlayPause();
+      return;
+    }
+
+    if (!authSession) {
+      return;
+    }
+
+    try {
+      const streamUrl = await fetchTrackStreamUrl(backendUrl, authSession, track.track_id, track.source);
+      playTrack({
+        id: track.track_id,
+        key: playerKey,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artworkUrl: track.cover_url,
+        duration: track.duration,
+        source: track.source,
+        url: streamUrl,
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to play track.');
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['left', 'right']}>
@@ -446,7 +522,10 @@ export function LibraryScreen() {
                 <ActiveLibrarySection
                   activeSection={activeSection}
                   albums={albums}
+                  currentTrackKey={currentTrackKey}
                   favouriteTracks={favouriteTracks}
+                  isPlaying={isPlaying}
+                  onPlayTrack={handlePlayTrack}
                   playlists={playlists}
                   tracks={tracks}
                 />

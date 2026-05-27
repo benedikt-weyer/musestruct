@@ -4,6 +4,8 @@ import {
   type Theme,
 } from '@react-navigation/native';
 import {
+  BottomTabBar,
+  type BottomTabBarProps,
   createBottomTabNavigator,
   type BottomTabNavigationOptions,
 } from '@react-navigation/bottom-tabs';
@@ -17,6 +19,7 @@ import { LibraryScreen } from '../screens/LibraryScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { MiniPlayerBar } from '../components/player/MiniPlayerBar';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,9 +72,18 @@ function createScreenOptions({
   };
 }
 
+function PlayerAwareTabBar(props: BottomTabBarProps) {
+  return (
+    <>
+      <MiniPlayerBar />
+      <BottomTabBar {...props} />
+    </>
+  );
+}
+
 function RootTabs() {
   return (
-    <Tab.Navigator screenOptions={createScreenOptions}>
+    <Tab.Navigator screenOptions={createScreenOptions} tabBar={(props) => <PlayerAwareTabBar {...props} />}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Library" component={LibraryScreen} options={{ title: 'Library' }} />
       <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse' }} />

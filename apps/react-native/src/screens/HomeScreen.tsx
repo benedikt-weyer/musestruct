@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { usePlayer } from '../context/PlayerContext';
 import { PLAYABLE_AUDIO_EXTENSIONS } from '../constants/audio';
 import { useSettings } from '../context/SettingsContext';
 import { MusicFolderAccess } from '../native/MusicFolderAccess';
@@ -41,6 +42,7 @@ function formatModifiedAt(modifiedAt: number) {
 
 export function HomeScreen() {
   const { selectedFolder } = useSettings();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [files, setFiles] = useState<MusicFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -69,7 +71,11 @@ export function HomeScreen() {
           </View>
         )
       }
-      renderItem={({ item }) => (
+      renderItem={({ item }) => {
+        const playerKey = `device:${item.id}`;
+        const isCurrentTrack = currentTrack?.key === playerKey;
+
+        return (
         <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
           <View className="flex-row items-start justify-between gap-3">
             <View className="flex-1">
@@ -90,8 +96,36 @@ export function HomeScreen() {
               {formatModifiedAt(item.modifiedAt)}
             </Text>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+            onPress={() => {
+              if (isCurrentTrack) {
+                togglePlayPause();
+                return;
+              }
+
+              playTrack({
+                id: item.id,
+                key: playerKey,
+                title: item.name,
+                artist: 'Local file',
+                album: selectedFolder?.name,
+                description: item.pathLabel,
+                duration: undefined,
+                source: 'device',
+                url: item.uri,
+              });
+            }}
+          >
+            <Text className="text-center text-sm font-semibold text-slate-700">
+              {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
+            </Text>
+          </Pressable>
         </View>
-      )}
+      );
+      }}
     />
   ) : (
     <View className="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-6">

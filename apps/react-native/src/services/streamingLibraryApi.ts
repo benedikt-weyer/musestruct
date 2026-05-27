@@ -178,3 +178,30 @@ export async function disconnectStreamingProvider(
 
   return parseApiResponse<string>(response);
 }
+
+export async function fetchTrackStreamUrl(
+  backendUrl: string,
+  authSession: AuthSession,
+  trackId: string,
+  service: string,
+  quality?: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams({
+    track_id: trackId,
+    service,
+  });
+
+  if (quality) {
+    searchParams.set('quality', quality);
+  }
+
+  const response = await fetch(
+    `${normalizedUrl}/api/streaming/stream-url?${searchParams.toString()}`,
+    {
+      headers: createAuthHeaders(authSession),
+    },
+  );
+
+  return parseApiResponse<string>(response);
+}

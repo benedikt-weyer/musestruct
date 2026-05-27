@@ -15,11 +15,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import {
   fetchAvailableServices,
   fetchServiceStatus,
+  fetchTrackStreamUrl,
   saveAlbumToLibrary,
   saveTrackToLibrary,
   searchStreamingCatalog,
@@ -51,9 +53,15 @@ function formatDuration(duration?: number) {
 }
 
 function BrowseTrackCard({
+  isCurrentTrack,
+  isPlaying,
+  onPlay,
   onSave,
   track,
 }: Readonly<{
+  isCurrentTrack: boolean;
+  isPlaying: boolean;
+  onPlay: (track: StreamingTrack) => void;
   onSave: (track: StreamingTrack) => void;
   track: StreamingTrack;
 }>) {
@@ -89,15 +97,29 @@ function BrowseTrackCard({
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
-        onPress={() => {
-          onSave(track);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-slate-700">Add track to library</Text>
-      </Pressable>
+      <View className="mt-4 flex-row gap-3">
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full bg-slate-900 px-4 py-3 active:bg-slate-700"
+          onPress={() => {
+            onPlay(track);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-white">
+            {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100"
+          onPress={() => {
+            onSave(track);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-slate-700">Add track to library</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -154,6 +176,7 @@ function BrowseAlbumCard({
 export function BrowseScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { authSession, backendUrl } = useSettings();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [query, setQuery] = useState('');
   const [availableServices, setAvailableServices] = useState<AvailableService[]>([]);
   const [serviceStatus, setServiceStatus] = useState<ConnectedServiceInfo[]>([]);
@@ -299,6 +322,41 @@ export function BrowseScreen() {
       showToast(`Added ${track.title} to your library.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to save track.');
+    }
+  }
+
+  async function handlePlayTrack(track: StreamingTrack) {
+    const playerKey = `${track.source}:${track.id}`;
+    const isCurrentTrack = currentTrack?.key === playerKey;
+
+    if (isCurrentTrack) {
+      togglePlayPause();
+      return;
+    }
+
+    if (!authSession) {
+      showToast('Please log in before playing provider tracks.');
+      return;
+    }
+
+    try {
+      const streamUrl = track.stream_url
+        ? track.stream_url
+        : await fetchTrackStreamUrl(backendUrl, authSession, track.id, track.source);
+
+      playTrack({
+        id: track.id,
+        key: playerKey,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artworkUrl: track.cover_url,
+        duration: track.duration,
+        source: track.source,
+        url: streamUrl,
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to play track.');
     }
   }
 
@@ -455,7 +513,14 @@ export function BrowseScreen() {
           {tracks.length > 0 ? (
             <View className="mt-3">
               {tracks.map((track) => (
-                <BrowseTrackCard key={`${track.source}:${track.id}`} onSave={handleSaveTrack} track={track} />
+                <BrowseTrackCard
+                  isCurrentTrack={currentTrack?.key === `${track.source}:${track.id}`}
+                  isPlaying={isPlaying}
+                  key={`${track.source}:${track.id}`}
+                  onPlay={handlePlayTrack}
+                  onSave={handleSaveTrack}
+                  track={track}
+                />
               ))}
             </View>
           ) : (
