@@ -1,6 +1,7 @@
 import type { AuthSession } from '../types/auth';
 import type {
   LibraryPlaylistListResponse,
+  LibraryPlaylist,
   SavedAlbum,
   SavedTracksListResponse,
 } from '../types/library';
@@ -99,6 +100,25 @@ export async function fetchLibraryPlaylists(
   });
 
   return parseApiResponse<LibraryPlaylistListResponse>(response);
+}
+
+export async function createLibraryPlaylist(
+  backendUrl: string,
+  authSession: AuthSession,
+  payload: {
+    name: string;
+    description?: string | null;
+    is_public: boolean;
+  },
+): Promise<LibraryPlaylist> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/v2/playlists`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<LibraryPlaylist>(response);
 }
 
 export async function deleteSavedTrack(

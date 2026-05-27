@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
+import { createLibraryPlaylist } from '../services/libraryApi';
 import {
   fetchAvailableServices,
   fetchServiceStatus,
@@ -178,8 +179,10 @@ function BrowseAlbumCard({
 }
 
 function BrowsePlaylistCard({
+  onSave,
   playlist,
 }: Readonly<{
+  onSave: (playlist: StreamingPlaylist) => void;
   playlist: StreamingPlaylist;
 }>) {
   return (
@@ -210,6 +213,16 @@ function BrowsePlaylistCard({
           </Text>
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+        onPress={() => {
+          onSave(playlist);
+        }}
+      >
+        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add playlist to library</Text>
+      </Pressable>
     </View>
   );
 }
@@ -473,6 +486,25 @@ export function BrowseScreen() {
     }
   }
 
+  async function handleSavePlaylist(playlist: StreamingPlaylist) {
+    if (!authSession) {
+      showToast('Please log in before saving playlists.');
+      return;
+    }
+
+    try {
+      await createLibraryPlaylist(backendUrl, authSession, {
+        name: playlist.name,
+        description:
+          playlist.description ?? `Imported from ${playlist.source} by ${playlist.owner}`,
+        is_public: playlist.is_public,
+      });
+      showToast(`Added ${playlist.name} to your library.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to save playlist.');
+    }
+  }
+
   if (!authSession) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
@@ -692,7 +724,11 @@ export function BrowseScreen() {
             {playlists.length > 0 ? (
               <View className="mt-3">
                 {playlists.map((playlist) => (
-                  <BrowsePlaylistCard key={`${playlist.source}:${playlist.id}`} playlist={playlist} />
+                  <BrowsePlaylistCard
+                    key={`${playlist.source}:${playlist.id}`}
+                    onSave={handleSavePlaylist}
+                    playlist={playlist}
+                  />
                 ))}
               </View>
             ) : (
