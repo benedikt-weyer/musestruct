@@ -10,3 +10,9 @@ export type PlayerTrack = {
   source: string;
   url: string;
 };
+
+export type QueueTrack = Omit<PlayerTrack, 'url'>;
+
+export type PlayerPlayMode = 'normal' | 'shuffle';
+
+export type PlayerLoopMode = 'once' | 'twice' | 'infinite';

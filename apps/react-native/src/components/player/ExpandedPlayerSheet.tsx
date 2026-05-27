@@ -16,18 +16,43 @@ function formatSource(source: string) {
     .join(' ');
 }
 
+function formatLoopMode(loopMode: 'once' | 'twice' | 'infinite') {
+  switch (loopMode) {
+    case 'once':
+      return 'Play Once';
+    case 'twice':
+      return 'Play Twice';
+    case 'infinite':
+      return 'Repeat Forever';
+  }
+}
+
+function formatPlayMode(playMode: 'normal' | 'shuffle') {
+  return playMode === 'shuffle' ? 'Shuffle' : 'Normal Order';
+}
+
 export function ExpandedPlayerSheet() {
   const {
+    canPlayNext,
+    canPlayPrevious,
     closeExpanded,
     closeTrack,
+    currentLoopMode,
+    currentPlayMode,
+    currentPlaylistName,
     currentTrack,
+    cycleLoopMode,
     duration,
     errorMessage,
     isBuffering,
     isExpanded,
+    isPlaylistActive,
     isPlaying,
     position,
+    playNextTrack,
+    playPreviousTrack,
     seekTo,
+    togglePlayMode,
     togglePlayPause,
   } = usePlayer();
 
@@ -85,6 +110,11 @@ export function ExpandedPlayerSheet() {
                 <Text className="mt-2 text-sm leading-6 text-slate-400" numberOfLines={2}>
                   {currentTrack.description ?? currentTrack.album ?? formatSource(currentTrack.source)}
                 </Text>
+                {isPlaylistActive && currentPlaylistName ? (
+                  <Text className="mt-2 text-xs font-semibold uppercase tracking-[1.5px] text-teal-300">
+                    Playlist • {currentPlaylistName}
+                  </Text>
+                ) : null}
               </View>
               <View className="rounded-full border border-slate-700 bg-slate-900 px-3 py-2">
                 <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-300">
@@ -109,7 +139,48 @@ export function ExpandedPlayerSheet() {
               </View>
             ) : null}
 
+            {isPlaylistActive ? (
+              <View className="mt-6 flex-row gap-3">
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 py-3 active:bg-slate-800"
+                  onPress={togglePlayMode}
+                >
+                  <Text className="text-center text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+                    Order
+                  </Text>
+                  <Text className="mt-1 text-center text-sm font-semibold text-white">
+                    {formatPlayMode(currentPlayMode)}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 py-3 active:bg-slate-800"
+                  onPress={cycleLoopMode}
+                >
+                  <Text className="text-center text-xs font-semibold uppercase tracking-[1px] text-slate-400">
+                    Loop
+                  </Text>
+                  <Text className="mt-1 text-center text-sm font-semibold text-white">
+                    {formatLoopMode(currentLoopMode)}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             <View className="mt-10 flex-row items-center justify-center gap-5">
+              {isPlaylistActive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="h-14 w-14 items-center justify-center rounded-full bg-slate-900 active:bg-slate-800"
+                  disabled={!canPlayPrevious}
+                  onPress={playPreviousTrack}
+                >
+                  <Ionicons color={canPlayPrevious ? '#e2e8f0' : '#475569'} name="play-skip-back" size={24} />
+                </Pressable>
+              ) : null}
+
               <Pressable
                 accessibilityRole="button"
                 className="h-14 w-14 items-center justify-center rounded-full bg-slate-900 active:bg-slate-800"
@@ -129,6 +200,17 @@ export function ExpandedPlayerSheet() {
                   <Ionicons color="#062c2c" name={isPlaying ? 'pause' : 'play'} size={34} />
                 )}
               </Pressable>
+
+              {isPlaylistActive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="h-14 w-14 items-center justify-center rounded-full bg-slate-900 active:bg-slate-800"
+                  disabled={!canPlayNext}
+                  onPress={playNextTrack}
+                >
+                  <Ionicons color={canPlayNext ? '#e2e8f0' : '#475569'} name="play-skip-forward" size={24} />
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </View>

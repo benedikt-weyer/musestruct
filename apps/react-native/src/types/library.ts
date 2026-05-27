@@ -40,6 +40,22 @@ export type LibraryPlaylist = {
   item_count: number;
 };
 
+export type LibraryPlaylistItem = {
+  id: string;
+  item_type: string;
+  item_id: string;
+  position: number;
+  added_at: string;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  duration?: number | null;
+  source?: string | null;
+  cover_url?: string | null;
+  is_playlist: boolean;
+  playlist_name?: string | null;
+};
+
 export type LibraryPlaylistListResponse = {
   playlists: LibraryPlaylist[];
   total: number;

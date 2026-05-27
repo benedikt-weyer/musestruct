@@ -19,6 +19,7 @@ import {
   deleteLibraryPlaylist,
   deleteSavedAlbum,
   deleteSavedTrack,
+  fetchLibraryPlaylistItems,
   fetchLibraryPlaylists,
   fetchSavedAlbums,
   fetchSavedTracks,
@@ -26,10 +27,12 @@ import {
 import { fetchTrackStreamUrl } from '../services/streamingLibraryApi';
 import type {
   LibraryPlaylist,
+  LibraryPlaylistItem,
   LibrarySection,
   SavedAlbum,
   SavedTrack,
 } from '../types/library';
+import type { PlayerPlayMode, QueueTrack } from '../types/player';
 
 type LibrarySectionOption = {
   key: LibrarySection;
@@ -74,6 +77,18 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleDateString();
+}
+
+function getTrackPlayLabel(isCurrentTrack: boolean, isPlaying: boolean) {
+  if (isCurrentTrack && isPlaying) {
+    return 'Pause track';
+  }
+
+  if (isCurrentTrack) {
+    return 'Resume track';
+  }
+
+  return 'Play track';
 }
 
 function LibrarySectionButton({
@@ -137,6 +152,8 @@ function TrackLibraryCard({
   showFavouriteBadge: boolean;
   track: SavedTrack;
 }>) {
+  const playLabel = getTrackPlayLabel(isCurrentTrack, isPlaying);
+
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
@@ -188,7 +205,7 @@ function TrackLibraryCard({
           }}
         >
           <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
-            {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
+            {playLabel}
           </Text>
         </Pressable>
 
@@ -265,14 +282,35 @@ function AlbumLibraryCard({
 }
 
 function PlaylistLibraryCard({
+  currentPlayMode,
+  isCurrentPlaylist,
   isRemoving,
+  isStarting,
+  isPlaying,
+  onPlay,
   onRemove,
+  onShuffle,
   playlist,
 }: Readonly<{
+  currentPlayMode: PlayerPlayMode;
+  isCurrentPlaylist: boolean;
   isRemoving: boolean;
+  isStarting: boolean;
+  isPlaying: boolean;
+  onPlay: (playlist: LibraryPlaylist) => void;
   onRemove: (playlist: LibraryPlaylist) => void;
+  onShuffle: (playlist: LibraryPlaylist) => void;
   playlist: LibraryPlaylist;
 }>) {
+  let playLabel = 'Play playlist';
+  if (isStarting) {
+    playLabel = 'Loading...';
+  } else if (isCurrentPlaylist && isPlaying) {
+    playLabel = 'Pause playlist';
+  } else if (isCurrentPlaylist) {
+    playLabel = 'Resume playlist';
+  }
+
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row items-start justify-between gap-4">
@@ -295,18 +333,46 @@ function PlaylistLibraryCard({
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
-        disabled={isRemoving}
-        onPress={() => {
-          onRemove(playlist);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-rose-700">
-          {isRemoving ? 'Deleting playlist...' : 'Delete playlist'}
-        </Text>
-      </Pressable>
+      <View className="mt-4 flex-row gap-3">
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+          disabled={isStarting}
+          onPress={() => {
+            onPlay(playlist);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {playLabel}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-teal-200 bg-teal-50 px-4 py-3 active:bg-teal-100"
+          disabled={isStarting}
+          onPress={() => {
+            onShuffle(playlist);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-teal-700">
+            {isCurrentPlaylist && currentPlayMode === 'shuffle' ? 'Shuffle active' : 'Shuffle'}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+          disabled={isRemoving}
+          onPress={() => {
+            onRemove(playlist);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-rose-700">
+            {isRemoving ? 'Deleting...' : 'Delete'}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -349,24 +415,32 @@ function ActiveLibrarySection({
   albums,
   deletingItemKey,
   favouriteTracks,
+  currentPlayMode,
+  currentPlaylistId,
   isPlaying,
+  onPlayPlaylist,
   onPlayTrack,
   onRemoveAlbum,
   onRemovePlaylist,
   onRemoveTrack,
+  playlistActionKey,
   playlists,
   tracks,
   currentTrackKey,
 }: Readonly<{
   activeSection: LibrarySection;
   albums: SavedAlbum[];
+  currentPlayMode: PlayerPlayMode;
+  currentPlaylistId: string | null;
   deletingItemKey: string | null;
   favouriteTracks: SavedTrack[];
   isPlaying: boolean;
+  onPlayPlaylist: (playlist: LibraryPlaylist, playMode: PlayerPlayMode) => void;
   onPlayTrack: (track: SavedTrack) => void;
   onRemoveAlbum: (album: SavedAlbum) => void;
   onRemovePlaylist: (playlist: LibraryPlaylist) => void;
   onRemoveTrack: (track: SavedTrack) => void;
+  playlistActionKey: string | null;
   playlists: LibraryPlaylist[];
   tracks: SavedTrack[];
   currentTrackKey: string | null;
@@ -381,9 +455,19 @@ function ActiveLibrarySection({
       <>
         {playlists.map((playlist) => (
           <PlaylistLibraryCard
+            currentPlayMode={currentPlayMode}
+            isCurrentPlaylist={currentPlaylistId === playlist.id}
             isRemoving={deletingItemKey === `playlist:${playlist.id}`}
+            isStarting={playlistActionKey === `playlist:${playlist.id}`}
+            isPlaying={isPlaying}
             key={playlist.id}
+            onPlay={(selectedPlaylist) => {
+              onPlayPlaylist(selectedPlaylist, 'normal');
+            }}
             onRemove={onRemovePlaylist}
+            onShuffle={(selectedPlaylist) => {
+              onPlayPlaylist(selectedPlaylist, 'shuffle');
+            }}
             playlist={playlist}
           />
         ))}
@@ -461,13 +545,22 @@ function ActiveLibrarySection({
 export function LibraryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { authSession, backendUrl } = useSettings();
-  const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
+  const {
+    currentPlayMode,
+    currentPlaylistId,
+    currentTrack,
+    isPlaying,
+    playPlaylist,
+    playTrack,
+    togglePlayPause,
+  } = usePlayer();
   const [activeSection, setActiveSection] = useState<LibrarySection>('tracks');
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [albums, setAlbums] = useState<SavedAlbum[]>([]);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
+  const [playlistActionKey, setPlaylistActionKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function loadLibrary() {
@@ -551,6 +644,132 @@ export function LibraryScreen() {
     }
   }
 
+  function createQueueTracks(playlist: LibraryPlaylist, items: LibraryPlaylistItem[]): QueueTrack[] {
+    return items
+      .filter((item) => !item.is_playlist && typeof item.source === 'string' && item.source.length > 0)
+      .map((item) => ({
+        album: item.album ?? undefined,
+        artist: item.artist ?? 'Unknown Artist',
+        artworkUrl: item.cover_url,
+        description: playlist.description ?? playlist.name,
+        duration: item.duration ?? undefined,
+        id: item.item_id,
+        key: `${item.source}:${item.item_id}`,
+        source: item.source ?? 'unknown',
+        title: item.title ?? 'Unknown Track',
+      }));
+  }
+
+  function handlePlayPlaylist(playlist: LibraryPlaylist, playMode: PlayerPlayMode) {
+    if (!authSession) {
+      return;
+    }
+
+    const shouldToggleCurrentPlaylist = currentPlaylistId === playlist.id && currentPlayMode === playMode;
+
+    if (shouldToggleCurrentPlaylist) {
+      togglePlayPause();
+      return;
+    }
+
+    void (async () => {
+      const actionKey = `playlist:${playlist.id}`;
+      setPlaylistActionKey(actionKey);
+      setErrorMessage(null);
+
+      try {
+        const items = await fetchLibraryPlaylistItems(backendUrl, authSession, playlist.id);
+        const queueTracks = createQueueTracks(playlist, items);
+
+        if (queueTracks.length === 0) {
+          throw new Error('This playlist does not contain any playable track items yet.');
+        }
+
+        await playPlaylist({
+          description: playlist.description ?? undefined,
+          playMode,
+          playlistId: playlist.id,
+          playlistName: playlist.name,
+          resolveTrack: async (queuedTrack) => {
+            const streamUrl = await fetchTrackStreamUrl(
+              backendUrl,
+              authSession,
+              queuedTrack.id,
+              queuedTrack.source,
+            );
+
+            return {
+              ...queuedTrack,
+              url: streamUrl,
+            };
+          },
+          tracks: queueTracks,
+        });
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to play playlist.');
+      } finally {
+        setPlaylistActionKey((currentKey) => (currentKey === actionKey ? null : currentKey));
+      }
+    })();
+  }
+
+  async function removeTrackFromLibrary(track: SavedTrack) {
+    if (!authSession) {
+      return;
+    }
+
+    const itemKey = `track:${track.id}`;
+    setDeletingItemKey(itemKey);
+
+    try {
+      await deleteSavedTrack(backendUrl, authSession, track.id);
+      setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id));
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
+    } finally {
+      setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+    }
+  }
+
+  async function removeAlbumFromLibrary(album: SavedAlbum) {
+    if (!authSession) {
+      return;
+    }
+
+    const itemKey = `album:${album.id}`;
+    setDeletingItemKey(itemKey);
+
+    try {
+      await deleteSavedAlbum(backendUrl, authSession, album.id);
+      setAlbums((currentAlbums) => currentAlbums.filter((item) => item.id !== album.id));
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to remove album.');
+    } finally {
+      setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+    }
+  }
+
+  async function removePlaylistFromLibrary(playlist: LibraryPlaylist) {
+    if (!authSession) {
+      return;
+    }
+
+    const itemKey = `playlist:${playlist.id}`;
+    setDeletingItemKey(itemKey);
+
+    try {
+      await deleteLibraryPlaylist(backendUrl, authSession, playlist.id);
+      setPlaylists((currentPlaylists) => currentPlaylists.filter((item) => item.id !== playlist.id));
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete playlist.');
+    } finally {
+      setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+    }
+  }
+
   function handleRemoveTrack(track: SavedTrack) {
     if (!authSession) {
       return;
@@ -565,20 +784,7 @@ export function LibraryScreen() {
         style: 'destructive',
         text: 'Remove',
         onPress: () => {
-          void (async () => {
-            const itemKey = `track:${track.id}`;
-            setDeletingItemKey(itemKey);
-
-            try {
-              await deleteSavedTrack(backendUrl, authSession, track.id);
-              setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id));
-              setErrorMessage(null);
-            } catch (error) {
-              setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
-            } finally {
-              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
-            }
-          })();
+          void removeTrackFromLibrary(track);
         },
       },
     ]);
@@ -598,20 +804,7 @@ export function LibraryScreen() {
         style: 'destructive',
         text: 'Remove',
         onPress: () => {
-          void (async () => {
-            const itemKey = `album:${album.id}`;
-            setDeletingItemKey(itemKey);
-
-            try {
-              await deleteSavedAlbum(backendUrl, authSession, album.id);
-              setAlbums((currentAlbums) => currentAlbums.filter((item) => item.id !== album.id));
-              setErrorMessage(null);
-            } catch (error) {
-              setErrorMessage(error instanceof Error ? error.message : 'Failed to remove album.');
-            } finally {
-              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
-            }
-          })();
+          void removeAlbumFromLibrary(album);
         },
       },
     ]);
@@ -631,22 +824,7 @@ export function LibraryScreen() {
         style: 'destructive',
         text: 'Delete',
         onPress: () => {
-          void (async () => {
-            const itemKey = `playlist:${playlist.id}`;
-            setDeletingItemKey(itemKey);
-
-            try {
-              await deleteLibraryPlaylist(backendUrl, authSession, playlist.id);
-              setPlaylists((currentPlaylists) =>
-                currentPlaylists.filter((item) => item.id !== playlist.id),
-              );
-              setErrorMessage(null);
-            } catch (error) {
-              setErrorMessage(error instanceof Error ? error.message : 'Failed to delete playlist.');
-            } finally {
-              setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
-            }
-          })();
+          void removePlaylistFromLibrary(playlist);
         },
       },
     ]);
@@ -726,14 +904,18 @@ export function LibraryScreen() {
                 <ActiveLibrarySection
                   activeSection={activeSection}
                   albums={albums}
+                  currentPlayMode={currentPlayMode}
+                  currentPlaylistId={currentPlaylistId}
                   currentTrackKey={currentTrackKey}
                   deletingItemKey={deletingItemKey}
                   favouriteTracks={favouriteTracks}
                   isPlaying={isPlaying}
+                  onPlayPlaylist={handlePlayPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onRemoveAlbum={handleRemoveAlbum}
                   onRemovePlaylist={handleRemovePlaylist}
                   onRemoveTrack={handleRemoveTrack}
+                  playlistActionKey={playlistActionKey}
                   playlists={playlists}
                   tracks={tracks}
                 />

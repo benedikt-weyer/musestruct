@@ -2,6 +2,7 @@ import type { AuthSession } from '../types/auth';
 import type {
   LibraryPlaylistListResponse,
   LibraryPlaylist,
+  LibraryPlaylistItem,
   SavedAlbum,
   SavedTracksListResponse,
 } from '../types/library';
@@ -100,6 +101,19 @@ export async function fetchLibraryPlaylists(
   });
 
   return parseApiResponse<LibraryPlaylistListResponse>(response);
+}
+
+export async function fetchLibraryPlaylistItems(
+  backendUrl: string,
+  authSession: AuthSession,
+  playlistId: string,
+): Promise<LibraryPlaylistItem[]> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${playlistId}/items`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<LibraryPlaylistItem[]>(response);
 }
 
 export async function createLibraryPlaylist(
