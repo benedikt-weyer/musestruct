@@ -4,6 +4,7 @@ import type {
   SavedAlbumPayload,
   SavedTrackPayload,
   ServiceStatusResponse,
+  SpotifyAuthUrlResponse,
   StreamingSearchResults,
 } from '../types/streaming';
 import { normalizeBackendUrl } from './backendApi';
@@ -128,4 +129,52 @@ export async function saveAlbumToLibrary(
   });
 
   return parseApiResponse<unknown>(response);
+}
+
+export async function connectQobuzProvider(
+  backendUrl: string,
+  authSession: AuthSession,
+  username: string,
+  password: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/streaming/connect/qobuz`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify({
+      username,
+      password,
+    }),
+  });
+
+  return parseApiResponse<string>(response);
+}
+
+export async function fetchSpotifyAuthUrl(
+  backendUrl: string,
+  authSession: AuthSession,
+): Promise<SpotifyAuthUrlResponse> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/streaming/spotify/auth-url`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<SpotifyAuthUrlResponse>(response);
+}
+
+export async function disconnectStreamingProvider(
+  backendUrl: string,
+  authSession: AuthSession,
+  serviceName: 'qobuz' | 'spotify',
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/streaming/disconnect`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify({
+      service_name: serviceName,
+    }),
+  });
+
+  return parseApiResponse<string>(response);
 }

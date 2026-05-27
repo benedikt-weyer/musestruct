@@ -4,6 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +21,14 @@ import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import { MusicFolderAccess } from '../native/MusicFolderAccess';
 import { normalizeBackendUrl, testBackendConnection } from '../services/backendApi';
+import {
+  connectQobuzProvider,
+  disconnectStreamingProvider,
+  fetchServiceStatus,
+  fetchSpotifyAuthUrl,
+} from '../services/streamingLibraryApi';
+import type { AuthSession } from '../types/auth';
+import type { ConnectedServiceInfo } from '../types/streaming';
 
 type NativeError = Error & {
   code?: string;
@@ -36,6 +45,368 @@ function showConnectionToast(message: string, isError: boolean) {
   }
 
   Alert.alert(isError ? 'Connection failed' : 'Connection successful', message);
+}
+
+type ProviderActionButtonProps = {
+  busy: boolean;
+  label: string;
+  onPress: () => void;
+  tone: 'primary' | 'secondary';
+};
+
+function ProviderActionButton({ busy, label, onPress, tone }: Readonly<ProviderActionButtonProps>) {
+  const buttonClassName =
+    tone === 'primary'
+      ? 'mt-4 rounded-full bg-slate-900 px-5 py-4 active:bg-slate-700'
+      : 'mt-4 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100';
+  const textClassName =
+    tone === 'primary'
+      ? 'text-center text-base font-semibold text-white'
+      : 'text-center text-base font-semibold text-slate-700';
+  const indicatorColor = tone === 'primary' ? '#ffffff' : '#0f766e';
+
+  return (
+    <Pressable accessibilityRole="button" className={buttonClassName} disabled={busy} onPress={onPress}>
+      {busy ? (
+        <ActivityIndicator color={indicatorColor} />
+      ) : (
+        <Text className={textClassName}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+type QobuzProviderCardProps = {
+  busyConnecting: boolean;
+  busyDisconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onPasswordChange: (value: string) => void;
+  onUsernameChange: (value: string) => void;
+  password: string;
+  provider: ConnectedServiceInfo | null;
+  username: string;
+};
+
+function QobuzProviderCard({
+  busyConnecting,
+  busyDisconnecting,
+  onConnect,
+  onDisconnect,
+  onPasswordChange,
+  onUsernameChange,
+  password,
+  provider,
+  username,
+}: Readonly<QobuzProviderCardProps>) {
+  const isConnected = provider?.is_connected === true;
+  const description = isConnected
+    ? provider?.account_username ?? 'Connected'
+    : 'Connect with your Qobuz account credentials.';
+
+  return (
+    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
+      <Text className="text-base font-semibold text-slate-900">Qobuz</Text>
+      <Text className="mt-1 text-sm leading-6 text-slate-600">{description}</Text>
+
+      {isConnected ? (
+        <ProviderActionButton
+          busy={busyDisconnecting}
+          label="Disconnect Qobuz"
+          onPress={onDisconnect}
+          tone="secondary"
+        />
+      ) : (
+        <>
+          <TextInput
+            autoCapitalize="none"
+            autoComplete="username"
+            autoCorrect={false}
+            className="mt-4 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+            importantForAutofill="yes"
+            onChangeText={onUsernameChange}
+            placeholder="Qobuz username"
+            placeholderTextColor="#94a3b8"
+            textContentType="username"
+            value={username}
+          />
+          <TextInput
+            autoCapitalize="none"
+            autoComplete="current-password"
+            autoCorrect={false}
+            className="mt-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-base text-slate-900"
+            importantForAutofill="yes"
+            onChangeText={onPasswordChange}
+            placeholder="Qobuz password"
+            placeholderTextColor="#94a3b8"
+            secureTextEntry
+            textContentType="password"
+            value={password}
+          />
+          <ProviderActionButton
+            busy={busyConnecting}
+            label="Connect Qobuz"
+            onPress={onConnect}
+            tone="primary"
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
+type SpotifyProviderCardProps = {
+  busyConnecting: boolean;
+  busyDisconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  provider: ConnectedServiceInfo | null;
+};
+
+function SpotifyProviderCard({
+  busyConnecting,
+  busyDisconnecting,
+  onConnect,
+  onDisconnect,
+  provider,
+}: Readonly<SpotifyProviderCardProps>) {
+  const isConnected = provider?.is_connected === true;
+  const description = isConnected
+    ? provider?.account_username ?? 'Connected'
+    : 'Open Spotify authorization in your browser, then return here and refresh status.';
+
+  return (
+    <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
+      <Text className="text-base font-semibold text-slate-900">Spotify</Text>
+      <Text className="mt-1 text-sm leading-6 text-slate-600">{description}</Text>
+
+      {isConnected ? (
+        <ProviderActionButton
+          busy={busyDisconnecting}
+          label="Disconnect Spotify"
+          onPress={onDisconnect}
+          tone="secondary"
+        />
+      ) : (
+        <ProviderActionButton
+          busy={busyConnecting}
+          label="Connect Spotify"
+          onPress={onConnect}
+          tone="primary"
+        />
+      )}
+    </View>
+  );
+}
+
+type ProviderSettingsCardProps = {
+  authSession: AuthSession | null;
+  backendUrl: string;
+};
+
+function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSettingsCardProps>) {
+  const [providerStatus, setProviderStatus] = useState<ConnectedServiceInfo[]>([]);
+  const [providerErrorMessage, setProviderErrorMessage] = useState<string | null>(null);
+  const [qobuzUsername, setQobuzUsername] = useState('');
+  const [qobuzPassword, setQobuzPassword] = useState('');
+  const [providerAction, setProviderAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authSession) {
+      setProviderStatus([]);
+      setProviderErrorMessage(null);
+      return;
+    }
+
+    void loadProviderStatus();
+  }, [authSession, backendUrl]);
+
+  async function loadProviderStatus(showSpinner = true) {
+    if (!authSession) {
+      setProviderStatus([]);
+      return;
+    }
+
+    if (showSpinner) {
+      setProviderAction('refresh');
+    }
+
+    setProviderErrorMessage(null);
+
+    try {
+      const response = await fetchServiceStatus(backendUrl, authSession);
+      setProviderStatus(response.services.filter((service) => service.name !== 'server'));
+    } catch (error) {
+      setProviderErrorMessage(
+        error instanceof Error ? error.message : 'Failed to load provider status.',
+      );
+    } finally {
+      if (showSpinner) {
+        setProviderAction((currentAction) =>
+          currentAction === 'refresh' ? null : currentAction,
+        );
+      }
+    }
+  }
+
+  async function handleConnectQobuz() {
+    if (!authSession) {
+      showConnectionToast('Please log in before connecting a provider.', true);
+      return;
+    }
+
+    const trimmedUsername = qobuzUsername.trim();
+    const trimmedPassword = qobuzPassword.trim();
+
+    if (!trimmedUsername || !trimmedPassword) {
+      showConnectionToast('Please enter both your Qobuz username and password.', true);
+      return;
+    }
+
+    const actionName = 'connect-qobuz';
+    setProviderAction(actionName);
+    setProviderErrorMessage(null);
+
+    try {
+      const message = await connectQobuzProvider(
+        backendUrl,
+        authSession,
+        trimmedUsername,
+        trimmedPassword,
+      );
+      setQobuzPassword('');
+      await loadProviderStatus(false);
+      showConnectionToast(message, false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to connect to Qobuz.';
+      setProviderErrorMessage(message);
+      showConnectionToast(message, true);
+    } finally {
+      setProviderAction((currentAction) =>
+        currentAction === actionName ? null : currentAction,
+      );
+    }
+  }
+
+  async function handleConnectSpotify() {
+    if (!authSession) {
+      showConnectionToast('Please log in before connecting a provider.', true);
+      return;
+    }
+
+    const actionName = 'connect-spotify';
+    setProviderAction(actionName);
+    setProviderErrorMessage(null);
+
+    try {
+      const response = await fetchSpotifyAuthUrl(backendUrl, authSession);
+      await Linking.openURL(response.auth_url);
+      showConnectionToast(
+        'Complete Spotify authorization in your browser, then refresh provider status.',
+        false,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start Spotify authorization.';
+      setProviderErrorMessage(message);
+      showConnectionToast(message, true);
+    } finally {
+      setProviderAction((currentAction) =>
+        currentAction === actionName ? null : currentAction,
+      );
+    }
+  }
+
+  async function handleDisconnectProvider(serviceName: 'qobuz' | 'spotify') {
+    if (!authSession) {
+      showConnectionToast('Please log in before disconnecting a provider.', true);
+      return;
+    }
+
+    const actionName = `disconnect-${serviceName}`;
+    setProviderAction(actionName);
+    setProviderErrorMessage(null);
+
+    try {
+      const message = await disconnectStreamingProvider(backendUrl, authSession, serviceName);
+      await loadProviderStatus(false);
+      showConnectionToast(message, false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to disconnect provider.';
+      setProviderErrorMessage(message);
+      showConnectionToast(message, true);
+    } finally {
+      setProviderAction((currentAction) =>
+        currentAction === actionName ? null : currentAction,
+      );
+    }
+  }
+
+  const qobuzProvider = providerStatus.find((service) => service.name === 'qobuz') ?? null;
+  const spotifyProvider = providerStatus.find((service) => service.name === 'spotify') ?? null;
+
+  return (
+    <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
+      <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
+        Providers
+      </Text>
+      <Text className="mt-2 text-sm leading-6 text-slate-600">
+        Connect external services the same way the Flutter app does, then refresh status after
+        completing browser-based authorization.
+      </Text>
+
+      {authSession ? (
+        <>
+          <ProviderActionButton
+            busy={providerAction === 'refresh'}
+            label="Refresh provider status"
+            onPress={() => {
+              void loadProviderStatus();
+            }}
+            tone="secondary"
+          />
+
+          <QobuzProviderCard
+            busyConnecting={providerAction === 'connect-qobuz'}
+            busyDisconnecting={providerAction === 'disconnect-qobuz'}
+            onConnect={() => {
+              void handleConnectQobuz();
+            }}
+            onDisconnect={() => {
+              void handleDisconnectProvider('qobuz');
+            }}
+            onPasswordChange={setQobuzPassword}
+            onUsernameChange={setQobuzUsername}
+            password={qobuzPassword}
+            provider={qobuzProvider}
+            username={qobuzUsername}
+          />
+
+          <SpotifyProviderCard
+            busyConnecting={providerAction === 'connect-spotify'}
+            busyDisconnecting={providerAction === 'disconnect-spotify'}
+            onConnect={() => {
+              void handleConnectSpotify();
+            }}
+            onDisconnect={() => {
+              void handleDisconnectProvider('spotify');
+            }}
+            provider={spotifyProvider}
+          />
+
+          {providerErrorMessage ? (
+            <View className="mt-4 rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4">
+              <Text className="text-sm font-semibold text-rose-900">Provider connection failed</Text>
+              <Text className="mt-1 text-sm text-rose-700">{providerErrorMessage}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <Text className="mt-3 text-sm leading-6 text-slate-600">
+          Log in first to connect or disconnect music providers.
+        </Text>
+      )}
+    </View>
+  );
 }
 
 export function SettingsScreen() {
@@ -290,6 +661,8 @@ export function SettingsScreen() {
             ) : null}
           </View>
         </View>
+
+        <ProviderSettingsCard authSession={authSession} backendUrl={backendUrl} />
 
         <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">

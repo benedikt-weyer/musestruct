@@ -67,6 +67,11 @@ export type ServiceStatusResponse = {
   services: ConnectedServiceInfo[];
 };
 
+export type SpotifyAuthUrlResponse = {
+  auth_url: string;
+  state: string;
+};
+
 export type SavedTrackPayload = {
   track_id: string;
   title: string;
