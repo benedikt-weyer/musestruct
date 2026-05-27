@@ -153,9 +153,19 @@ export async function connectQobuzProvider(
 export async function fetchSpotifyAuthUrl(
   backendUrl: string,
   authSession: AuthSession,
+  redirectUrl?: string,
 ): Promise<SpotifyAuthUrlResponse> {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/streaming/spotify/auth-url`, {
+  const searchParams = new URLSearchParams();
+
+  if (redirectUrl) {
+    searchParams.set('redirect_url', redirectUrl);
+  }
+
+  const requestUrl = searchParams.size
+    ? `${normalizedUrl}/api/streaming/spotify/auth-url?${searchParams.toString()}`
+    : `${normalizedUrl}/api/streaming/spotify/auth-url`;
+  const response = await fetch(requestUrl, {
     headers: createAuthHeaders(authSession),
   });
 

@@ -305,10 +305,195 @@ pub struct SpotifyAuthUrlResponse {
 }
 
 #[derive(Deserialize)]
+pub struct SpotifyAuthUrlQuery {
+    pub redirect_url: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct SpotifyCallbackQuery {
     pub code: Option<String>,
     pub state: Option<String>,
     pub error: Option<String>,
+}
+
+fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.split(',').next().unwrap_or(value).trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn infer_request_scheme(host: &str) -> &'static str {
+    let hostname = host.split(':').next().unwrap_or(host);
+    let is_local = hostname.eq_ignore_ascii_case("localhost")
+        || hostname.starts_with("127.")
+        || hostname.starts_with("10.")
+        || hostname.starts_with("192.168.")
+        || hostname.starts_with("172.");
+
+    if is_local {
+        "http"
+    } else {
+        "https"
+    }
+}
+
+fn resolve_spotify_redirect_uri(headers: &HeaderMap) -> String {
+    match std::env::var("SPOTIFY_REDIRECT_URI") {
+        Ok(redirect_uri) if !redirect_uri.trim().is_empty() => redirect_uri,
+        _ => {
+            let host = header_string(headers, "x-forwarded-host")
+                .or_else(|| headers.get(header::HOST).and_then(|value| value.to_str().ok()).map(|value| value.to_string()))
+                .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+            let scheme = header_string(headers, "x-forwarded-proto")
+                .unwrap_or_else(|| infer_request_scheme(&host).to_string());
+
+            format!("{}://{}/api/streaming/spotify/callback", scheme, host)
+        }
+    }
+}
+
+fn normalize_client_redirect_url(redirect_url: Option<String>) -> Result<Option<String>, String> {
+    let Some(redirect_url) = redirect_url else {
+        return Ok(None);
+    };
+
+    let redirect_url = redirect_url.trim();
+
+    if redirect_url.is_empty() {
+        return Ok(None);
+    }
+
+    if !redirect_url.contains("://") || redirect_url.chars().any(char::is_whitespace) {
+        return Err("Redirect URL must be an absolute URL like musestruct://spotify".to_string());
+    }
+
+    Ok(Some(redirect_url.to_string()))
+}
+
+fn encode_spotify_state(user_id: uuid::Uuid, client_redirect_url: Option<&str>) -> String {
+    let nonce = uuid::Uuid::new_v4();
+    let encoded_redirect_url = client_redirect_url
+        .map(base64::encode)
+        .unwrap_or_default();
+
+    format!("{}:{}:{}", nonce, user_id, encoded_redirect_url)
+}
+
+fn decode_spotify_state(state: &str) -> Result<(uuid::Uuid, Option<String>), String> {
+    let mut parts = state.splitn(3, ':');
+
+    let _nonce = parts
+        .next()
+        .ok_or_else(|| "Invalid state parameter format received from Spotify.".to_string())?;
+
+    let user_id = parts
+        .next()
+        .ok_or_else(|| "Invalid state parameter format received from Spotify.".to_string())
+        .and_then(|user_id_str| {
+            uuid::Uuid::parse_str(user_id_str)
+                .map_err(|_| "Invalid state parameter received from Spotify.".to_string())
+        })?;
+
+    let client_redirect_url = match parts.next() {
+        Some(encoded_redirect_url) if !encoded_redirect_url.is_empty() => {
+            let decoded_bytes = base64::decode(encoded_redirect_url)
+                .map_err(|_| "Invalid state parameter format received from Spotify.".to_string())?;
+            let decoded_redirect_url = String::from_utf8(decoded_bytes)
+                .map_err(|_| "Invalid state parameter format received from Spotify.".to_string())?;
+            normalize_client_redirect_url(Some(decoded_redirect_url))?
+        }
+        _ => None,
+    };
+
+    Ok((user_id, client_redirect_url))
+}
+
+fn build_spotify_app_redirect_url(base_redirect_url: &str, status: &str, message: &str) -> String {
+    let separator = if base_redirect_url.contains('?') { '&' } else { '?' };
+    format!(
+        "{}{separator}status={}&message={}&service=spotify",
+        base_redirect_url,
+        urlencoding::encode(status),
+        urlencoding::encode(message),
+    )
+}
+
+fn build_spotify_app_redirect_html(target_url: &str, title: &str, message: &str, accent_color: &str) -> String {
+    format!(
+        r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{}</title>
+    <meta http-equiv="refresh" content="0;url={}">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, {} 0%, #0f172a 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .container {{
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+        }}
+        h1 {{
+            color: #0f172a;
+            margin: 0 0 16px 0;
+            font-size: 28px;
+            font-weight: 700;
+        }}
+        p {{
+            color: #475569;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }}
+        .open-btn {{
+            display: inline-block;
+            background: {};
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+        }}
+    </style>
+    <script>
+        window.location.replace({});
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>{}</h1>
+        <p>{}</p>
+        <a class="open-btn" href="{}">Return to the app</a>
+    </div>
+</body>
+</html>
+        "#,
+        title,
+        target_url,
+        accent_color,
+        accent_color,
+        serde_json::to_string(target_url).unwrap_or_else(|_| "\"\"".to_string()),
+        title,
+        message,
+        target_url,
+    )
 }
 
 #[derive(Deserialize)]
@@ -425,9 +610,18 @@ pub async fn connect_qobuz(
 pub async fn get_spotify_auth_url(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
+    Query(query): Query<SpotifyAuthUrlQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<ApiResponse<SpotifyAuthUrlResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
     let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
-    let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap_or_else(|_| "http://127.0.0.1:8080/api/streaming/spotify/callback".to_string());
+    let redirect_uri = resolve_spotify_redirect_uri(&headers);
+    let client_redirect_url = normalize_client_redirect_url(query.redirect_url)
+        .map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error(error)),
+            )
+        })?;
     
     if client_id.is_empty() {
         return Err((
@@ -437,8 +631,7 @@ pub async fn get_spotify_auth_url(
     }
 
     // Generate a random state parameter for security and include user ID
-    let state_uuid = uuid::Uuid::new_v4();
-    let state = format!("{}:{}", state_uuid, user.id);
+    let state = encode_spotify_state(user.id, client_redirect_url.as_deref());
     
     // Store the state with user ID in the database for validation
     // For now, we'll include it in the response and validate it in the callback
@@ -463,7 +656,7 @@ pub async fn get_spotify_auth_url(
         client_id,
         urlencoding::encode(&scopes),
         urlencoding::encode(&redirect_uri),
-        state
+        urlencoding::encode(&state)
     );
 
     Ok(Json(ApiResponse::success(SpotifyAuthUrlResponse {
@@ -475,6 +668,7 @@ pub async fn get_spotify_auth_url(
 pub async fn spotify_callback(
     State(state): State<AppState>,
     Query(params): Query<SpotifyCallbackQuery>,
+    headers: HeaderMap,
 ) -> Result<Html<String>, (StatusCode, Html<String>)> {
     if let Some(error) = params.error {
         let error_html = format!(r#"
@@ -710,13 +904,25 @@ pub async fn spotify_callback(
         }
     };
 
-    // Extract user ID from state parameter (format: "uuid:user_id")
-    let user_id = match state_param.split(':').nth(1) {
-        Some(user_id_str) => {
-            match uuid::Uuid::parse_str(user_id_str) {
-                Ok(user_id) => user_id,
-                Err(_) => {
-                    let error_html = r#"
+    let (user_id, client_redirect_url) = match decode_spotify_state(&state_param) {
+        Ok(decoded_state) => decoded_state,
+        Err(error_message) => {
+            let error_html = if let Some(client_redirect_url) = state_param
+                .splitn(3, ':')
+                .nth(2)
+                .and_then(|encoded_redirect_url| base64::decode(encoded_redirect_url).ok())
+                .and_then(|decoded_bytes| String::from_utf8(decoded_bytes).ok())
+                .and_then(|decoded_redirect_url| normalize_client_redirect_url(Some(decoded_redirect_url)).ok().flatten())
+            {
+                let target_url = build_spotify_app_redirect_url(&client_redirect_url, "error", &error_message);
+                build_spotify_app_redirect_html(
+                    &target_url,
+                    "Spotify Connection Error",
+                    &error_message,
+                    "#ef4444",
+                )
+            } else {
+                format!(r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -782,96 +988,34 @@ pub async fn spotify_callback(
     <div class="container">
         <div class="error-icon">✗</div>
         <h1>❌ Connection Error</h1>
-        <p>Invalid state parameter received from Spotify.</p>
+        <p>{}</p>
         <button class="close-btn" onclick="window.close()">Close Window</button>
     </div>
 </body>
 </html>
-                    "#;
-                    return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
-                }
-            }
-        },
-        None => {
-            let error_html = r#"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify Connection Error - Musestruct</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-        .error-icon {
-            width: 80px;
-            height: 80px;
-            background: #ff6b6b;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            font-size: 40px;
-            color: white;
-        }
-        h1 {
-            color: #ff6b6b;
-            margin: 0 0 16px 0;
-            font-size: 28px;
-            font-weight: 700;
-        }
-        p {
-            color: #666;
-            margin: 0 0 24px 0;
-            line-height: 1.5;
-        }
-        .close-btn {
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="error-icon">✗</div>
-        <h1>❌ Connection Error</h1>
-        <p>Invalid state parameter format received from Spotify.</p>
-        <button class="close-btn" onclick="window.close()">Close Window</button>
-    </div>
-</body>
-</html>
-            "#;
-            return Err((StatusCode::BAD_REQUEST, Html(error_html.to_string())));
+                "#, error_message)
+            };
+
+            return Err((StatusCode::BAD_REQUEST, Html(error_html)));
         }
     };
 
     // Exchange authorization code for access token
-    match exchange_spotify_code(&code, state.db(), user_id).await {
-        Ok(_message) => {
+    let redirect_uri = resolve_spotify_redirect_uri(&headers);
+
+    match exchange_spotify_code(&code, &redirect_uri, state.db(), user_id).await {
+        Ok(message) => {
+            if let Some(client_redirect_url) = client_redirect_url {
+                let target_url = build_spotify_app_redirect_url(&client_redirect_url, "success", &message);
+                let html = build_spotify_app_redirect_html(
+                    &target_url,
+                    "Spotify Connected",
+                    "Spotify is connected. Returning you to the app...",
+                    "#1db954",
+                );
+                return Ok(axum::response::Html(html));
+            }
+
             // Return a pretty HTML page instead of JSON
             let html = r#"
 <!DOCTYPE html>
@@ -1066,12 +1210,12 @@ pub async fn spotify_callback(
 
 async fn exchange_spotify_code(
     code: &str,
+    redirect_uri: &str,
     db: &sea_orm::DatabaseConnection,
     user_id: uuid::Uuid,
 ) -> Result<String, String> {
     let client_id = std::env::var("SPOTIFY_CLIENT_ID").unwrap_or_default();
     let client_secret = std::env::var("SPOTIFY_CLIENT_SECRET").unwrap_or_default();
-    let redirect_uri = std::env::var("SPOTIFY_REDIRECT_URI").unwrap_or_else(|_| "http://127.0.0.1:8080/api/streaming/spotify/callback".to_string());
 
     if client_id.is_empty() || client_secret.is_empty() {
         return Err("Spotify credentials not configured".to_string());
@@ -1083,7 +1227,7 @@ async fn exchange_spotify_code(
     let mut form = std::collections::HashMap::new();
     form.insert("grant_type", "authorization_code");
     form.insert("code", code);
-    form.insert("redirect_uri", &redirect_uri);
+    form.insert("redirect_uri", redirect_uri);
 
     let response = client
         .post("https://accounts.spotify.com/api/token")

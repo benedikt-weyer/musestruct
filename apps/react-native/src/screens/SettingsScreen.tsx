@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -29,6 +29,8 @@ import {
 } from '../services/streamingLibraryApi';
 import type { AuthSession } from '../types/auth';
 import type { ConnectedServiceInfo } from '../types/streaming';
+
+const SPOTIFY_APP_REDIRECT_URL = 'musestruct://spotify';
 
 type NativeError = Error & {
   code?: string;
@@ -210,6 +212,7 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
   const [qobuzUsername, setQobuzUsername] = useState('');
   const [qobuzPassword, setQobuzPassword] = useState('');
   const [providerAction, setProviderAction] = useState<string | null>(null);
+  const lastHandledSpotifyUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!authSession) {
@@ -219,6 +222,54 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
     }
 
     void loadProviderStatus();
+  }, [authSession, backendUrl]);
+
+  useEffect(() => {
+    async function handleSpotifyRedirect(url: string | null) {
+      if (!url || lastHandledSpotifyUrlRef.current === url) {
+        return;
+      }
+
+      let parsedUrl: URL;
+
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return;
+      }
+
+      if (parsedUrl.protocol !== 'musestruct:' || parsedUrl.hostname !== 'spotify') {
+        return;
+      }
+
+      lastHandledSpotifyUrlRef.current = url;
+      const status = parsedUrl.searchParams.get('status');
+      const message = parsedUrl.searchParams.get('message');
+
+      if (status === 'success') {
+        await loadProviderStatus(false);
+        showConnectionToast(message ?? 'Spotify connected successfully.', false);
+        return;
+      }
+
+      if (status === 'error') {
+        const errorMessage = message ?? 'Spotify authorization failed.';
+        setProviderErrorMessage(errorMessage);
+        showConnectionToast(errorMessage, true);
+      }
+    }
+
+    const subscription = Linking.addEventListener('url', (event) => {
+      void handleSpotifyRedirect(event.url);
+    });
+
+    void Linking.getInitialURL().then((initialUrl) => {
+      void handleSpotifyRedirect(initialUrl);
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [authSession, backendUrl]);
 
   async function loadProviderStatus(showSpinner = true) {
@@ -299,10 +350,14 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
     setProviderErrorMessage(null);
 
     try {
-      const response = await fetchSpotifyAuthUrl(backendUrl, authSession);
+      const response = await fetchSpotifyAuthUrl(
+        backendUrl,
+        authSession,
+        SPOTIFY_APP_REDIRECT_URL,
+      );
       await Linking.openURL(response.auth_url);
       showConnectionToast(
-        'Complete Spotify authorization in your browser, then refresh provider status.',
+        'Complete Spotify authorization in your browser. The app will reopen automatically.',
         false,
       );
     } catch (error) {
