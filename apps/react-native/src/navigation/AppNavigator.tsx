@@ -11,6 +11,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import type { RootStackParamList, RootTabParamList } from './types';
+import { BrowseScreen } from '../screens/BrowseScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
@@ -22,6 +23,10 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 function getTabIconName(routeName: keyof RootTabParamList, focused: boolean) {
   if (routeName === 'Home') {
     return focused ? 'home' : 'home-outline';
+  }
+
+  if (routeName === 'Browse') {
+    return focused ? 'search' : 'search-outline';
   }
 
   return focused ? 'settings' : 'settings-outline';
@@ -63,6 +68,7 @@ function RootTabs() {
   return (
     <Tab.Navigator screenOptions={createScreenOptions}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Browse" component={BrowseScreen} options={{ title: 'Browse' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );
