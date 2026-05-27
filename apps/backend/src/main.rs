@@ -3,7 +3,7 @@ mod services;
 mod handlers;
 mod migrator;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     http::Method,
     middleware,
@@ -14,10 +14,12 @@ use dotenvy::dotenv;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::prelude::*;
 use std::env;
+use tokio::time::{Duration, sleep};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, error};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use url::Url;
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
 use handlers::streaming::{search_music, get_stream_url, get_backend_stream_url, connect_qobuz, connect_spotify, get_available_services, get_service_status, disconnect_service, get_spotify_auth_url, spotify_callback, transfer_spotify_playback, get_spotify_access_token, refresh_spotify_token, get_playlist_tracks, stream_local_file, stream_local_cover};
@@ -30,6 +32,87 @@ use handlers::audio_analysis::{analyze_track_bpm, get_track_bpm, analyze_track_b
 use services::{AuthService, streaming_service::StreamingService};
 use std::sync::Arc;
 use migrator::Migrator;
+
+fn sanitize_database_url(database_url: &str) -> String {
+    match Url::parse(database_url) {
+        Ok(mut parsed_url) => {
+            if parsed_url.password().is_some() {
+                let _ = parsed_url.set_password(Some("***"));
+            }
+
+            parsed_url.to_string()
+        }
+        Err(_) => "<invalid DATABASE_URL>".to_string(),
+    }
+}
+
+fn load_database_url() -> Result<String> {
+    if let Ok(database_url) = env::var("DATABASE_URL") {
+        if !database_url.trim().is_empty() {
+            return Ok(database_url);
+        }
+    }
+
+    let postgres_host = env::var("POSTGRES_HOST")
+        .context("DATABASE_URL is not set and POSTGRES_HOST is missing")?;
+    let postgres_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "5432".to_string());
+    let postgres_db = env::var("POSTGRES_DB")
+        .context("DATABASE_URL is not set and POSTGRES_DB is missing")?;
+    let postgres_user = env::var("POSTGRES_USER")
+        .context("DATABASE_URL is not set and POSTGRES_USER is missing")?;
+    let postgres_password = env::var("POSTGRES_PASSWORD")
+        .context("DATABASE_URL is not set and POSTGRES_PASSWORD is missing")?;
+
+    Ok(format!(
+        "postgresql://{}:{}@{}:{}/{}",
+        urlencoding::encode(&postgres_user),
+        urlencoding::encode(&postgres_password),
+        postgres_host,
+        postgres_port,
+        postgres_db,
+    ))
+}
+
+async fn connect_database(database_url: &str) -> Result<DatabaseConnection> {
+    let max_attempts = env::var("DATABASE_CONNECT_MAX_ATTEMPTS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(30)
+        .max(1);
+    let retry_delay_secs = env::var("DATABASE_CONNECT_RETRY_DELAY_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(2);
+    let sanitized_database_url = sanitize_database_url(database_url);
+
+    for attempt in 1..=max_attempts {
+        info!(
+            "Connecting to database (attempt {}/{}): {}",
+            attempt,
+            max_attempts,
+            sanitized_database_url,
+        );
+
+        match Database::connect(database_url).await {
+            Ok(database_connection) => return Ok(database_connection),
+            Err(connect_error) => {
+                if attempt == max_attempts {
+                    error!("Failed to connect to database after {} attempts: {}", max_attempts, connect_error);
+                    return Err(connect_error.into());
+                }
+
+                error!("Database connection attempt {} failed: {}", attempt, connect_error);
+
+                if retry_delay_secs > 0 {
+                    info!("Retrying database connection in {} seconds", retry_delay_secs);
+                    sleep(Duration::from_secs(retry_delay_secs)).await;
+                }
+            }
+        }
+    }
+
+    unreachable!()
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -46,16 +129,8 @@ async fn main() -> Result<()> {
         .init();
 
     // Database connection
-    let database_url = env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
-    
-    info!("Connecting to database: {}", database_url);
-    let db = Database::connect(&database_url).await
-        .map_err(|e| {
-            error!("Failed to connect to database: {}", e);
-            error!("Database URL: {}", database_url);
-            e
-        })?;
+    let database_url = load_database_url()?;
+    let db = connect_database(&database_url).await?;
     
     // Run migrations
     info!("Running database migrations...");
