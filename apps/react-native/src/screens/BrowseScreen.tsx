@@ -18,8 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
-import { createLibraryPlaylist } from '../services/libraryApi';
+import { addLibraryPlaylistItem, createLibraryPlaylist } from '../services/libraryApi';
 import {
+  fetchStreamingPlaylistTracks,
   fetchAvailableServices,
   fetchServiceStatus,
   fetchTrackStreamUrl,
@@ -46,6 +47,8 @@ function showToast(message: string) {
 
   Alert.alert('Musestruct', message);
 }
+
+const PLAYLIST_IMPORT_PAGE_SIZE = 50;
 
 function formatDuration(duration?: number) {
   if (!duration) {
@@ -498,12 +501,48 @@ export function BrowseScreen() {
     }
 
     try {
-      await createLibraryPlaylist(backendUrl, authSession, {
+      const tracks: StreamingTrack[] = [];
+
+      for (let offset = 0; offset < playlist.track_count; offset += PLAYLIST_IMPORT_PAGE_SIZE) {
+        const page = await fetchStreamingPlaylistTracks(
+          backendUrl,
+          authSession,
+          playlist.id,
+          playlist.source,
+          PLAYLIST_IMPORT_PAGE_SIZE,
+          offset,
+        );
+
+        tracks.push(...page);
+
+        if (page.length < PLAYLIST_IMPORT_PAGE_SIZE) {
+          break;
+        }
+      }
+
+      const savedPlaylist = await createLibraryPlaylist(backendUrl, authSession, {
         name: playlist.name,
         description:
           playlist.description ?? `Imported from ${playlist.source} by ${playlist.owner}`,
         is_public: playlist.is_public,
       });
+
+      await Promise.all(
+        tracks.map((track, index) =>
+          addLibraryPlaylistItem(backendUrl, authSession, savedPlaylist.id, {
+            item_type: 'track',
+            item_id: track.id,
+            position: index,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track.duration ?? null,
+            source: track.source,
+            cover_url: track.cover_url ?? null,
+          }),
+        ),
+      );
+
       showToast(`Added ${playlist.name} to your library.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to save playlist.');

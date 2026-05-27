@@ -135,6 +135,33 @@ export async function createLibraryPlaylist(
   return parseApiResponse<LibraryPlaylist>(response);
 }
 
+export async function addLibraryPlaylistItem(
+  backendUrl: string,
+  authSession: AuthSession,
+  playlistId: string,
+  payload: {
+    item_type: 'track' | 'playlist';
+    item_id: string;
+    position?: number;
+    title?: string | null;
+    artist?: string | null;
+    album?: string | null;
+    duration?: number | null;
+    source?: string | null;
+    cover_url?: string | null;
+    playlist_name?: string | null;
+  },
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${playlistId}/items`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<LibraryPlaylistItem>(response);
+}
+
 export async function deleteSavedTrack(
   backendUrl: string,
   authSession: AuthSession,

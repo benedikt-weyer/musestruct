@@ -5,6 +5,7 @@ import type {
   SavedTrackPayload,
   ServiceStatusResponse,
   SpotifyAuthUrlResponse,
+  StreamingTrack,
   StreamingSearchResults,
 } from '../types/streaming';
 import { normalizeBackendUrl } from './backendApi';
@@ -241,4 +242,35 @@ export async function fetchTrackStreamUrl(
   );
 
   return parseApiResponse<string>(response);
+}
+
+export async function fetchStreamingPlaylistTracks(
+  backendUrl: string,
+  authSession: AuthSession,
+  playlistId: string,
+  service: string,
+  limit?: number,
+  offset?: number,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams({
+    service,
+  });
+
+  if (typeof limit === 'number') {
+    searchParams.set('limit', limit.toString());
+  }
+
+  if (typeof offset === 'number') {
+    searchParams.set('offset', offset.toString());
+  }
+
+  const response = await fetch(
+    `${normalizedUrl}/api/streaming/playlist/${playlistId}/tracks?${searchParams.toString()}`,
+    {
+      headers: createAuthHeaders(authSession),
+    },
+  );
+
+  return parseApiResponse<StreamingTrack[]>(response);
 }
