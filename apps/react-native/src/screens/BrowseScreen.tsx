@@ -30,8 +30,12 @@ import type {
   AvailableService,
   ConnectedServiceInfo,
   StreamingAlbum,
+  StreamingPlaylist,
   StreamingTrack,
 } from '../types/streaming';
+
+type BrowseSearchType = 'track' | 'album' | 'playlist';
+type BrowseSearchScope = 'all' | 'library';
 
 function showToast(message: string) {
   if (Platform.OS === 'android') {
@@ -173,16 +177,88 @@ function BrowseAlbumCard({
   );
 }
 
+function BrowsePlaylistCard({
+  playlist,
+}: Readonly<{
+  playlist: StreamingPlaylist;
+}>) {
+  return (
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+      <View className="flex-row gap-4">
+        {playlist.cover_url ? (
+          <Image
+            className="h-20 w-20 rounded-[18px] bg-slate-100 dark:bg-slate-800"
+            resizeMode="cover"
+            source={{ uri: playlist.cover_url }}
+          />
+        ) : (
+          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
+              {playlist.source}
+            </Text>
+          </View>
+        )}
+
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
+          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">By {playlist.owner}</Text>
+          {playlist.description ? (
+            <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{playlist.description}</Text>
+          ) : null}
+          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
+            {playlist.source} • {playlist.track_count} tracks • {playlist.is_public ? 'public' : 'private'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function FilterChip({
+  isSelected,
+  label,
+  onPress,
+}: Readonly<{
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+}>) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      className={
+        isSelected
+          ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:border-teal-900 dark:bg-teal-950/40'
+          : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950'
+      }
+      onPress={onPress}
+    >
+      <Text
+        className={
+          isSelected
+            ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700 dark:text-teal-300'
+            : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200'
+        }
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function BrowseScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { authSession, backendUrl } = useSettings();
   const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [query, setQuery] = useState('');
+  const [searchType, setSearchType] = useState<BrowseSearchType>('track');
+  const [searchScope, setSearchScope] = useState<BrowseSearchScope>('all');
   const [availableServices, setAvailableServices] = useState<AvailableService[]>([]);
   const [serviceStatus, setServiceStatus] = useState<ConnectedServiceInfo[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [tracks, setTracks] = useState<StreamingTrack[]>([]);
   const [albums, setAlbums] = useState<StreamingAlbum[]>([]);
+  const [playlists, setPlaylists] = useState<StreamingPlaylist[]>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -231,6 +307,18 @@ export function BrowseScreen() {
     () => serviceStatus.filter((service) => service.is_connected),
     [serviceStatus],
   );
+  const searchPlaceholder =
+    searchType === 'track'
+      ? searchScope === 'library'
+        ? 'Search saved tracks'
+        : 'Search tracks'
+      : searchType === 'album'
+        ? searchScope === 'library'
+          ? 'Search saved albums'
+          : 'Search albums'
+        : searchScope === 'library'
+          ? 'Search saved playlists'
+          : 'Search playlists';
   let connectedProvidersContent = (
     <Text className="mt-3 text-sm leading-6 text-slate-600">
       No external providers are currently connected for this account.
@@ -289,11 +377,14 @@ export function BrowseScreen() {
     try {
       const results = await searchStreamingCatalog(backendUrl, authSession, trimmedQuery, {
         services: selectedServices,
+        type: searchType,
+        library: searchScope === 'library',
         limit: 20,
       });
 
       setTracks(results.tracks);
       setAlbums(results.albums);
+      setPlaylists(results.playlists);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'Music search failed unexpectedly.',
@@ -424,7 +515,8 @@ export function BrowseScreen() {
           </Text>
           <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">External Providers</Text>
           <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Search connected providers and add tracks or albums to your personal library.
+            Search connected providers for tracks, albums, or playlists across all catalogs or
+            inside your saved library.
           </Text>
         </View>
 
@@ -440,11 +532,44 @@ export function BrowseScreen() {
             onSubmitEditing={() => {
               void handleSearch();
             }}
-            placeholder="Search tracks and albums"
+            placeholder={searchPlaceholder}
             placeholderTextColor="#94a3b8"
             returnKeyType="search"
             value={query}
           />
+
+          <View className="mt-4 gap-3">
+            <View>
+              <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
+                Type
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                <FilterChip isSelected={searchType === 'track'} label="Tracks" onPress={() => {
+                  setSearchType('track');
+                }} />
+                <FilterChip isSelected={searchType === 'album'} label="Albums" onPress={() => {
+                  setSearchType('album');
+                }} />
+                <FilterChip isSelected={searchType === 'playlist'} label="Playlists" onPress={() => {
+                  setSearchType('playlist');
+                }} />
+              </View>
+            </View>
+
+            <View>
+              <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
+                Scope
+              </Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                <FilterChip isSelected={searchScope === 'all'} label="All" onPress={() => {
+                  setSearchScope('all');
+                }} />
+                <FilterChip isSelected={searchScope === 'library'} label="My Library" onPress={() => {
+                  setSearchScope('library');
+                }} />
+              </View>
+            </View>
+          </View>
 
           <View className="mt-4 flex-row flex-wrap gap-2">
             {availableServices.map((service) => {
@@ -506,50 +631,81 @@ export function BrowseScreen() {
           </View>
         ) : null}
 
-        <View className="mt-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
-            Tracks
-          </Text>
-          {tracks.length > 0 ? (
-            <View className="mt-3">
-              {tracks.map((track) => (
-                <BrowseTrackCard
-                  isCurrentTrack={currentTrack?.key === `${track.source}:${track.id}`}
-                  isPlaying={isPlaying}
-                  key={`${track.source}:${track.id}`}
-                  onPlay={handlePlayTrack}
-                  onSave={handleSaveTrack}
-                  track={track}
-                />
-              ))}
-            </View>
-          ) : (
-            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
-              <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                Search a connected provider to see matching tracks.
-              </Text>
-            </View>
-          )}
-        </View>
+        {searchType === 'track' ? (
+          <View className="mt-4">
+            <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
+              Tracks
+            </Text>
+            {tracks.length > 0 ? (
+              <View className="mt-3">
+                {tracks.map((track) => (
+                  <BrowseTrackCard
+                    isCurrentTrack={currentTrack?.key === `${track.source}:${track.id}`}
+                    isPlaying={isPlaying}
+                    key={`${track.source}:${track.id}`}
+                    onPlay={handlePlayTrack}
+                    onSave={handleSaveTrack}
+                    track={track}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
+                <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  {searchScope === 'library'
+                    ? 'Search your saved provider tracks to see matches here.'
+                    : 'Search a connected provider to see matching tracks.'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
 
-        <View className="mt-4">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
-            Albums
-          </Text>
-          {albums.length > 0 ? (
-            <View className="mt-3">
-              {albums.map((album) => (
-                <BrowseAlbumCard album={album} key={`${album.source}:${album.id}`} onSave={handleSaveAlbum} />
-              ))}
-            </View>
-          ) : (
-            <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
-              <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                Search a connected provider to see matching albums.
-              </Text>
-            </View>
-          )}
-        </View>
+        {searchType === 'album' ? (
+          <View className="mt-4">
+            <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
+              Albums
+            </Text>
+            {albums.length > 0 ? (
+              <View className="mt-3">
+                {albums.map((album) => (
+                  <BrowseAlbumCard album={album} key={`${album.source}:${album.id}`} onSave={handleSaveAlbum} />
+                ))}
+              </View>
+            ) : (
+              <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
+                <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  {searchScope === 'library'
+                    ? 'Search your saved provider albums to see matches here.'
+                    : 'Search a connected provider to see matching albums.'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {searchType === 'playlist' ? (
+          <View className="mt-4">
+            <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
+              Playlists
+            </Text>
+            {playlists.length > 0 ? (
+              <View className="mt-3">
+                {playlists.map((playlist) => (
+                  <BrowsePlaylistCard key={`${playlist.source}:${playlist.id}`} playlist={playlist} />
+                ))}
+              </View>
+            ) : (
+              <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
+                <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  {searchScope === 'library'
+                    ? 'Search your saved provider playlists to see matches here.'
+                    : 'Search a connected provider to see matching playlists.'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

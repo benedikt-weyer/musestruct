@@ -18,6 +18,7 @@ type ApiResponse<T> = {
 type SearchOptions = {
   services?: string[];
   type?: 'track' | 'album' | 'playlist';
+  library?: boolean;
   limit?: number;
   offset?: number;
 };
@@ -45,6 +46,10 @@ function createSearchQuery(query: string, options: SearchOptions) {
 
   if (options.type) {
     searchParams.set('type', options.type);
+  }
+
+  if (options.library) {
+    searchParams.set('library', 'true');
   }
 
   if (typeof options.limit === 'number') {
