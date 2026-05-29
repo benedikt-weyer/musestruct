@@ -231,10 +231,12 @@ function BrowsePlaylistCard({
 }
 
 function FilterChip({
+  disabled = false,
   isSelected,
   label,
   onPress,
 }: Readonly<{
+  disabled?: boolean;
   isSelected: boolean;
   label: string;
   onPress: () => void;
@@ -242,18 +244,27 @@ function FilterChip({
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       className={
         isSelected
-          ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:border-teal-900 dark:bg-teal-950/40'
-          : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950'
+          ? disabled
+            ? 'rounded-full border border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800'
+            : 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:border-teal-900 dark:bg-teal-950/40'
+          : disabled
+            ? 'rounded-full border border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800'
+            : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950'
       }
       onPress={onPress}
     >
       <Text
         className={
           isSelected
-            ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700 dark:text-teal-300'
-            : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200'
+            ? disabled
+              ? 'text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400'
+              : 'text-xs font-semibold uppercase tracking-[1px] text-teal-700 dark:text-teal-300'
+            : disabled
+              ? 'text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500'
+              : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200'
         }
       >
         {label}
@@ -278,6 +289,7 @@ export function BrowseScreen() {
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isServerSelected = selectedServices.includes('server');
 
   useEffect(() => {
     async function loadServices() {
@@ -297,19 +309,18 @@ export function BrowseScreen() {
           fetchServiceStatus(backendUrl, authSession),
         ]);
 
-        const externalServices = available.services.filter((service) => service.name !== 'server');
-        const connectedExternalServiceNames = status.services
-          .filter((service) => service.is_connected && service.name !== 'server')
+        const connectedServiceNames = status.services
+          .filter((service) => service.is_connected)
           .map((service) => service.name);
 
-        setAvailableServices(externalServices);
-        setServiceStatus(status.services.filter((service) => service.name !== 'server'));
-        setSelectedServices(connectedExternalServiceNames);
+        setAvailableServices(available.services);
+        setServiceStatus(status.services);
+        setSelectedServices(connectedServiceNames);
       } catch (error) {
         setErrorMessage(
           error instanceof Error
             ? error.message
-            : 'Failed to load connected music providers.',
+            : 'Failed to load music providers.',
         );
       } finally {
         setIsBootstrapping(false);
@@ -318,6 +329,12 @@ export function BrowseScreen() {
 
     void loadServices();
   }, [authSession, backendUrl]);
+
+  useEffect(() => {
+    if (isServerSelected && searchScope !== 'all') {
+      setSearchScope('all');
+    }
+  }, [isServerSelected, searchScope]);
 
   const connectedServices = useMemo(
     () => serviceStatus.filter((service) => service.is_connected),
@@ -337,7 +354,7 @@ export function BrowseScreen() {
           : 'Search playlists';
   let connectedProvidersContent = (
     <Text className="mt-3 text-sm leading-6 text-slate-600">
-      No external providers are currently connected for this account.
+      No providers are currently connected for this account.
     </Text>
   );
 
@@ -560,10 +577,10 @@ export function BrowseScreen() {
             <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
               Browse
             </Text>
-            <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">External Providers</Text>
+            <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
             <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-              Sign in first so the app can search connected providers and add tracks or albums to
-              your library.
+              Sign in first so the app can search connected providers, including your server music,
+              and add tracks or albums to your library.
             </Text>
           </View>
 
@@ -592,10 +609,10 @@ export function BrowseScreen() {
           <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
             Browse
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">External Providers</Text>
+          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
           <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Search connected providers for tracks, albums, or playlists across all catalogs or
-            inside your saved library.
+            Search connected providers for tracks, albums, or playlists, including music from your
+            own server.
           </Text>
         </View>
 
@@ -640,13 +657,18 @@ export function BrowseScreen() {
                 Scope
               </Text>
               <View className="mt-2 flex-row flex-wrap gap-2">
-                <FilterChip isSelected={searchScope === 'all'} label="All" onPress={() => {
+                <FilterChip disabled={isServerSelected} isSelected={searchScope === 'all'} label="All" onPress={() => {
                   setSearchScope('all');
                 }} />
-                <FilterChip isSelected={searchScope === 'library'} label="My Library" onPress={() => {
+                <FilterChip disabled={isServerSelected} isSelected={searchScope === 'library'} label="My Library" onPress={() => {
                   setSearchScope('library');
                 }} />
               </View>
+              {isServerSelected ? (
+                <Text className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Server search already targets your own music collection, so the scope filter is disabled.
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -731,7 +753,9 @@ export function BrowseScreen() {
             ) : (
               <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
                 <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                  {searchScope === 'library'
+                  {isServerSelected
+                    ? 'Search your server music to see matching tracks here.'
+                    : searchScope === 'library'
                     ? 'Search your saved provider tracks to see matches here.'
                     : 'Search a connected provider to see matching tracks.'}
                 </Text>
@@ -754,7 +778,9 @@ export function BrowseScreen() {
             ) : (
               <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
                 <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                  {searchScope === 'library'
+                  {isServerSelected
+                    ? 'Search your server music to see matching albums here.'
+                    : searchScope === 'library'
                     ? 'Search your saved provider albums to see matches here.'
                     : 'Search a connected provider to see matching albums.'}
                 </Text>
@@ -781,7 +807,9 @@ export function BrowseScreen() {
             ) : (
               <View className="mt-3 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-5 dark:border-slate-700 dark:bg-slate-900">
                 <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                  {searchScope === 'library'
+                  {isServerSelected
+                    ? 'Search your server music to see matching playlists here.'
+                    : searchScope === 'library'
                     ? 'Search your saved provider playlists to see matches here.'
                     : 'Search a connected provider to see matching playlists.'}
                 </Text>
