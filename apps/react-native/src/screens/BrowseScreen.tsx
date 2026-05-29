@@ -278,10 +278,12 @@ function BrowseAlbumCard({
 }
 
 function BrowsePlaylistCard({
-  onSave,
+  onClone,
+  onWatch,
   playlist,
 }: Readonly<{
-  onSave: (playlist: StreamingPlaylist) => void;
+  onClone: (playlist: StreamingPlaylist) => void;
+  onWatch: (playlist: StreamingPlaylist) => void;
   playlist: StreamingPlaylist;
 }>) {
   return (
@@ -313,15 +315,27 @@ function BrowsePlaylistCard({
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
-        onPress={() => {
-          onSave(playlist);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Import watched playlist</Text>
-      </Pressable>
+      <View className="mt-4 flex-row gap-3">
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+          onPress={() => {
+            onWatch(playlist);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Watch playlist</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 rounded-full border border-teal-200 bg-teal-50 px-4 py-3 active:bg-teal-100"
+          onPress={() => {
+            onClone(playlist);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-teal-700">Clone playlist</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -612,7 +626,7 @@ export function BrowseScreen() {
     }
   }
 
-  async function handleSavePlaylist(playlist: StreamingPlaylist) {
+  async function handleImportPlaylist(playlist: StreamingPlaylist, watched: boolean) {
     if (!authSession) {
       showToast('Please log in before saving playlists.');
       return;
@@ -627,10 +641,14 @@ export function BrowseScreen() {
         owner: playlist.owner,
         cover_url: playlist.cover_url ?? null,
         is_public: playlist.is_public,
-        watched: true,
+        watched,
       });
 
-      showToast(`Imported ${playlist.name} as a watched playlist.`);
+      showToast(
+        watched
+          ? `Imported ${playlist.name} as a watched playlist.`
+          : `Cloned ${playlist.name} into your playlists.`,
+      );
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to save playlist.');
     }
@@ -949,7 +967,12 @@ export function BrowseScreen() {
                 {playlists.map((playlist) => (
                   <BrowsePlaylistCard
                     key={`${playlist.source}:${playlist.id}`}
-                    onSave={handleSavePlaylist}
+                    onClone={(selectedPlaylist) => {
+                      void handleImportPlaylist(selectedPlaylist, false);
+                    }}
+                    onWatch={(selectedPlaylist) => {
+                      void handleImportPlaylist(selectedPlaylist, true);
+                    }}
                     playlist={playlist}
                   />
                 ))}

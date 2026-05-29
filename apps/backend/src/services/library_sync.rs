@@ -479,6 +479,13 @@ async fn sync_user_playlist_from_canonical(
     preferred_source: Option<LibraryProvider>,
     watched: bool,
 ) -> Result<crate::models::UserPlaylistModel> {
+    let is_read_only = watched;
+    let last_synced_at = if watched {
+        Some(chrono::Utc::now().naive_utc())
+    } else {
+        None
+    };
+
     let canonical_playlist = CanonicalPlaylistEntity::find_by_id(canonical_playlist_id)
         .one(db)
         .await?
@@ -507,27 +514,45 @@ async fn sync_user_playlist_from_canonical(
         active.provider_playlist_id = Set(Some(provider_playlist_id.clone()));
         active.name = Set(canonical_playlist.name.clone());
         active.description = Set(canonical_playlist.description.clone());
-        active.is_read_only = Set(true);
+        active.is_read_only = Set(is_read_only);
         active.is_watched = Set(watched);
-        active.last_synced_at = Set(Some(chrono::Utc::now().naive_utc()));
+        active.last_synced_at = Set(last_synced_at);
         active.updated_at = Set(chrono::Utc::now().naive_utc());
         active.update(db).await?
-    } else if let Some(existing) = UserPlaylistEntity::find()
+    } else if watched {
+        if let Some(existing) = UserPlaylistEntity::find()
         .filter(UserPlaylistColumn::UserId.eq(user_id))
         .filter(UserPlaylistColumn::CanonicalPlaylistId.eq(canonical_playlist_id))
+        .filter(UserPlaylistColumn::IsWatched.eq(true))
         .one(db)
-        .await?
-    {
-        let mut active = existing.into_active_model();
-        active.source = Set(Some(source.as_str().to_string()));
-        active.provider_playlist_id = Set(Some(provider_playlist_id.clone()));
-        active.name = Set(canonical_playlist.name.clone());
-        active.description = Set(canonical_playlist.description.clone());
-        active.is_read_only = Set(true);
-        active.is_watched = Set(watched);
-        active.last_synced_at = Set(Some(chrono::Utc::now().naive_utc()));
-        active.updated_at = Set(chrono::Utc::now().naive_utc());
-        active.update(db).await?
+        .await? {
+            let mut active = existing.into_active_model();
+            active.source = Set(Some(source.as_str().to_string()));
+            active.provider_playlist_id = Set(Some(provider_playlist_id.clone()));
+            active.name = Set(canonical_playlist.name.clone());
+            active.description = Set(canonical_playlist.description.clone());
+            active.is_read_only = Set(is_read_only);
+            active.is_watched = Set(watched);
+            active.last_synced_at = Set(last_synced_at);
+            active.updated_at = Set(chrono::Utc::now().naive_utc());
+            active.update(db).await?
+        } else {
+            UserPlaylistActiveModel {
+                user_id: Set(user_id),
+                canonical_playlist_id: Set(Some(canonical_playlist_id)),
+                source: Set(Some(source.as_str().to_string())),
+                provider_playlist_id: Set(Some(provider_playlist_id.clone())),
+                name: Set(canonical_playlist.name.clone()),
+                description: Set(canonical_playlist.description.clone()),
+                is_public: Set(false),
+                is_read_only: Set(is_read_only),
+                is_watched: Set(watched),
+                last_synced_at: Set(last_synced_at),
+                ..UserPlaylistActiveModel::new()
+            }
+            .insert(db)
+            .await?
+        }
     } else {
         UserPlaylistActiveModel {
             user_id: Set(user_id),
@@ -537,9 +562,9 @@ async fn sync_user_playlist_from_canonical(
             name: Set(canonical_playlist.name.clone()),
             description: Set(canonical_playlist.description.clone()),
             is_public: Set(false),
-            is_read_only: Set(true),
+            is_read_only: Set(is_read_only),
             is_watched: Set(watched),
-            last_synced_at: Set(Some(chrono::Utc::now().naive_utc())),
+            last_synced_at: Set(last_synced_at),
             ..UserPlaylistActiveModel::new()
         }
         .insert(db)
