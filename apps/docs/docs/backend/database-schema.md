@@ -2,7 +2,7 @@
 
 This page documents the current PostgreSQL schema used by the backend after the music-library rewrite.
 
-The source of truth is the migration set in `apps/backend/src/migrator`, especially `m20260529_000001_create_provider_canonical_music_schema.rs`. The active model is now split into four layers:
+The source of truth is the migration set registered in `apps/backend/src/migrator/mod.rs`, especially `m20260529_000001_create_provider_canonical_music_schema.rs`. Historical migration files may still exist in the repository, but only the migrations listed in `Migrator::migrations()` define the active schema. The active model is split into four layers:
 
 - identity and auth tables
 - provider cache tables per user and provider
@@ -30,6 +30,18 @@ Each provider now has its own cache family:
 
 These tables are user-scoped caches of provider state. Each row preserves the provider's native identifier plus `provider_metadata` so the backend can rehydrate canonical matches and watched playlist imports without storing one generic provider table.
 
+Shared structure across the provider cache families:
+
+- track tables store `provider_track_id`, title/artist metadata, optional album and duration fields, `cover_url`, `provider_metadata`, and audit timestamps
+- album tables store `provider_album_id`, `track_signature`, optional `release_date`, `cover_url`, `track_count`, `provider_metadata`, and audit timestamps
+- playlist tables store `provider_playlist_id`, optional `description`, `owner_name`, `content_signature`, `cover_url`, `provider_metadata`, and audit timestamps
+- album and playlist join tables enforce uniqueness both by referenced track and by position
+
+Server-specific behavior:
+
+- `server_tracks`, `server_albums`, `server_playlists`, `server_album_tracks`, and `server_playlist_tracks` are populated by the server preload job exposed at `/api/library/server-preload`
+- server browsing/search now reads from these synced tables instead of rescanning local files for every search request
+
 ### Canonical tables
 
 - `canonical_tracks`
@@ -54,7 +66,26 @@ These tables define the actual user-facing library and queue.
 - `user_playlist_items` links playlists to `user_tracks` or nested playlists.
 - `queue_items` references `user_tracks` only. Queue metadata is no longer duplicated into the queue table.
 
+Canonical and user-layer details:
+
+- `canonical_tracks`, `canonical_albums`, and `canonical_playlists` also carry user-facing metadata such as `cover_url`, plus per-provider foreign keys used for reconciliation
+- `user_tracks` materializes the selected playback source and keeps its own `cover_url` snapshot for library, queue, and playlist-item responses
+- `user_playlists` supports imported watched playlists through `canonical_playlist_id`, `provider_playlist_id`, `is_read_only`, `is_watched`, and `last_synced_at`
+
+## Indexes and Constraints
+
+The active migration also creates operational indexes beyond the table definitions shown below:
+
+- unique partial indexes on each provider foreign-key column in the canonical tables
+- search indexes on canonical normalized fields:
+    - `canonical_tracks(normalized_title, normalized_artist)`
+    - `canonical_albums(normalized_name, normalized_artist)`
+    - `canonical_playlists(normalized_name)`
+- user-scoped indexes on `user_tracks.user_id`, `user_playlists.user_id`, `user_playlist_items.playlist_id`, and `queue_items.user_id`
+
 ## ER Diagram
+
+The diagram below is a condensed view of the operational schema. Repeated audit and metadata columns such as `provider_metadata`, `created_at`, and `updated_at`, along with some nullable descriptive fields, are omitted where they would otherwise dominate the diagram. Use the migration file for exact column-level DDL.
 
 ```mermaid
 erDiagram
