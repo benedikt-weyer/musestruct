@@ -14,6 +14,7 @@ use crate::{
     services::{
         LibraryProvider, LibrarySyncService, ServerPreloadMode, ServerPreloadProgress,
         UnresolvedMatchesResponse,
+        cache_cover_url,
     },
 };
 
@@ -267,7 +268,7 @@ fn saved_track_response(track: UserTrackModel) -> SavedTrackResponse {
         album: track.album_name.unwrap_or_default(),
         duration: track.duration,
         source: track.source,
-        cover_url: track.cover_url,
+        cover_url: cache_cover_url(track.cover_url),
         created_at: track.created_at,
         updated_at: track.updated_at,
     }

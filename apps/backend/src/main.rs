@@ -23,7 +23,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
-use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_streaming_track, get_tidal_auth_url, get_tidal_sdk_credentials, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, tidal_callback, transfer_spotify_playback};
+use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_streaming_track, get_tidal_auth_url, get_tidal_sdk_credentials, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, stream_provider_cover, tidal_callback, transfer_spotify_playback};
 use handlers::saved_tracks::{get_saved_tracks, get_server_preload_status, get_unresolved_matches, is_track_saved, refresh_provider_library, remove_saved_track, save_track, start_server_preload};
 use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
 use handlers::user_playlists::{add_playlist_item, create_playlist, delete_playlist, get_playlist, get_playlist_items, get_playlists, import_canonical_playlist, import_provider_playlist, refresh_watched_playlist, remove_playlist_item, reorder_playlist_item, update_playlist};
@@ -231,6 +231,7 @@ async fn main() -> Result<()> {
         .route("/api/stream/local/{*file_path}", get(stream_local_file))
         // Local cover image streaming (public for cover images)
         .route("/api/stream/local/cover/{*file_path}", get(stream_local_cover))
+        .route("/api/stream/cover/provider", get(stream_provider_cover))
         // Streaming service routes (public for audio streaming)
         .merge(StreamingService::router(streaming_service))
         // Merge protected routes

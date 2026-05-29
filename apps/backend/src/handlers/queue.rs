@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     handlers::auth::{AppState, ApiResponse},
     models::{AddToQueueDto, ReorderQueueDto, UserQueueItemActiveModel, UserQueueItemColumn, UserQueueItemEntity, UserResponseDto, UserTrackEntity},
-    services::{LibraryProvider, LibrarySyncService},
+    services::{LibraryProvider, LibrarySyncService, cache_cover_url},
 };
 
 #[derive(Debug, serde::Serialize)]
@@ -55,7 +55,7 @@ pub async fn get_queue(
             album: track.album_name.unwrap_or_default(),
             duration: track.duration,
             source: track.source,
-            cover_url: track.cover_url,
+            cover_url: cache_cover_url(track.cover_url),
             position: item.position,
             added_at: item.added_at,
         });

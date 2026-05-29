@@ -16,7 +16,7 @@ use crate::{
         UserPlaylistItemColumn, UserPlaylistItemEntity, UserPlaylistModel, UserResponseDto,
         UserTrackEntity,
     },
-    services::{LibraryProvider, LibrarySyncService},
+    services::{LibraryProvider, LibrarySyncService, cache_cover_url},
 };
 
 #[derive(Deserialize)]
@@ -601,7 +601,7 @@ async fn playlist_item_response(
             album: track.album_name,
             duration: track.duration,
             source: Some(track.source),
-            cover_url: track.cover_url,
+            cover_url: cache_cover_url(track.cover_url),
             is_playlist: false,
             playlist_name: None,
         })

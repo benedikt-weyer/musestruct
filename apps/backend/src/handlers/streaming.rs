@@ -11,6 +11,7 @@ use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, PaginatorTrait, Q
 
 use crate::services::streaming::{LocalMusicService, QobuzService, SearchResults, SpotifyService, StreamingService, StreamingTrack, TidalService};
 use crate::services::streaming_service::StreamingService as BackendStreamingService;
+use crate::services::{COVER_CACHE_TTL_SECONDS, fetch_cached_provider_cover, normalize_search_results, normalize_streaming_track, normalize_streaming_tracks};
 use crate::models::{
     SearchQuery, ServerAlbumColumn, ServerAlbumEntity, ServerAlbumTrackColumn, ServerAlbumTrackEntity,
     ServerPlaylistColumn, ServerPlaylistEntity, ServerPlaylistTrackColumn, ServerPlaylistTrackEntity,
@@ -872,14 +873,14 @@ pub async fn search_music(
         }
     }
 
-    let combined_results = SearchResults {
+    let combined_results = normalize_search_results(SearchResults {
         tracks: all_tracks,
         albums: all_albums,
         playlists: all_playlists.clone(),
         total: total_results,
         offset: requested_offset,
         limit: requested_limit,
-    };
+    });
 
     println!("Backend: Returning search results - {} tracks, {} albums, {} playlists", 
              combined_results.tracks.len(), combined_results.albums.len(), combined_results.playlists.len());
@@ -1165,7 +1166,7 @@ pub async fn get_streaming_track(
     };
 
     match service.get_track(&params.track_id).await {
-        Ok(track) => Ok(Json(ApiResponse::success(track))),
+        Ok(track) => Ok(Json(ApiResponse::success(normalize_streaming_track(track)))),
         Err(err) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::error(format!("Failed to get track: {}", err))),
@@ -2971,7 +2972,7 @@ pub async fn get_playlist_tracks(
     };
 
     match service.get_playlist_tracks(&playlist_id, params.limit, params.offset).await {
-        Ok(tracks) => Ok(Json(ApiResponse::success(tracks))),
+        Ok(tracks) => Ok(Json(ApiResponse::success(normalize_streaming_tracks(tracks)))),
         Err(err) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::error(format!("Failed to get playlist tracks: {}", err))),
@@ -3088,10 +3089,9 @@ pub async fn stream_local_file(
 // Stream local cover images (both cached and direct files)
 pub async fn stream_local_cover(
     axum::extract::Path(file_path_param): axum::extract::Path<String>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     use tokio::fs;
-    use tokio::io::AsyncReadExt;
     
     // Decode the file path (can include subdirectories)
     let decoded_path = urlencoding::decode(&file_path_param)
@@ -3149,7 +3149,46 @@ pub async fn stream_local_cover(
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type)
-        .header(header::CACHE_CONTROL, "public, max-age=86400") // Cache for 24 hours
+        .header(
+            header::CACHE_CONTROL,
+            format!("public, max-age={}", COVER_CACHE_TTL_SECONDS),
+        )
+        .header(header::CONTENT_LENGTH, content.len())
+        .body(content.into())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+#[derive(Deserialize)]
+pub struct GetProviderCoverQuery {
+    pub url: String,
+}
+
+pub async fn stream_provider_cover(
+    Query(params): Query<GetProviderCoverQuery>,
+) -> Result<Response, StatusCode> {
+    let decoded_url = urlencoding::decode(&params.url)
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .into_owned();
+
+    let parsed = url::Url::parse(&decoded_url).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let (content, content_type) = fetch_cached_provider_cover(&decoded_url)
+        .await
+        .map_err(|error| {
+            error!("Failed to load provider cover {}: {}", decoded_url, error);
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(
+            header::CACHE_CONTROL,
+            format!("public, max-age={}", COVER_CACHE_TTL_SECONDS),
+        )
         .header(header::CONTENT_LENGTH, content.len())
         .body(content.into())
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)

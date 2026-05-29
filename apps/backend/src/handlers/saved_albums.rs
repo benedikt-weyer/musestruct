@@ -13,7 +13,7 @@ use crate::{
     handlers::streaming::{get_valid_spotify_tokens, get_valid_tidal_tokens},
     handlers::auth::{AppState, ApiResponse},
     models::{SavedAlbumEntity, UserResponseDto, StreamingServiceEntity, StreamingServiceColumn},
-    services::streaming::{LocalMusicService, QobuzService, SpotifyService, StreamingService, StreamingTrack, TidalService},
+    services::{normalize_streaming_tracks, streaming::{LocalMusicService, QobuzService, SpotifyService, StreamingService, StreamingTrack, TidalService}},
 };
 
 #[derive(Deserialize, Debug)]
@@ -339,7 +339,7 @@ pub async fn get_album_tracks(
             debug!("Found {} tracks for album {}", tracks.len(), album_id);
             Ok(Json(ApiResponse {
                 success: true,
-                data: Some(tracks),
+                data: Some(normalize_streaming_tracks(tracks)),
                 message: None,
             }))
         },
