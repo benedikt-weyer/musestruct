@@ -788,8 +788,19 @@ impl LibrarySyncService {
         playlist: StreamingPlaylist,
         watched: bool,
     ) -> Result<crate::models::UserPlaylistModel> {
-        let service = create_authenticated_streaming_service(provider, user_id, db).await?;
-        let playlist_tracks = fetch_playlist_tracks(service.as_ref(), &playlist.id).await?;
+        let playlist_tracks = if provider == LibraryProvider::Server {
+            load_cached_server_playlist_tracks(db, user_id, &playlist.id)
+                .await?
+                .unwrap_or_else(Vec::new)
+        } else {
+            Vec::new()
+        };
+        let playlist_tracks = if playlist_tracks.is_empty() {
+            let service = create_authenticated_streaming_service(provider, user_id, db).await?;
+            fetch_playlist_tracks(service.as_ref(), &playlist.id).await?
+        } else {
+            playlist_tracks
+        };
         let mut provider_track_states: HashMap<String, ProviderTrackState> = HashMap::new();
         let provider_playlist_state = sync_provider_playlist(
             db,
@@ -1805,6 +1816,65 @@ fn server_track_inventory_row(row: ServerTrackModel) -> ServerTrackInventoryRow 
         file_name,
         track_number,
         year,
+    }
+}
+
+async fn load_cached_server_playlist_tracks(
+    db: &DatabaseConnection,
+    user_id: Uuid,
+    provider_playlist_id: &str,
+) -> Result<Option<Vec<StreamingTrack>>> {
+    let Some(playlist) = ServerPlaylistEntity::find()
+        .filter(ServerPlaylistColumn::UserId.eq(user_id))
+        .filter(ServerPlaylistColumn::ProviderPlaylistId.eq(provider_playlist_id))
+        .one(db)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let membership = ServerPlaylistTrackEntity::find()
+        .filter(crate::models::ServerPlaylistTrackColumn::PlaylistId.eq(playlist.id))
+        .order_by_asc(crate::models::ServerPlaylistTrackColumn::Position)
+        .all(db)
+        .await?;
+
+    if membership.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
+
+    let track_ids = membership.iter().map(|row| row.track_id).collect::<Vec<_>>();
+    let track_map = ServerTrackEntity::find()
+        .filter(ServerTrackColumn::UserId.eq(user_id))
+        .filter(ServerTrackColumn::Id.is_in(track_ids))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|row| (row.id, row))
+        .collect::<HashMap<_, _>>();
+
+    let tracks = membership
+        .into_iter()
+        .filter_map(|row| track_map.get(&row.track_id).map(server_streaming_track_from_row))
+        .collect::<Vec<_>>();
+
+    Ok(Some(tracks))
+}
+
+fn server_streaming_track_from_row(row: &ServerTrackModel) -> StreamingTrack {
+    StreamingTrack {
+        id: row.provider_track_id.clone(),
+        title: row.title.clone(),
+        artist: row.artist.clone(),
+        album: row.album_name.clone().unwrap_or_default(),
+        duration: row.duration,
+        stream_url: None,
+        cover_url: row.cover_url.clone(),
+        quality: None,
+        source: LibraryProvider::Server.as_str().to_string(),
+        bitrate: None,
+        sample_rate: None,
+        bit_depth: None,
     }
 }
 
