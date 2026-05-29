@@ -20,6 +20,64 @@ type ApiResponse<T> = {
   message: string | null;
 };
 
+function absolutizeCoverUrl(backendUrl: string, coverUrl?: string | null) {
+  if (!coverUrl) {
+    return coverUrl ?? undefined;
+  }
+
+  try {
+    return new URL(coverUrl, backendUrl).toString();
+  } catch {
+    return coverUrl;
+  }
+}
+
+function normalizeSavedTrackCover(backendUrl: string, track: SavedTrack): SavedTrack {
+  return {
+    ...track,
+    cover_url: absolutizeCoverUrl(backendUrl, track.cover_url),
+  };
+}
+
+function normalizeFavouriteTrackCover(
+  backendUrl: string,
+  track: FavouriteTrack,
+): FavouriteTrack {
+  return {
+    ...track,
+    cover_url: absolutizeCoverUrl(backendUrl, track.cover_url),
+  };
+}
+
+function normalizeLastPlayedTrackCover(
+  backendUrl: string,
+  track: LastPlayedTrack,
+): LastPlayedTrack {
+  return {
+    ...track,
+    cover_url: absolutizeCoverUrl(backendUrl, track.cover_url),
+  };
+}
+
+function normalizeLibraryPlaylist(backendUrl: string, playlist: LibraryPlaylist): LibraryPlaylist {
+  return {
+    ...playlist,
+    preview_cover_urls: playlist.preview_cover_urls.map(
+      (coverUrl) => absolutizeCoverUrl(backendUrl, coverUrl) ?? coverUrl,
+    ),
+  };
+}
+
+function normalizeLibraryPlaylistItem(
+  backendUrl: string,
+  item: LibraryPlaylistItem,
+): LibraryPlaylistItem {
+  return {
+    ...item,
+    cover_url: absolutizeCoverUrl(backendUrl, item.cover_url),
+  };
+}
+
 function createAuthHeaders(authSession: AuthSession) {
   return {
     Authorization: `Bearer ${authSession.sessionToken}`,
@@ -173,7 +231,12 @@ export async function fetchSavedTracks(
   return {
     ...payload,
     tracks: await Promise.all(
-      payload.tracks.map((track) => refreshSavedTidalTrackMetadata(backendUrl, authSession, track)),
+      payload.tracks.map(async (track) =>
+        normalizeSavedTrackCover(
+          normalizedUrl,
+          await refreshSavedTidalTrackMetadata(backendUrl, authSession, track),
+        ),
+      ),
     ),
   };
 }
@@ -193,7 +256,11 @@ export async function fetchFavouriteTracks(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<FavouriteTracksListResponse>(response);
+  const payload = await parseApiResponse<FavouriteTracksListResponse>(response);
+  return {
+    ...payload,
+    tracks: payload.tracks.map((track) => normalizeFavouriteTrackCover(normalizedUrl, track)),
+  };
 }
 
 export async function fetchLastPlayedTracks(
@@ -213,7 +280,12 @@ export async function fetchLastPlayedTracks(
   return {
     ...payload,
     tracks: await Promise.all(
-      payload.tracks.map((track) => refreshLastPlayedTidalTrackMetadata(backendUrl, authSession, track)),
+      payload.tracks.map(async (track) =>
+        normalizeLastPlayedTrackCover(
+          normalizedUrl,
+          await refreshLastPlayedTidalTrackMetadata(backendUrl, authSession, track),
+        ),
+      ),
     ),
   };
 }
@@ -287,7 +359,11 @@ export async function fetchLibraryPlaylists(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<LibraryPlaylistListResponse>(response);
+  const payload = await parseApiResponse<LibraryPlaylistListResponse>(response);
+  return {
+    ...payload,
+    playlists: payload.playlists.map((playlist) => normalizeLibraryPlaylist(normalizedUrl, playlist)),
+  };
 }
 
 export async function fetchLibraryPlaylistItems(
@@ -302,7 +378,12 @@ export async function fetchLibraryPlaylistItems(
 
   const items = await parseApiResponse<LibraryPlaylistItem[]>(response);
   return Promise.all(
-    items.map((item) => refreshPlaylistItemTidalMetadata(backendUrl, authSession, item)),
+    items.map(async (item) =>
+      normalizeLibraryPlaylistItem(
+        normalizedUrl,
+        await refreshPlaylistItemTidalMetadata(backendUrl, authSession, item),
+      ),
+    ),
   );
 }
 
@@ -322,7 +403,8 @@ export async function createLibraryPlaylist(
     body: JSON.stringify(payload),
   });
 
-  return parseApiResponse<LibraryPlaylist>(response);
+  const playlist = await parseApiResponse<LibraryPlaylist>(response);
+  return normalizeLibraryPlaylist(normalizedUrl, playlist);
 }
 
 export async function addLibraryPlaylistItem(
@@ -349,7 +431,8 @@ export async function addLibraryPlaylistItem(
     body: JSON.stringify(payload),
   });
 
-  return parseApiResponse<LibraryPlaylistItem>(response);
+  const item = await parseApiResponse<LibraryPlaylistItem>(response);
+  return normalizeLibraryPlaylistItem(normalizedUrl, item);
 }
 
 export async function importProviderPlaylist(
@@ -373,7 +456,8 @@ export async function importProviderPlaylist(
     body: JSON.stringify(payload),
   });
 
-  return parseApiResponse<LibraryPlaylist>(response);
+  const playlist = await parseApiResponse<LibraryPlaylist>(response);
+  return normalizeLibraryPlaylist(normalizedUrl, playlist);
 }
 
 export async function refreshWatchedPlaylist(
@@ -387,7 +471,8 @@ export async function refreshWatchedPlaylist(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<LibraryPlaylist>(response);
+  const playlist = await parseApiResponse<LibraryPlaylist>(response);
+  return normalizeLibraryPlaylist(normalizedUrl, playlist);
 }
 
 export async function deleteSavedTrack(

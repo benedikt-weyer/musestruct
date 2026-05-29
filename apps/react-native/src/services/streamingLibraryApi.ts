@@ -5,6 +5,8 @@ import type {
   ServerPreloadMode,
   ServerPreloadProgress,
   ServiceStatusResponse,
+  StreamingAlbum,
+  StreamingPlaylist,
   SpotifyAuthUrlResponse,
   StreamingTrack,
   StreamingSearchResults,
@@ -81,10 +83,41 @@ function absolutizeStreamUrl(backendUrl: string, streamUrl?: string | null) {
   }
 }
 
+function absolutizeCoverUrl(backendUrl: string, coverUrl?: string | null) {
+  if (!coverUrl) {
+    return coverUrl ?? undefined;
+  }
+
+  try {
+    return new URL(coverUrl, backendUrl).toString();
+  } catch {
+    return coverUrl;
+  }
+}
+
 function normalizeStreamingTrackUrls(backendUrl: string, track: StreamingTrack): StreamingTrack {
   return {
     ...track,
+    cover_url: absolutizeCoverUrl(backendUrl, track.cover_url),
     stream_url: absolutizeStreamUrl(backendUrl, track.stream_url),
+  };
+}
+
+function normalizeStreamingAlbumUrls(backendUrl: string, album: StreamingAlbum): StreamingAlbum {
+  return {
+    ...album,
+    cover_url: absolutizeCoverUrl(backendUrl, album.cover_url),
+    tracks: album.tracks.map((track) => normalizeStreamingTrackUrls(backendUrl, track)),
+  };
+}
+
+function normalizeStreamingPlaylistUrls(
+  backendUrl: string,
+  playlist: StreamingPlaylist,
+): StreamingPlaylist {
+  return {
+    ...playlist,
+    cover_url: absolutizeCoverUrl(backendUrl, playlist.cover_url),
   };
 }
 
@@ -95,10 +128,10 @@ function normalizeStreamingSearchResults(
   return {
     ...results,
     tracks: results.tracks.map((track) => normalizeStreamingTrackUrls(backendUrl, track)),
-    albums: results.albums.map((album) => ({
-      ...album,
-      tracks: album.tracks.map((track) => normalizeStreamingTrackUrls(backendUrl, track)),
-    })),
+    albums: results.albums.map((album) => normalizeStreamingAlbumUrls(backendUrl, album)),
+    playlists: results.playlists.map((playlist) =>
+      normalizeStreamingPlaylistUrls(backendUrl, playlist),
+    ),
   };
 }
 
