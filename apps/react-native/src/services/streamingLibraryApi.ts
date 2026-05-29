@@ -69,6 +69,39 @@ function createSearchQuery(query: string, options: SearchOptions) {
   return searchParams.toString();
 }
 
+function absolutizeStreamUrl(backendUrl: string, streamUrl?: string | null) {
+  if (!streamUrl) {
+    return streamUrl ?? undefined;
+  }
+
+  try {
+    return new URL(streamUrl, backendUrl).toString();
+  } catch {
+    return streamUrl;
+  }
+}
+
+function normalizeStreamingTrackUrls(backendUrl: string, track: StreamingTrack): StreamingTrack {
+  return {
+    ...track,
+    stream_url: absolutizeStreamUrl(backendUrl, track.stream_url),
+  };
+}
+
+function normalizeStreamingSearchResults(
+  backendUrl: string,
+  results: StreamingSearchResults,
+): StreamingSearchResults {
+  return {
+    ...results,
+    tracks: results.tracks.map((track) => normalizeStreamingTrackUrls(backendUrl, track)),
+    albums: results.albums.map((album) => ({
+      ...album,
+      tracks: album.tracks.map((track) => normalizeStreamingTrackUrls(backendUrl, track)),
+    })),
+  };
+}
+
 export async function fetchAvailableServices(
   backendUrl: string,
   authSession: AuthSession,
@@ -105,7 +138,8 @@ export async function searchStreamingCatalog(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<StreamingSearchResults>(response);
+  const results = await parseApiResponse<StreamingSearchResults>(response);
+  return normalizeStreamingSearchResults(normalizedUrl, results);
 }
 
 export async function saveTrackToLibrary(
@@ -227,7 +261,8 @@ export async function fetchTrackStreamUrl(
     },
   );
 
-  return parseApiResponse<string>(response);
+  const streamUrl = await parseApiResponse<string>(response);
+  return absolutizeStreamUrl(normalizedUrl, streamUrl) ?? streamUrl;
 }
 
 export async function fetchStreamingTrack(
@@ -246,7 +281,8 @@ export async function fetchStreamingTrack(
     headers: createAuthHeaders(authSession),
   });
 
-  return parseApiResponse<StreamingTrack>(response);
+  const track = await parseApiResponse<StreamingTrack>(response);
+  return normalizeStreamingTrackUrls(normalizedUrl, track);
 }
 
 export async function fetchStreamingPlaylistTracks(
@@ -277,7 +313,8 @@ export async function fetchStreamingPlaylistTracks(
     },
   );
 
-  return parseApiResponse<StreamingTrack[]>(response);
+  const tracks = await parseApiResponse<StreamingTrack[]>(response);
+  return tracks.map((track) => normalizeStreamingTrackUrls(normalizedUrl, track));
 }
 
 export async function fetchServerPreloadStatus(
