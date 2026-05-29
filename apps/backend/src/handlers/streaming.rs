@@ -7,11 +7,16 @@ use axum_extra::extract::Query as MultiValueQuery;
 use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, QueryFilter};
+use sea_orm::{EntityTrait, Set, ActiveModelTrait, ColumnTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use crate::services::streaming::{LocalMusicService, QobuzService, SearchResults, SpotifyService, StreamingService, StreamingTrack, TidalService};
 use crate::services::streaming_service::StreamingService as BackendStreamingService;
-use crate::models::{UserResponseDto, SearchQuery, StreamingServiceEntity, StreamingServiceActiveModel, StreamingServiceColumn}; 
+use crate::models::{
+    SearchQuery, ServerAlbumColumn, ServerAlbumEntity, ServerAlbumTrackColumn, ServerAlbumTrackEntity,
+    ServerPlaylistColumn, ServerPlaylistEntity, ServerPlaylistTrackColumn, ServerPlaylistTrackEntity,
+    ServerTrackColumn, ServerTrackEntity, StreamingServiceActiveModel, StreamingServiceColumn,
+    StreamingServiceEntity, UserResponseDto,
+}; 
 use crate::handlers::auth::{AppState, ApiResponse};
 use std::sync::Arc;
 
@@ -657,6 +662,32 @@ pub async fn search_music(
 
     // Search each service
     for service_name in &services_to_search {
+        if service_name == "server" {
+            match search_server_catalog(
+                state.db(),
+                user.id,
+                &params.q,
+                search_type,
+                is_library_search,
+                per_service_limit,
+                per_service_offset,
+            )
+            .await
+            {
+                Ok(results) => {
+                    all_tracks.extend(results.tracks);
+                    all_albums.extend(results.albums);
+                    all_playlists.extend(results.playlists);
+                    total_results += results.total;
+                }
+                Err(err) => {
+                    search_errors.push(format!("{}: {}", service_name, err));
+                }
+            }
+
+            continue;
+        }
+
         match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
             Ok(service) => {
                 if is_library_search {
@@ -859,6 +890,234 @@ pub async fn search_music(
     }
 
     Ok(Json(ApiResponse::success(combined_results)))
+}
+
+async fn search_server_catalog(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    query: &str,
+    search_type: Option<&str>,
+    _is_library_search: bool,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<SearchResults, String> {
+    let normalized_query = query.trim().to_lowercase();
+    let limit = limit.unwrap_or(20) as u64;
+    let offset = offset.unwrap_or(0) as u64;
+    let all_types = search_type.is_none() || search_type == Some("all");
+
+    let tracks = if all_types || search_type == Some("track") {
+        search_server_tracks(db, user_id, &normalized_query, limit, offset)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
+
+    let albums = if all_types || search_type == Some("album") {
+        search_server_albums(db, user_id, &normalized_query, limit, offset)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
+
+    let playlists = if all_types || search_type == Some("playlist") {
+        search_server_playlists(db, user_id, &normalized_query, limit, offset)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        Vec::new()
+    };
+
+    let total = match search_type {
+        Some("track") => tracks.len() as u32,
+        Some("album") => albums.len() as u32,
+        Some("playlist") => playlists.len() as u32,
+        _ => (tracks.len() + albums.len() + playlists.len()) as u32,
+    };
+
+    Ok(SearchResults {
+        tracks,
+        albums,
+        playlists,
+        total,
+        offset: offset as u32,
+        limit: limit as u32,
+    })
+}
+
+async fn search_server_tracks(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+    limit: u64,
+    offset: u64,
+) -> anyhow::Result<Vec<StreamingTrack>> {
+    let mut query = ServerTrackEntity::find().filter(ServerTrackColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerTrackColumn::Title
+                .contains(normalized_query)
+                .or(ServerTrackColumn::Artist.contains(normalized_query))
+                .or(ServerTrackColumn::AlbumName.contains(normalized_query))
+                .or(ServerTrackColumn::ProviderTrackId.contains(normalized_query)),
+        );
+    }
+
+    let rows = query
+        .order_by_asc(ServerTrackColumn::Artist)
+        .order_by_asc(ServerTrackColumn::Title)
+        .offset(offset)
+        .offset(offset)
+        .limit(limit)
+        .all(db)
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| StreamingTrack {
+            id: row.provider_track_id,
+            title: row.title,
+            artist: row.artist,
+            album: row.album_name.unwrap_or_default(),
+            duration: row.duration,
+            stream_url: None,
+            cover_url: row.cover_url,
+            quality: Some("Original".to_string()),
+            source: "server".to_string(),
+            bitrate: None,
+            sample_rate: None,
+            bit_depth: None,
+        })
+        .collect())
+}
+
+async fn search_server_albums(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+    limit: u64,
+    offset: u64,
+) -> anyhow::Result<Vec<crate::services::streaming::StreamingAlbum>> {
+    let mut query = ServerAlbumEntity::find().filter(ServerAlbumColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerAlbumColumn::Name
+                .contains(normalized_query)
+                .or(ServerAlbumColumn::Artist.contains(normalized_query)),
+        );
+    }
+
+    let albums = query
+        .order_by_asc(ServerAlbumColumn::Artist)
+        .order_by_asc(ServerAlbumColumn::Name)
+        .offset(offset)
+        .limit(limit)
+        .all(db)
+        .await?;
+
+    let mut results = Vec::with_capacity(albums.len());
+    for album in albums {
+        let album_track_rows = ServerAlbumTrackEntity::find()
+            .filter(ServerAlbumTrackColumn::AlbumId.eq(album.id))
+            .order_by_asc(ServerAlbumTrackColumn::Position)
+            .all(db)
+            .await?;
+        let track_ids = album_track_rows.iter().map(|row| row.track_id).collect::<Vec<_>>();
+        let tracks = if track_ids.is_empty() {
+            Vec::new()
+        } else {
+            let track_map = ServerTrackEntity::find()
+                .filter(ServerTrackColumn::Id.is_in(track_ids.clone()))
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|row| (row.id, row))
+                .collect::<HashMap<_, _>>();
+
+            album_track_rows
+                .into_iter()
+                .filter_map(|join_row| track_map.get(&join_row.track_id))
+                .map(|track| StreamingTrack {
+                    id: track.provider_track_id.clone(),
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                    album: track.album_name.clone().unwrap_or_default(),
+                    duration: track.duration,
+                    stream_url: None,
+                    cover_url: track.cover_url.clone(),
+                    quality: Some("Original".to_string()),
+                    source: "server".to_string(),
+                    bitrate: None,
+                    sample_rate: None,
+                    bit_depth: None,
+                })
+                .collect()
+        };
+
+        results.push(crate::services::streaming::StreamingAlbum {
+            id: album.provider_album_id,
+            title: album.name,
+            artist: album.artist,
+            release_date: album.release_date,
+            cover_url: album.cover_url,
+            tracks,
+            source: "server".to_string(),
+        });
+    }
+
+    Ok(results)
+}
+
+async fn search_server_playlists(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+    limit: u64,
+    offset: u64,
+) -> anyhow::Result<Vec<crate::services::streaming::StreamingPlaylist>> {
+    let mut query = ServerPlaylistEntity::find().filter(ServerPlaylistColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerPlaylistColumn::Name
+                .contains(normalized_query)
+                .or(ServerPlaylistColumn::Description.contains(normalized_query))
+                .or(ServerPlaylistColumn::OwnerName.contains(normalized_query)),
+        );
+    }
+
+    let playlists = query
+        .order_by_asc(ServerPlaylistColumn::Name)
+        .offset(offset)
+        .limit(limit)
+        .all(db)
+        .await?;
+
+    let mut results = Vec::with_capacity(playlists.len());
+    for playlist in playlists {
+        let track_count = ServerPlaylistTrackEntity::find()
+            .filter(ServerPlaylistTrackColumn::PlaylistId.eq(playlist.id))
+            .count(db)
+            .await? as u32;
+
+        results.push(crate::services::streaming::StreamingPlaylist {
+            id: playlist.provider_playlist_id,
+            name: playlist.name,
+            description: playlist.description,
+            owner: playlist.owner_name.unwrap_or_else(|| "Local".to_string()),
+            source: "server".to_string(),
+            cover_url: playlist.cover_url,
+            track_count,
+            is_public: false,
+            external_url: None,
+        });
+    }
+
+    Ok(results)
 }
 
 pub async fn get_stream_url(
