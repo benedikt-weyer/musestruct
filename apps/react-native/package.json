@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "react-native start",
     "android": "./scripts/run-android.sh",
+    "android:install": "./scripts/install-android.sh",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "check": "tsc --noEmit",

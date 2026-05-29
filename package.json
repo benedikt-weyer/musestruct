@@ -12,6 +12,7 @@
     "react-native": "turbo run dev --filter=@musestruct/react-native",
     "docs": "turbo run dev --filter=@musestruct/docs",
     "android": "turbo run android --filter=@musestruct/react-native",
+    "android:install": "turbo run android:install --filter=@musestruct/react-native",
     "ios": "turbo run ios --filter=@musestruct/react-native",
     "build": "turbo run build",
     "docs:build": "turbo run build --filter=@musestruct/docs",

@@ -9,6 +9,10 @@
       "cache": false,
       "outputs": []
     },
+    "android:install": {
+      "cache": false,
+      "outputs": []
+    },
     "ios": {
       "cache": false,
       "outputs": []
