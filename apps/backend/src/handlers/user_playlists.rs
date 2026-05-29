@@ -4,9 +4,9 @@ use axum::{
     response::Json,
     Extension,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
     models::{
         UserPlaylistActiveModel, UserPlaylistColumn, UserPlaylistEntity, UserPlaylistItemActiveModel,
         UserPlaylistItemColumn, UserPlaylistItemEntity, UserPlaylistModel, UserResponseDto,
-        UserTrackEntity,
+        UserTrackColumn, UserTrackEntity,
     },
     services::{LibraryProvider, LibrarySyncService, cache_cover_url},
 };
@@ -63,6 +63,7 @@ pub struct PlaylistResponseDto {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     pub item_count: i32,
+    pub preview_cover_urls: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -145,7 +146,7 @@ pub async fn get_playlists(
             .count(state.db())
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        playlists.push(playlist_model_response(playlist, item_count as i32));
+        playlists.push(playlist_model_response(state.db(), playlist, item_count as i32).await?);
     }
 
     Ok(Json(ApiResponse::success(PlaylistListResponse {
@@ -172,7 +173,9 @@ pub async fn create_playlist(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, 0))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, 0).await?,
+    )))
 }
 
 pub async fn get_playlist(
@@ -193,7 +196,9 @@ pub async fn get_playlist(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, item_count as i32))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+    )))
 }
 
 pub async fn update_playlist(
@@ -232,7 +237,9 @@ pub async fn update_playlist(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, item_count as i32))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+    )))
 }
 
 pub async fn delete_playlist(
@@ -476,7 +483,9 @@ pub async fn import_canonical_playlist(
         .count(state.db())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, item_count as i32))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+    )))
 }
 
 pub async fn import_provider_playlist(
@@ -513,7 +522,9 @@ pub async fn import_provider_playlist(
         .count(state.db())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, item_count as i32))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+    )))
 }
 
 pub async fn refresh_watched_playlist(
@@ -529,7 +540,9 @@ pub async fn refresh_watched_playlist(
         .count(state.db())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(ApiResponse::success(playlist_model_response(playlist, item_count as i32))))
+    Ok(Json(ApiResponse::success(
+        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+    )))
 }
 
 async fn ensure_user_playlist_owner(
@@ -608,8 +621,18 @@ async fn playlist_item_response(
     }
 }
 
-fn playlist_model_response(playlist: UserPlaylistModel, item_count: i32) -> PlaylistResponseDto {
-    PlaylistResponseDto {
+async fn playlist_model_response(
+    db: &sea_orm::DatabaseConnection,
+    playlist: UserPlaylistModel,
+    item_count: i32,
+) -> Result<PlaylistResponseDto, StatusCode> {
+    let preview_cover_urls = if item_count > 0 {
+        playlist_preview_cover_urls(db, playlist.id).await?
+    } else {
+        Vec::new()
+    };
+
+    Ok(PlaylistResponseDto {
         id: playlist.id,
         canonical_playlist_id: playlist.canonical_playlist_id,
         name: playlist.name,
@@ -623,7 +646,61 @@ fn playlist_model_response(playlist: UserPlaylistModel, item_count: i32) -> Play
         created_at: playlist.created_at,
         updated_at: playlist.updated_at,
         item_count,
+        preview_cover_urls,
+    })
+}
+
+async fn playlist_preview_cover_urls(
+    db: &sea_orm::DatabaseConnection,
+    playlist_id: Uuid,
+) -> Result<Vec<String>, StatusCode> {
+    let items = UserPlaylistItemEntity::find()
+        .filter(UserPlaylistItemColumn::PlaylistId.eq(playlist_id))
+        .order_by_asc(UserPlaylistItemColumn::Position)
+        .limit(16)
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let track_ids = items
+        .iter()
+        .filter_map(|item| item.user_track_id)
+        .collect::<Vec<_>>();
+    if track_ids.is_empty() {
+        return Ok(Vec::new());
     }
+
+    let tracks_by_id = UserTrackEntity::find()
+        .filter(UserTrackColumn::Id.is_in(track_ids))
+        .all(db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .map(|track| (track.id, track))
+        .collect::<HashMap<_, _>>();
+
+    let mut preview_cover_urls = Vec::new();
+    for item in items {
+        let Some(user_track_id) = item.user_track_id else {
+            continue;
+        };
+        let Some(track) = tracks_by_id.get(&user_track_id) else {
+            continue;
+        };
+        let Some(cover_url) = cache_cover_url(track.cover_url.clone()) else {
+            continue;
+        };
+        if preview_cover_urls.contains(&cover_url) {
+            continue;
+        }
+
+        preview_cover_urls.push(cover_url);
+        if preview_cover_urls.len() == 4 {
+            break;
+        }
+    }
+
+    Ok(preview_cover_urls)
 }
 
 async fn creates_playlist_cycle(

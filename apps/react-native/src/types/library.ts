@@ -33,6 +33,7 @@ export type LibraryPlaylist = {
   created_at: string;
   updated_at: string;
   item_count: number;
+  preview_cover_urls: string[];
 };
 
 export type LibraryPlaylistItem = {

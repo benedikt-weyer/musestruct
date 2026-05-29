@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlaylistArtwork } from '../components/PlaylistArtwork';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
+import type { AuthSession } from '../types/auth';
 import { importProviderPlaylist } from '../services/libraryApi';
 import {
   getStoredBrowseSearchScope,
@@ -28,6 +30,7 @@ import {
 import {
   fetchAvailableServices,
   fetchServiceStatus,
+  fetchStreamingPlaylistTracks,
   fetchTrackStreamUrl,
   saveTrackToLibrary,
   searchStreamingCatalog,
@@ -130,6 +133,24 @@ function getVisibleResultCount(
   }
 
   return playlists.length;
+}
+
+function getPlaylistPreviewCoverUrls(tracks: StreamingTrack[]) {
+  const previewCoverUrls: string[] = [];
+
+  for (const track of tracks) {
+    const coverUrl = track.cover_url?.trim();
+    if (!coverUrl || previewCoverUrls.includes(coverUrl)) {
+      continue;
+    }
+
+    previewCoverUrls.push(coverUrl);
+    if (previewCoverUrls.length === 4) {
+      break;
+    }
+  }
+
+  return previewCoverUrls;
 }
 
 function getEmptyStateMessage({
@@ -304,30 +325,63 @@ function BrowseAlbumCard({
 }
 
 function BrowsePlaylistCard({
+  authSession,
+  backendUrl,
   onClone,
   onWatch,
   playlist,
 }: Readonly<{
+  authSession: AuthSession | null;
+  backendUrl: string;
   onClone: (playlist: StreamingPlaylist) => void;
   onWatch: (playlist: StreamingPlaylist) => void;
   playlist: StreamingPlaylist;
 }>) {
+  const [previewCoverUrls, setPreviewCoverUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (playlist.cover_url || !authSession || playlist.track_count <= 0) {
+      setPreviewCoverUrls([]);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    void fetchStreamingPlaylistTracks(
+      backendUrl,
+      authSession,
+      playlist.id,
+      playlist.source,
+      4,
+      0,
+    )
+      .then((tracks) => {
+        if (!isCancelled) {
+          setPreviewCoverUrls(getPlaylistPreviewCoverUrls(tracks));
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setPreviewCoverUrls([]);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authSession, backendUrl, playlist.cover_url, playlist.id, playlist.source, playlist.track_count]);
+
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <View className="flex-row gap-4">
-        {playlist.cover_url ? (
-          <Image
-            className="h-20 w-20 rounded-[18px] bg-slate-100 dark:bg-slate-800"
-            resizeMode="cover"
-            source={{ uri: playlist.cover_url }}
-          />
-        ) : (
-          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
-              {playlist.source}
-            </Text>
-          </View>
-        )}
+        <PlaylistArtwork
+          coverUrl={playlist.cover_url}
+          fallbackLabel={playlist.source}
+          previewCoverUrls={previewCoverUrls}
+          size={80}
+        />
 
         <View className="flex-1">
           <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
@@ -949,6 +1003,8 @@ export function BrowseScreen() {
               <View className="mt-3">
                 {playlists.map((playlist) => (
                   <BrowsePlaylistCard
+                    authSession={authSession}
+                    backendUrl={backendUrl}
                     key={`${playlist.source}:${playlist.id}`}
                     onClone={(selectedPlaylist) => {
                       void handleImportPlaylist(selectedPlaylist, false);

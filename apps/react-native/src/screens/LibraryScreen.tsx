@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlaylistArtwork } from '../components/PlaylistArtwork';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
@@ -257,7 +258,13 @@ function PlaylistLibraryCard({
       <Pressable accessibilityRole="button" onPress={() => {
         onOpen(playlist);
       }}>
-        <View className="flex-row items-start justify-between gap-4">
+        <View className="flex-row items-start gap-4">
+          <PlaylistArtwork
+            fallbackLabel={playlist.source ?? 'playlist'}
+            previewCoverUrls={playlist.preview_cover_urls}
+            size={80}
+          />
+
           <View className="flex-1">
             <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
             <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
