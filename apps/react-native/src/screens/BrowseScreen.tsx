@@ -38,6 +38,18 @@ type BrowseSearchType = 'track' | 'album' | 'playlist';
 type BrowseResultMode = 'all' | BrowseSearchType;
 type BrowseSearchScope = 'all' | 'library';
 
+function getAllLibraryButtonLabel(searchType: BrowseSearchType) {
+  if (searchType === 'track') {
+    return 'Search All Tracks In My Library';
+  }
+
+  if (searchType === 'album') {
+    return 'Search All Albums In My Library';
+  }
+
+  return 'Search All Playlists In My Library';
+}
+
 function showToast(message: string) {
   if (Platform.OS === 'android') {
     ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -812,12 +824,11 @@ export function BrowseScreen() {
                 void handleSearch(0, {
                   allowEmptyQuery: true,
                   forceScope: 'library',
-                  includeAllTypes: true,
                 });
               }}
             >
               <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
-                Search All In My Library
+                {getAllLibraryButtonLabel(searchType)}
               </Text>
             </Pressable>
           ) : null}
