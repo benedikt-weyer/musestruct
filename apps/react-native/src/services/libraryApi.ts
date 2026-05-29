@@ -28,7 +28,7 @@ function createAuthHeaders(authSession: AuthSession) {
 }
 
 async function parseApiResponse<T>(response: Response) {
-  const payload = (await response.json()) as ApiResponse<T>;
+  const payload = await readApiResponse<T>(response);
 
   if (!response.ok || !payload.success || payload.data === null) {
     throw new Error(payload.message ?? `Request failed with status ${response.status}.`);
@@ -38,7 +38,7 @@ async function parseApiResponse<T>(response: Response) {
 }
 
 async function parseMutationResponse(response: Response) {
-  const payload = (await response.json()) as ApiResponse<unknown>;
+  const payload = await readApiResponse<unknown>(response);
 
   if (!response.ok || !payload.success) {
     throw new Error(payload.message ?? `Request failed with status ${response.status}.`);
@@ -53,6 +53,20 @@ async function parseMutationResponse(response: Response) {
   }
 
   return null;
+}
+
+async function readApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  const rawBody = await response.text();
+
+  if (!rawBody.trim()) {
+    throw new Error(`Request failed with status ${response.status}.`);
+  }
+
+  try {
+    return JSON.parse(rawBody) as ApiResponse<T>;
+  } catch {
+    throw new Error(rawBody.trim() || `Request failed with status ${response.status}.`);
+  }
 }
 
 function hasStaleTidalMetadata(track: {

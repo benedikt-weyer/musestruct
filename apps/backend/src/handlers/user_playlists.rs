@@ -7,6 +7,7 @@ use axum::{
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -493,11 +494,18 @@ pub async fn import_provider_playlist(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
     Json(payload): Json<ImportProviderPlaylistDto>,
-) -> Result<Json<ApiResponse<PlaylistResponseDto>>, StatusCode> {
+) -> Result<Json<ApiResponse<PlaylistResponseDto>>, (StatusCode, Json<ApiResponse<()>>)> {
     let provider = payload
         .source
         .parse::<LibraryProvider>()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("Unsupported provider".to_string())),
+            )
+        })?;
+    let provider_playlist_id = payload.playlist_id.clone();
+    let watched = payload.watched.unwrap_or(true);
     let playlist = LibrarySyncService::import_provider_playlist(
         state.db(),
         user.id,
@@ -513,18 +521,67 @@ pub async fn import_provider_playlist(
             is_public: payload.is_public.unwrap_or(false),
             external_url: None,
         },
-        payload.watched.unwrap_or(true),
+        watched,
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|error| {
+        error!(
+            user_id = %user.id,
+            provider = provider.as_str(),
+            provider_playlist_id = %provider_playlist_id,
+            watched = watched,
+            error = %error,
+            "Failed to import provider playlist"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!(
+                "Failed to import provider playlist: {}",
+                error
+            ))),
+        )
+    })?;
 
     let item_count = UserPlaylistItemEntity::find()
         .filter(UserPlaylistItemColumn::PlaylistId.eq(playlist.id))
         .count(state.db())
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|error| {
+            error!(
+                user_id = %user.id,
+                playlist_id = %playlist.id,
+                provider = provider.as_str(),
+                error = %error,
+                "Failed to count imported playlist items"
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!(
+                    "Failed to count imported playlist items: {}",
+                    error
+                ))),
+            )
+        })?;
+    let imported_playlist_id = playlist.id;
     Ok(Json(ApiResponse::success(
-        playlist_model_response(state.db(), playlist, item_count as i32).await?,
+        playlist_model_response(state.db(), playlist, item_count as i32)
+            .await
+            .map_err(|error| {
+                error!(
+                    user_id = %user.id,
+                    playlist_id = %imported_playlist_id,
+                    provider = provider.as_str(),
+                    error = %error,
+                    "Failed to build imported playlist response"
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!(
+                        "Failed to build imported playlist response: {}",
+                        error
+                    ))),
+                )
+            })?,
     )))
 }
 

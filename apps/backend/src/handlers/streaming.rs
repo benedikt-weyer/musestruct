@@ -2960,6 +2960,32 @@ pub async fn get_playlist_tracks(
     Query(params): Query<GetPlaylistTracksQuery>,
 ) -> Result<Json<ApiResponse<Vec<StreamingTrack>>>, (StatusCode, Json<ApiResponse<()>>)> {
     let service_name = params.service.as_deref().unwrap_or("spotify");
+
+    if service_name == "server" {
+        match get_cached_server_playlist_tracks(
+            state.db(),
+            user.id,
+            &playlist_id,
+            params.limit,
+            params.offset,
+        )
+        .await
+        {
+            Ok(Some(tracks)) => {
+                return Ok(Json(ApiResponse::success(normalize_streaming_tracks(tracks))));
+            }
+            Ok(None) => {}
+            Err(err) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!(
+                        "Failed to get cached server playlist tracks: {}",
+                        err
+                    ))),
+                ));
+            }
+        }
+    }
     
     let service = match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
         Ok(service) => service,
@@ -2985,6 +3011,66 @@ pub struct GetPlaylistTracksQuery {
     pub service: Option<String>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+}
+
+async fn get_cached_server_playlist_tracks(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    provider_playlist_id: &str,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> anyhow::Result<Option<Vec<StreamingTrack>>> {
+    let Some(playlist) = ServerPlaylistEntity::find()
+        .filter(ServerPlaylistColumn::UserId.eq(user_id))
+        .filter(ServerPlaylistColumn::ProviderPlaylistId.eq(provider_playlist_id))
+        .one(db)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let playlist_track_rows = ServerPlaylistTrackEntity::find()
+        .filter(ServerPlaylistTrackColumn::PlaylistId.eq(playlist.id))
+        .order_by_asc(ServerPlaylistTrackColumn::Position)
+        .all(db)
+        .await?;
+
+    let track_ids = playlist_track_rows.iter().map(|row| row.track_id).collect::<Vec<_>>();
+    if track_ids.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
+
+    let track_map = ServerTrackEntity::find()
+        .filter(ServerTrackColumn::UserId.eq(user_id))
+        .filter(ServerTrackColumn::Id.is_in(track_ids))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|row| (row.id, row))
+        .collect::<HashMap<_, _>>();
+
+    let tracks = playlist_track_rows
+        .into_iter()
+        .filter_map(|join_row| track_map.get(&join_row.track_id))
+        .map(|track| StreamingTrack {
+            id: track.provider_track_id.clone(),
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            album: track.album_name.clone().unwrap_or_default(),
+            duration: track.duration,
+            stream_url: None,
+            cover_url: track.cover_url.clone(),
+            quality: Some("Original".to_string()),
+            source: "server".to_string(),
+            bitrate: None,
+            sample_rate: None,
+            bit_depth: None,
+        })
+        .skip(offset.unwrap_or(0) as usize)
+        .take(limit.unwrap_or(50) as usize)
+        .collect::<Vec<_>>();
+
+    Ok(Some(tracks))
 }
 
 // Stream local music files

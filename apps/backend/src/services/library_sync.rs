@@ -2235,18 +2235,90 @@ async fn insert_provider_playlist_row(
 ) -> Result<Uuid> {
     let metadata = serde_json::to_value(playlist).unwrap_or(Value::Null);
     match provider {
-        LibraryProvider::Spotify => Ok(SpotifyPlaylistActiveModel {
-            user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..SpotifyPlaylistActiveModel::new()
-        }.insert(db).await?.id),
-        LibraryProvider::Tidal => Ok(TidalPlaylistActiveModel {
-            user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..TidalPlaylistActiveModel::new()
-        }.insert(db).await?.id),
-        LibraryProvider::Qobuz => Ok(QobuzPlaylistActiveModel {
-            user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..QobuzPlaylistActiveModel::new()
-        }.insert(db).await?.id),
-        LibraryProvider::Server => Ok(ServerPlaylistActiveModel {
-            user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..ServerPlaylistActiveModel::new()
-        }.insert(db).await?.id),
+        LibraryProvider::Spotify => {
+            if let Some(existing) = SpotifyPlaylistEntity::find()
+                .filter(SpotifyPlaylistColumn::UserId.eq(user_id))
+                .filter(SpotifyPlaylistColumn::ProviderPlaylistId.eq(&playlist.id))
+                .one(db)
+                .await?
+            {
+                let mut active = existing.into_active_model();
+                active.name = Set(playlist.name.clone());
+                active.description = Set(playlist.description.clone());
+                active.owner_name = Set(option_string(&playlist.owner));
+                active.content_signature = Set(content_signature);
+                active.cover_url = Set(playlist.cover_url.clone());
+                active.provider_metadata = Set(metadata);
+                return Ok(active.update(db).await?.id);
+            }
+
+            Ok(SpotifyPlaylistActiveModel {
+                user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..SpotifyPlaylistActiveModel::new()
+            }.insert(db).await?.id)
+        }
+        LibraryProvider::Tidal => {
+            if let Some(existing) = TidalPlaylistEntity::find()
+                .filter(TidalPlaylistColumn::UserId.eq(user_id))
+                .filter(TidalPlaylistColumn::ProviderPlaylistId.eq(&playlist.id))
+                .one(db)
+                .await?
+            {
+                let mut active = existing.into_active_model();
+                active.name = Set(playlist.name.clone());
+                active.description = Set(playlist.description.clone());
+                active.owner_name = Set(option_string(&playlist.owner));
+                active.content_signature = Set(content_signature);
+                active.cover_url = Set(playlist.cover_url.clone());
+                active.provider_metadata = Set(metadata);
+                return Ok(active.update(db).await?.id);
+            }
+
+            Ok(TidalPlaylistActiveModel {
+                user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..TidalPlaylistActiveModel::new()
+            }.insert(db).await?.id)
+        }
+        LibraryProvider::Qobuz => {
+            if let Some(existing) = QobuzPlaylistEntity::find()
+                .filter(QobuzPlaylistColumn::UserId.eq(user_id))
+                .filter(QobuzPlaylistColumn::ProviderPlaylistId.eq(&playlist.id))
+                .one(db)
+                .await?
+            {
+                let mut active = existing.into_active_model();
+                active.name = Set(playlist.name.clone());
+                active.description = Set(playlist.description.clone());
+                active.owner_name = Set(option_string(&playlist.owner));
+                active.content_signature = Set(content_signature);
+                active.cover_url = Set(playlist.cover_url.clone());
+                active.provider_metadata = Set(metadata);
+                return Ok(active.update(db).await?.id);
+            }
+
+            Ok(QobuzPlaylistActiveModel {
+                user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..QobuzPlaylistActiveModel::new()
+            }.insert(db).await?.id)
+        }
+        LibraryProvider::Server => {
+            if let Some(existing) = ServerPlaylistEntity::find()
+                .filter(ServerPlaylistColumn::UserId.eq(user_id))
+                .filter(ServerPlaylistColumn::ProviderPlaylistId.eq(&playlist.id))
+                .one(db)
+                .await?
+            {
+                let mut active = existing.into_active_model();
+                active.name = Set(playlist.name.clone());
+                active.description = Set(playlist.description.clone());
+                active.owner_name = Set(option_string(&playlist.owner));
+                active.content_signature = Set(content_signature);
+                active.cover_url = Set(playlist.cover_url.clone());
+                active.provider_metadata = Set(metadata);
+                return Ok(active.update(db).await?.id);
+            }
+
+            Ok(ServerPlaylistActiveModel {
+                user_id: Set(user_id), provider_playlist_id: Set(playlist.id.clone()), name: Set(playlist.name.clone()), description: Set(playlist.description.clone()), owner_name: Set(option_string(&playlist.owner)), content_signature: Set(content_signature), cover_url: Set(playlist.cover_url.clone()), provider_metadata: Set(metadata), ..ServerPlaylistActiveModel::new()
+            }.insert(db).await?.id)
+        }
     }
 }
 
