@@ -1,14 +1,15 @@
 export type SavedTrack = {
   id: string;
+  canonical_track_id: string;
   track_id: string;
   title: string;
   artist: string;
   album: string;
-  duration: number;
+  duration?: number | null;
   source: string;
   cover_url?: string | null;
-  bpm?: number | null;
   created_at: string;
+  updated_at: string;
 };
 
 export type SavedTracksListResponse = {
@@ -18,23 +19,17 @@ export type SavedTracksListResponse = {
   limit: number;
 };
 
-export type SavedAlbum = {
-  id: string;
-  album_id: string;
-  title: string;
-  artist: string;
-  release_date?: string | null;
-  cover_url?: string | null;
-  source: string;
-  track_count: number;
-  created_at: string;
-};
-
 export type LibraryPlaylist = {
   id: string;
+  canonical_playlist_id?: string | null;
   name: string;
   description?: string | null;
+  source?: string | null;
+  provider_playlist_id?: string | null;
   is_public: boolean;
+  is_read_only: boolean;
+  is_watched: boolean;
+  last_synced_at?: string | null;
   created_at: string;
   updated_at: string;
   item_count: number;
@@ -63,4 +58,4 @@ export type LibraryPlaylistListResponse = {
   per_page: number;
 };
 
-export type LibrarySection = 'playlists' | 'albums' | 'tracks' | 'favourites';
+export type LibrarySection = 'playlists' | 'tracks';

@@ -4,14 +4,14 @@ use axum::{
     response::Json,
     Extension,
 };
-use sea_orm::{EntityTrait, ColumnTrait, ActiveModelTrait, QueryFilter, QueryOrder, QuerySelect, Set, PaginatorTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
 use uuid::Uuid;
 
 use crate::{
-    handlers::auth::{AppState, ApiResponse},
-    models::{SavedTrackEntity, UserResponseDto},
+    handlers::auth::{ApiResponse, AppState},
+    models::{UserResponseDto, UserTrackColumn, UserTrackEntity, UserTrackModel},
+    services::{LibraryProvider, LibrarySyncService, UnresolvedMatchesResponse},
 };
 
 #[derive(Deserialize, Debug)]
@@ -28,15 +28,16 @@ pub struct SaveTrackRequest {
 #[derive(Serialize)]
 pub struct SavedTrackResponse {
     pub id: Uuid,
+    pub canonical_track_id: Uuid,
     pub track_id: String,
     pub title: String,
     pub artist: String,
     pub album: String,
-    pub duration: i32,
+    pub duration: Option<i32>,
     pub source: String,
     pub cover_url: Option<String>,
-    pub bpm: Option<f32>,
     pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 #[derive(Serialize)]
@@ -51,6 +52,21 @@ pub struct SavedTracksListResponse {
 pub struct GetSavedTracksQuery {
     pub page: Option<u64>,
     pub limit: Option<u64>,
+    pub search: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct RefreshProviderResponse {
+    pub provider: String,
+    pub tracks: usize,
+    pub albums: usize,
+    pub playlists: usize,
+    pub canonical_tracks: usize,
+    pub canonical_albums: usize,
+    pub canonical_playlists: usize,
+    pub unresolved_tracks: usize,
+    pub unresolved_albums: usize,
+    pub unresolved_playlists: usize,
 }
 
 pub async fn save_track(
@@ -58,80 +74,26 @@ pub async fn save_track(
     Extension(user): Extension<UserResponseDto>,
     Json(request): Json<SaveTrackRequest>,
 ) -> Result<Json<ApiResponse<SavedTrackResponse>>, StatusCode> {
-    debug!("save_track called with request: {:?}", request);
-    debug!("User ID: {:?}", user.id);
-    
-    // Check if track already exists for this user and source
-    debug!("Starting duplicate check query...");
-    let existing_track = SavedTrackEntity::find()
-        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
-        .filter(crate::models::SavedTrackColumn::TrackId.eq(&request.track_id))
-        .filter(crate::models::SavedTrackColumn::Source.eq(&request.source))
-        .one(state.db())
-        .await
-        .map_err(|e| {
-            error!("Error during duplicate check query: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let provider = request
+        .source
+        .parse::<LibraryProvider>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    debug!("Duplicate check completed, existing_track: {:?}", existing_track.is_some());
+    let track = LibrarySyncService::ensure_user_track_from_input(
+        state.db(),
+        user.id,
+        provider,
+        &request.track_id,
+        &request.title,
+        &request.artist,
+        Some(&request.album),
+        Some(request.duration),
+        request.cover_url.as_deref(),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if existing_track.is_some() {
-        debug!("Track already exists, returning early");
-        return Ok(Json(ApiResponse {
-            success: false,
-            data: None,
-            message: Some("Track already saved".to_string()),
-        }));
-    }
-
-    debug!("Track does not exist, proceeding to create new saved track");
-    // Create new saved track
-    debug!("Creating SavedTrackActiveModel...");
-    let saved_track = crate::models::SavedTrackActiveModel {
-        id: Set(Uuid::new_v4()),
-        user_id: Set(user.id),
-        track_id: Set(request.track_id.clone()),
-        title: Set(request.title.clone()),
-        artist: Set(request.artist.clone()),
-        album: Set(request.album.clone()),
-        duration: Set(request.duration),
-        source: Set(request.source.clone()),
-        cover_url: Set(request.cover_url.clone()),
-        bpm: Set(None), // BPM not available when saving track initially
-        key_name: Set(None), // Key not available when saving track initially
-        camelot: Set(None), // Camelot not available when saving track initially
-        key_confidence: Set(None), // Key confidence not available when saving track initially
-        created_at: Set(chrono::Utc::now().naive_utc()),
-    };
-    debug!("SavedTrackActiveModel created successfully");
-    debug!("Attempting to insert into database...");
-
-    let result = saved_track.insert(state.db()).await.map_err(|e| {
-        error!("Error inserting saved track: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    debug!("Successfully inserted saved track with ID: {:?}", result.id);
-
-    let response = SavedTrackResponse {
-        id: result.id,
-        track_id: result.track_id,
-        title: result.title,
-        artist: result.artist,
-        album: result.album,
-        duration: result.duration,
-        source: result.source,
-        cover_url: result.cover_url,
-        bpm: result.bpm,
-        created_at: result.created_at,
-    };
-
-    Ok(Json(ApiResponse {
-        success: true,
-        data: Some(response),
-        message: Some("Track saved successfully".to_string()),
-    }))
+    Ok(Json(ApiResponse::success(saved_track_response(track))))
 }
 
 pub async fn get_saved_tracks(
@@ -140,54 +102,35 @@ pub async fn get_saved_tracks(
     Query(params): Query<GetSavedTracksQuery>,
 ) -> Result<Json<ApiResponse<SavedTracksListResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
-    let limit = params.limit.unwrap_or(50).min(100); // Max 100 per page
-    let offset = (page - 1) * limit;
+    let limit = params.limit.unwrap_or(50).min(100);
 
-    // Get total count
-    let total_count = SavedTrackEntity::find()
-        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
-        .count(state.db())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (track_summaries, total_count) = LibrarySyncService::list_user_tracks(
+        state.db(),
+        user.id,
+        params.search.as_deref(),
+        page,
+        limit,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Get paginated tracks
-    let saved_tracks = SavedTrackEntity::find()
-        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
-        .order_by_desc(crate::models::SavedTrackColumn::CreatedAt)
-        .offset(offset)
-        .limit(limit)
+    let track_ids = track_summaries.iter().map(|track| track.id).collect::<Vec<_>>();
+    let tracks = UserTrackEntity::find()
+        .filter(UserTrackColumn::UserId.eq(user.id))
+        .filter(UserTrackColumn::Id.is_in(track_ids))
         .all(state.db())
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let tracks: Vec<SavedTrackResponse> = saved_tracks
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .into_iter()
-        .map(|track| SavedTrackResponse {
-            id: track.id,
-            track_id: track.track_id,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            duration: track.duration,
-            source: track.source,
-            cover_url: track.cover_url,
-            bpm: track.bpm,
-            created_at: track.created_at,
-        })
+        .map(saved_track_response)
         .collect();
 
-    let response = SavedTracksListResponse {
+    Ok(Json(ApiResponse::success(SavedTracksListResponse {
         tracks,
         total_count,
         page,
         limit,
-    };
-
-    Ok(Json(ApiResponse {
-        success: true,
-        data: Some(response),
-        message: Some("Saved tracks retrieved successfully".to_string()),
-    }))
+    })))
 }
 
 pub async fn remove_saved_track(
@@ -195,14 +138,11 @@ pub async fn remove_saved_track(
     Extension(user): Extension<UserResponseDto>,
     Path(track_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
-    let result = SavedTrackEntity::delete_many()
-        .filter(crate::models::SavedTrackColumn::Id.eq(track_id))
-        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
-        .exec(state.db())
+    let removed = LibrarySyncService::remove_user_track(state.db(), user.id, track_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if result.rows_affected == 0 {
+    if !removed {
         return Ok(Json(ApiResponse {
             success: false,
             data: None,
@@ -222,24 +162,69 @@ pub async fn is_track_saved(
     Extension(user): Extension<UserResponseDto>,
     Query(params): Query<serde_json::Value>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
-    let track_id = params.get("track_id")
-        .and_then(|v| v.as_str())
+    let track_id = params
+        .get("track_id")
+        .and_then(|value| value.as_str())
         .ok_or(StatusCode::BAD_REQUEST)?;
-    let source = params.get("source")
-        .and_then(|v| v.as_str())
+    let source = params
+        .get("source")
+        .and_then(|value| value.as_str())
         .ok_or(StatusCode::BAD_REQUEST)?;
+    let provider = source.parse::<LibraryProvider>().map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let saved_track = SavedTrackEntity::find()
-        .filter(crate::models::SavedTrackColumn::UserId.eq(user.id))
-        .filter(crate::models::SavedTrackColumn::TrackId.eq(track_id))
-        .filter(crate::models::SavedTrackColumn::Source.eq(source))
-        .one(state.db())
+    let saved = LibrarySyncService::is_track_saved(state.db(), user.id, provider, track_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(ApiResponse {
-        success: true,
-        data: Some(saved_track.is_some()),
-        message: Some("Track saved status retrieved".to_string()),
-    }))
+    Ok(Json(ApiResponse::success(saved)))
+}
+
+pub async fn refresh_provider_library(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Path(provider): Path<String>,
+) -> Result<Json<ApiResponse<RefreshProviderResponse>>, StatusCode> {
+    let provider = provider.parse::<LibraryProvider>().map_err(|_| StatusCode::BAD_REQUEST)?;
+    let summary = LibrarySyncService::refresh_provider_library(state.db(), user.id, provider)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(RefreshProviderResponse {
+        provider: summary.provider,
+        tracks: summary.tracks,
+        albums: summary.albums,
+        playlists: summary.playlists,
+        canonical_tracks: summary.canonical_tracks,
+        canonical_albums: summary.canonical_albums,
+        canonical_playlists: summary.canonical_playlists,
+        unresolved_tracks: summary.unresolved_tracks,
+        unresolved_albums: summary.unresolved_albums,
+        unresolved_playlists: summary.unresolved_playlists,
+    })))
+}
+
+pub async fn get_unresolved_matches(
+    State(state): State<AppState>,
+    Extension(_user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<UnresolvedMatchesResponse>>, StatusCode> {
+    let unresolved = LibrarySyncService::unresolved_matches(state.db())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(unresolved)))
+}
+
+fn saved_track_response(track: UserTrackModel) -> SavedTrackResponse {
+    SavedTrackResponse {
+        id: track.id,
+        canonical_track_id: track.canonical_track_id,
+        track_id: track.provider_track_id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album_name.unwrap_or_default(),
+        duration: track.duration,
+        source: track.source,
+        cover_url: track.cover_url,
+        created_at: track.created_at,
+        updated_at: track.updated_at,
+    }
 }

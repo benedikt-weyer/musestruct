@@ -23,11 +23,9 @@ use url::Url;
 
 use handlers::auth::{AppState, auth_middleware, register, login, logout, me};
 use handlers::streaming::{connect_qobuz, connect_spotify, disconnect_service, get_available_services, get_backend_stream_url, get_playlist_tracks, get_service_status, get_spotify_access_token, get_spotify_auth_url, get_stream_url, get_streaming_track, get_tidal_auth_url, get_tidal_sdk_credentials, refresh_spotify_token, search_music, spotify_callback, stream_local_cover, stream_local_file, tidal_callback, transfer_spotify_playback};
-use handlers::music::{get_user_playlists, create_playlist, get_playlist};
-use handlers::playlist::{get_playlists, create_playlist as create_new_playlist, get_playlist as get_new_playlist, update_playlist, delete_playlist, get_playlist_items, add_playlist_item, remove_playlist_item, reorder_playlist_item};
-use handlers::saved_tracks::{save_track, get_saved_tracks, remove_saved_track, is_track_saved};
-use handlers::saved_albums::{save_album, get_saved_albums, remove_saved_album, check_album_saved, get_album_tracks};
+use handlers::saved_tracks::{get_saved_tracks, get_unresolved_matches, is_track_saved, refresh_provider_library, remove_saved_track, save_track};
 use handlers::queue::{get_queue, add_to_queue, remove_from_queue, reorder_queue, clear_queue};
+use handlers::user_playlists::{add_playlist_item, create_playlist, delete_playlist, get_playlist, get_playlist_items, get_playlists, import_canonical_playlist, import_provider_playlist, refresh_watched_playlist, remove_playlist_item, reorder_playlist_item, update_playlist};
 use handlers::audio_analysis::{analyze_track_bpm, get_track_bpm, analyze_track_bpm_spectrogram, analyze_track_key};
 use services::{AuthService, streaming_service::StreamingService};
 use std::sync::Arc;
@@ -182,28 +180,24 @@ async fn main() -> Result<()> {
         .route("/api/streaming/spotify/refresh", post(refresh_spotify_token))
         .route("/api/streaming/disconnect", post(disconnect_service))
         .route("/api/streaming/playlist/{playlist_id}/tracks", get(get_playlist_tracks))
-        .route("/api/playlists", get(get_user_playlists))
         .route("/api/playlists", post(create_playlist))
+        .route("/api/playlists", get(get_playlists))
         .route("/api/playlists/{id}", get(get_playlist))
-        // New playlist system
-        .route("/api/v2/playlists", get(get_playlists))
-        .route("/api/v2/playlists", post(create_new_playlist))
-        .route("/api/v2/playlists/{id}", get(get_new_playlist))
-        .route("/api/v2/playlists/{id}", put(update_playlist))
-        .route("/api/v2/playlists/{id}", delete(delete_playlist))
-        .route("/api/v2/playlists/{id}/items", get(get_playlist_items))
-        .route("/api/v2/playlists/{id}/items", post(add_playlist_item))
-        .route("/api/v2/playlists/{playlist_id}/items/{item_id}", delete(remove_playlist_item))
-        .route("/api/v2/playlists/{playlist_id}/items/{item_id}/reorder", put(reorder_playlist_item))
+        .route("/api/playlists/{id}", put(update_playlist))
+        .route("/api/playlists/{id}", delete(delete_playlist))
+        .route("/api/playlists/{id}/items", get(get_playlist_items))
+        .route("/api/playlists/{id}/items", post(add_playlist_item))
+        .route("/api/playlists/{playlist_id}/items/{item_id}", delete(remove_playlist_item))
+        .route("/api/playlists/{playlist_id}/items/{item_id}/reorder", put(reorder_playlist_item))
+        .route("/api/playlists/import/{canonical_playlist_id}", post(import_canonical_playlist))
+        .route("/api/playlists/import-provider", post(import_provider_playlist))
+        .route("/api/playlists/{id}/refresh", post(refresh_watched_playlist))
         .route("/api/saved-tracks", get(get_saved_tracks))
         .route("/api/saved-tracks", post(save_track))
         .route("/api/saved-tracks/{id}", delete(remove_saved_track))
         .route("/api/saved-tracks/check", get(is_track_saved))
-        .route("/api/albums/saved", get(get_saved_albums))
-        .route("/api/albums/save", post(save_album))
-        .route("/api/albums/saved/{id}", delete(remove_saved_album))
-        .route("/api/albums/saved/check", get(check_album_saved))
-        .route("/api/albums/{album_id}/tracks", get(get_album_tracks))
+        .route("/api/library/refresh/{provider}", post(refresh_provider_library))
+        .route("/api/library/unresolved", get(get_unresolved_matches))
         .route("/api/queue", get(get_queue))
         .route("/api/queue", post(add_to_queue))
         .route("/api/queue", delete(clear_queue))

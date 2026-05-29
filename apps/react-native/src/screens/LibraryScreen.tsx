@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -17,21 +17,14 @@ import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import {
   deleteLibraryPlaylist,
-  deleteSavedAlbum,
   deleteSavedTrack,
   fetchLibraryPlaylistItems,
   fetchLibraryPlaylists,
-  fetchSavedAlbums,
   fetchSavedTracks,
+  refreshWatchedPlaylist,
 } from '../services/libraryApi';
 import { fetchStreamingTrack, fetchTrackStreamUrl } from '../services/streamingLibraryApi';
-import type {
-  LibraryPlaylist,
-  LibraryPlaylistItem,
-  LibrarySection,
-  SavedAlbum,
-  SavedTrack,
-} from '../types/library';
+import type { LibraryPlaylist, LibraryPlaylistItem, LibrarySection, SavedTrack } from '../types/library';
 import type { PlayerPlayMode, QueueTrack } from '../types/player';
 
 type LibrarySectionOption = {
@@ -44,32 +37,30 @@ const LIBRARY_SECTIONS: LibrarySectionOption[] = [
   {
     key: 'playlists',
     label: 'Playlists',
-    subtitle: 'Your playlists stored in the Musestruct backend.',
-  },
-  {
-    key: 'albums',
-    label: 'Albums',
-    subtitle: 'Albums you already added to your personal library.',
+    subtitle: 'Editable playlists and watched read-only imports.',
   },
   {
     key: 'tracks',
     label: 'Tracks',
-    subtitle: 'Every track currently saved in your library.',
-  },
-  {
-    key: 'favourites',
-    label: 'Favourites',
-    subtitle: 'Saved tracks are treated as favourites in the current backend model.',
+    subtitle: 'Your saved user tracks backed by canonical matches.',
   },
 ];
 
-function formatDuration(duration: number) {
+function formatDuration(duration?: number | null) {
+  if (!duration || duration <= 0) {
+    return '--:--';
+  }
+
   const minutes = Math.floor(duration / 60);
   const seconds = duration % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
+  if (!value) {
+    return 'Unknown date';
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -141,7 +132,6 @@ function TrackLibraryCard({
   isPlaying,
   onPlay,
   onRemove,
-  showFavouriteBadge,
   track,
 }: Readonly<{
   isRemoving: boolean;
@@ -149,7 +139,6 @@ function TrackLibraryCard({
   isPlaying: boolean;
   onPlay: (track: SavedTrack) => void;
   onRemove: (track: SavedTrack) => void;
-  showFavouriteBadge: boolean;
   track: SavedTrack;
 }>) {
   const playLabel = getTrackPlayLabel(isCurrentTrack, isPlaying);
@@ -172,16 +161,7 @@ function TrackLibraryCard({
         )}
 
         <View className="flex-1">
-          <View className="flex-row items-start justify-between gap-3">
-            <Text className="flex-1 text-base font-semibold text-slate-900 dark:text-slate-100">{track.title}</Text>
-            {showFavouriteBadge ? (
-              <View className="rounded-full bg-rose-100 px-3 py-1">
-                <Text className="text-xs font-semibold uppercase tracking-[1px] text-rose-700">
-                  Favourite
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{track.title}</Text>
           <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{track.artist}</Text>
           <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{track.album}</Text>
           <View className="mt-3 flex-row items-center justify-between">
@@ -226,57 +206,12 @@ function TrackLibraryCard({
   );
 }
 
-function AlbumLibraryCard({
-  album,
-  isRemoving,
-  onRemove,
-}: Readonly<{
-  album: SavedAlbum;
-  isRemoving: boolean;
-  onRemove: (album: SavedAlbum) => void;
-}>) {
+function PlaylistBadge({ label }: Readonly<{ label: string }>) {
   return (
-    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-      <View className="flex-row gap-4">
-        {album.cover_url ? (
-          <Image
-            className="h-20 w-20 rounded-[18px] bg-slate-100 dark:bg-slate-800"
-            resizeMode="cover"
-            source={{ uri: album.cover_url }}
-          />
-        ) : (
-          <View className="h-20 w-20 items-center justify-center rounded-[18px] bg-slate-100 dark:bg-slate-800">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
-              {album.source}
-            </Text>
-          </View>
-        )}
-
-        <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{album.title}</Text>
-          <Text className="mt-1 text-sm text-slate-600 dark:text-slate-300">{album.artist}</Text>
-          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {album.release_date ?? 'Unknown release date'}
-          </Text>
-          <Text className="mt-2 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
-            {album.source} • {album.track_count} tracks
-          </Text>
-          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">Saved {formatDate(album.created_at)}</Text>
-        </View>
-      </View>
-
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
-        disabled={isRemoving}
-        onPress={() => {
-          onRemove(album);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-rose-700">
-          {isRemoving ? 'Removing album...' : 'Remove album'}
-        </Text>
-      </Pressable>
+    <View className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">
+      <Text className="text-[11px] font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
+        {label}
+      </Text>
     </View>
   );
 }
@@ -284,22 +219,26 @@ function AlbumLibraryCard({
 function PlaylistLibraryCard({
   currentPlayMode,
   isCurrentPlaylist,
+  isRefreshing,
   isRemoving,
   isStarting,
   isPlaying,
   onOpen,
   onPlay,
+  onRefresh,
   onRemove,
   onShuffle,
   playlist,
 }: Readonly<{
   currentPlayMode: PlayerPlayMode;
   isCurrentPlaylist: boolean;
+  isRefreshing: boolean;
   isRemoving: boolean;
   isStarting: boolean;
   isPlaying: boolean;
   onOpen: (playlist: LibraryPlaylist) => void;
   onPlay: (playlist: LibraryPlaylist) => void;
+  onRefresh: (playlist: LibraryPlaylist) => void;
   onRemove: (playlist: LibraryPlaylist) => void;
   onShuffle: (playlist: LibraryPlaylist) => void;
   playlist: LibraryPlaylist;
@@ -324,26 +263,27 @@ function PlaylistLibraryCard({
             <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
               {playlist.description ?? 'No description yet.'}
             </Text>
-            <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
-              {playlist.item_count} items • {playlist.is_public ? 'Public' : 'Private'}
-            </Text>
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              <PlaylistBadge label={`${playlist.item_count} items`} />
+              <PlaylistBadge label={playlist.is_public ? 'Public' : 'Private'} />
+              {playlist.is_read_only ? <PlaylistBadge label="Read only" /> : null}
+              {playlist.is_watched ? <PlaylistBadge label="Watched" /> : null}
+              {playlist.source ? <PlaylistBadge label={playlist.source} /> : null}
+            </View>
             <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-              Updated {formatDate(playlist.updated_at)}
-            </Text>
-          </View>
-          <View className="rounded-full bg-slate-100 px-3 py-2 dark:bg-slate-800">
-            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
-              Playlist
+              {playlist.is_watched && playlist.last_synced_at
+                ? `Last synced ${formatDate(playlist.last_synced_at)}`
+                : `Updated ${formatDate(playlist.updated_at)}`}
             </Text>
           </View>
         </View>
       </Pressable>
 
-      <View className="mt-4 flex-row gap-3">
+      <View className="mt-4 flex-row flex-wrap gap-3">
         <Pressable
           accessibilityRole="button"
           className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
-          disabled={isStarting}
+          disabled={isStarting || isRefreshing}
           onPress={() => {
             onPlay(playlist);
           }}
@@ -356,7 +296,7 @@ function PlaylistLibraryCard({
         <Pressable
           accessibilityRole="button"
           className="flex-1 rounded-full border border-teal-200 bg-teal-50 px-4 py-3 active:bg-teal-100"
-          disabled={isStarting}
+          disabled={isStarting || isRefreshing}
           onPress={() => {
             onShuffle(playlist);
           }}
@@ -366,10 +306,25 @@ function PlaylistLibraryCard({
           </Text>
         </Pressable>
 
+        {playlist.is_watched ? (
+          <Pressable
+            accessibilityRole="button"
+            className="rounded-full border border-sky-200 bg-sky-50 px-4 py-3 active:bg-sky-100"
+            disabled={isRefreshing || isStarting}
+            onPress={() => {
+              onRefresh(playlist);
+            }}
+          >
+            <Text className="text-center text-sm font-semibold text-sky-700">
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
-          disabled={isRemoving}
+          disabled={isRemoving || isRefreshing}
           onPress={() => {
             onRemove(playlist);
           }}
@@ -394,7 +349,7 @@ function LibraryLoginState({
     <View className="mt-4 rounded-[24px] bg-white px-4 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <Text className="text-lg font-semibold text-slate-900 dark:text-slate-100">Login required</Text>
       <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-        Your playlists, albums, tracks, and favourites are loaded from the backend account.
+        Your saved tracks and imported playlists are loaded from the backend account.
       </Text>
 
       <Pressable
@@ -418,45 +373,43 @@ function LibraryLoginState({
 
 function ActiveLibrarySection({
   activeSection,
-  albums,
-  deletingItemKey,
-  favouriteTracks,
   currentPlayMode,
   currentPlaylistId,
+  currentTrackKey,
+  deletingItemKey,
   isPlaying,
   onOpenPlaylist,
   onPlayPlaylist,
   onPlayTrack,
-  onRemoveAlbum,
+  onRefreshPlaylist,
   onRemovePlaylist,
   onRemoveTrack,
   playlistActionKey,
   playlists,
+  refreshingPlaylistId,
   tracks,
-  currentTrackKey,
 }: Readonly<{
   activeSection: LibrarySection;
-  albums: SavedAlbum[];
   currentPlayMode: PlayerPlayMode;
   currentPlaylistId: string | null;
+  currentTrackKey: string | null;
   deletingItemKey: string | null;
-  favouriteTracks: SavedTrack[];
   isPlaying: boolean;
   onOpenPlaylist: (playlist: LibraryPlaylist) => void;
   onPlayPlaylist: (playlist: LibraryPlaylist, playMode: PlayerPlayMode) => void;
   onPlayTrack: (track: SavedTrack) => void;
-  onRemoveAlbum: (album: SavedAlbum) => void;
+  onRefreshPlaylist: (playlist: LibraryPlaylist) => void;
   onRemovePlaylist: (playlist: LibraryPlaylist) => void;
   onRemoveTrack: (track: SavedTrack) => void;
   playlistActionKey: string | null;
   playlists: LibraryPlaylist[];
+  refreshingPlaylistId: string | null;
   tracks: SavedTrack[];
-  currentTrackKey: string | null;
 }>) {
   if (activeSection === 'playlists') {
     return playlists.length === 0 ? (
       <EmptyLibraryState
-        description="Create playlists from the backend flow and they will appear here."
+        description="Import watched playlists from Browse or create your own editable playlists."
         title="No playlists yet"
       />
     ) : (
@@ -465,6 +418,7 @@ function ActiveLibrarySection({
           <PlaylistLibraryCard
             currentPlayMode={currentPlayMode}
             isCurrentPlaylist={currentPlaylistId === playlist.id}
+            isRefreshing={refreshingPlaylistId === playlist.id}
             isRemoving={deletingItemKey === `playlist:${playlist.id}`}
             isStarting={playlistActionKey === `playlist:${playlist.id}`}
             isPlaying={isPlaying}
@@ -473,6 +427,7 @@ function ActiveLibrarySection({
             onPlay={(selectedPlaylist) => {
               onPlayPlaylist(selectedPlaylist, 'normal');
             }}
+            onRefresh={onRefreshPlaylist}
             onRemove={onRemovePlaylist}
             onShuffle={(selectedPlaylist) => {
               onPlayPlaylist(selectedPlaylist, 'shuffle');
@@ -484,58 +439,14 @@ function ActiveLibrarySection({
     );
   }
 
-  if (activeSection === 'albums') {
-    return albums.length === 0 ? (
-      <EmptyLibraryState
-        description="Albums you save from Browse will show up in this section."
-        title="No albums in your library"
-      />
-    ) : (
-      <>
-        {albums.map((album) => (
-          <AlbumLibraryCard
-            album={album}
-            isRemoving={deletingItemKey === `album:${album.id}`}
-            key={album.id}
-            onRemove={onRemoveAlbum}
-          />
-        ))}
-      </>
-    );
-  }
-
-  if (activeSection === 'tracks') {
-    return tracks.length === 0 ? (
-      <EmptyLibraryState
-        description="Tracks you add from external providers will show up here."
-        title="No library tracks yet"
-      />
-    ) : (
-      <>
-        {tracks.map((track) => (
-          <TrackLibraryCard
-            isRemoving={deletingItemKey === `track:${track.id}`}
-            isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
-            isPlaying={isPlaying}
-            key={track.id}
-            onPlay={onPlayTrack}
-            onRemove={onRemoveTrack}
-            showFavouriteBadge={false}
-            track={track}
-          />
-        ))}
-      </>
-    );
-  }
-
-  return favouriteTracks.length === 0 ? (
+  return tracks.length === 0 ? (
     <EmptyLibraryState
-      description="Saved tracks are treated as favourites, but none have been added yet."
-      title="No favourites yet"
+      description="Tracks you add from providers will show up here."
+      title="No library tracks yet"
     />
   ) : (
     <>
-      {favouriteTracks.map((track) => (
+      {tracks.map((track) => (
         <TrackLibraryCard
           isRemoving={deletingItemKey === `track:${track.id}`}
           isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
@@ -543,7 +454,6 @@ function ActiveLibrarySection({
           key={track.id}
           onPlay={onPlayTrack}
           onRemove={onRemoveTrack}
-          showFavouriteBadge
           track={track}
         />
       ))}
@@ -565,17 +475,16 @@ export function LibraryScreen() {
   } = usePlayer();
   const [activeSection, setActiveSection] = useState<LibrarySection>('tracks');
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
-  const [albums, setAlbums] = useState<SavedAlbum[]>([]);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
   const [playlistActionKey, setPlaylistActionKey] = useState<string | null>(null);
+  const [refreshingPlaylistId, setRefreshingPlaylistId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function loadLibrary() {
+  const loadLibrary = useCallback(async () => {
     if (!authSession) {
       setTracks([]);
-      setAlbums([]);
       setPlaylists([]);
       setErrorMessage(null);
       return;
@@ -585,33 +494,28 @@ export function LibraryScreen() {
     setErrorMessage(null);
 
     try {
-      const [savedTracksResponse, savedAlbumsResponse, playlistsResponse] = await Promise.all([
+      const [savedTracksResponse, playlistsResponse] = await Promise.all([
         fetchSavedTracks(backendUrl, authSession),
-        fetchSavedAlbums(backendUrl, authSession),
         fetchLibraryPlaylists(backendUrl, authSession),
       ]);
 
       setTracks(savedTracksResponse.tracks);
-      setAlbums(savedAlbumsResponse);
       setPlaylists(playlistsResponse.playlists);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load your library.');
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [authSession, backendUrl]);
 
   useEffect(() => {
     void loadLibrary();
   }, [authSession, backendUrl]);
 
-  const favouriteTracks = useMemo(() => tracks, [tracks]);
   const currentTrackKey = currentTrack?.key ?? null;
   const sectionCounts: Record<LibrarySection, number> = {
     playlists: playlists.length,
-    albums: albums.length,
     tracks: tracks.length,
-    favourites: favouriteTracks.length,
   };
   const activeSectionMeta =
     LIBRARY_SECTIONS.find((section) => section.key === activeSection) ?? LIBRARY_SECTIONS[0];
@@ -648,7 +552,7 @@ export function LibraryScreen() {
         artist: playbackTrack?.artist ?? track.artist,
         album: playbackTrack?.album ?? track.album,
         artworkUrl: playbackTrack?.cover_url ?? track.cover_url,
-        duration: playbackTrack?.duration ?? track.duration,
+        duration: playbackTrack?.duration ?? track.duration ?? undefined,
         source: track.source,
         url:
           track.source === 'tidal'
@@ -668,7 +572,7 @@ export function LibraryScreen() {
       .map((item) => ({
         album: item.album ?? undefined,
         artist: item.artist ?? 'Unknown Artist',
-        artworkUrl: item.cover_url,
+        artworkUrl: item.cover_url ?? undefined,
         description: playlist.description ?? playlist.name,
         duration: item.duration ?? undefined,
         id: item.item_id,
@@ -744,6 +648,25 @@ export function LibraryScreen() {
     })();
   }
 
+  async function handleRefreshPlaylist(playlist: LibraryPlaylist) {
+    if (!authSession) {
+      return;
+    }
+
+    setRefreshingPlaylistId(playlist.id);
+    try {
+      const refreshed = await refreshWatchedPlaylist(backendUrl, authSession, playlist.id);
+      setPlaylists((currentPlaylists) =>
+        currentPlaylists.map((item) => (item.id === refreshed.id ? refreshed : item)),
+      );
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to refresh playlist.');
+    } finally {
+      setRefreshingPlaylistId((currentId) => (currentId === playlist.id ? null : currentId));
+    }
+  }
+
   async function removeTrackFromLibrary(track: SavedTrack) {
     if (!authSession) {
       return;
@@ -758,25 +681,6 @@ export function LibraryScreen() {
       setErrorMessage(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
-    } finally {
-      setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
-    }
-  }
-
-  async function removeAlbumFromLibrary(album: SavedAlbum) {
-    if (!authSession) {
-      return;
-    }
-
-    const itemKey = `album:${album.id}`;
-    setDeletingItemKey(itemKey);
-
-    try {
-      await deleteSavedAlbum(backendUrl, authSession, album.id);
-      setAlbums((currentAlbums) => currentAlbums.filter((item) => item.id !== album.id));
-      setErrorMessage(null);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to remove album.');
     } finally {
       setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
     }
@@ -821,26 +725,6 @@ export function LibraryScreen() {
     ]);
   }
 
-  function handleRemoveAlbum(album: SavedAlbum) {
-    if (!authSession) {
-      return;
-    }
-
-    Alert.alert('Remove album', `Remove "${album.title}" from your library?`, [
-      {
-        style: 'cancel',
-        text: 'Cancel',
-      },
-      {
-        style: 'destructive',
-        text: 'Remove',
-        onPress: () => {
-          void removeAlbumFromLibrary(album);
-        },
-      },
-    ]);
-  }
-
   function handleRemovePlaylist(playlist: LibraryPlaylist) {
     if (!authSession) {
       return;
@@ -873,7 +757,7 @@ export function LibraryScreen() {
           </Text>
           <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Your Music Library</Text>
           <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Switch between playlists, albums, tracks, and favourites without leaving the page.
+            Browse your saved tracks and imported playlists without the removed album layer.
           </Text>
         </View>
 
@@ -928,18 +812,16 @@ export function LibraryScreen() {
 
             <View className="mt-4">
               {isLoading ? (
-                <View className="rounded-[24px] bg-white px-5 py-10 shadow-sm shadow-slate-200">
+                <View className="rounded-[24px] bg-white px-5 py-10 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
                   <ActivityIndicator color="#0f766e" />
                 </View>
               ) : (
                 <ActiveLibrarySection
                   activeSection={activeSection}
-                  albums={albums}
                   currentPlayMode={currentPlayMode}
                   currentPlaylistId={currentPlaylistId}
                   currentTrackKey={currentTrackKey}
                   deletingItemKey={deletingItemKey}
-                  favouriteTracks={favouriteTracks}
                   isPlaying={isPlaying}
                   onOpenPlaylist={(playlist) => {
                     navigation.navigate('PlaylistDetails', {
@@ -950,11 +832,12 @@ export function LibraryScreen() {
                   }}
                   onPlayPlaylist={handlePlayPlaylist}
                   onPlayTrack={handlePlayTrack}
-                  onRemoveAlbum={handleRemoveAlbum}
+                  onRefreshPlaylist={handleRefreshPlaylist}
                   onRemovePlaylist={handleRemovePlaylist}
                   onRemoveTrack={handleRemoveTrack}
                   playlistActionKey={playlistActionKey}
                   playlists={playlists}
+                  refreshingPlaylistId={refreshingPlaylistId}
                   tracks={tracks}
                 />
               )}

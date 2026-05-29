@@ -81,13 +81,3 @@ export type SavedTrackPayload = {
   source: string;
   cover_url?: string;
 };
-
-export type SavedAlbumPayload = {
-  album_id: string;
-  title: string;
-  artist: string;
-  release_date?: string;
-  cover_url?: string;
-  source: string;
-  track_count: number;
-};

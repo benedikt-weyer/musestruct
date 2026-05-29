@@ -1,17 +1,13 @@
 pub mod auth;
-pub mod music;
 pub mod streaming;
 pub mod saved_tracks;
-pub mod saved_albums;
 pub mod queue;
-pub mod playlist;
+pub mod user_playlists;
 pub mod audio_analysis;
 
 pub use auth::*;
-pub use music::*;
 pub use streaming::*;
 pub use saved_tracks::*;
-pub use saved_albums::*;
 pub use queue::*;
-pub use playlist::*;
+pub use user_playlists::*;
 pub use audio_analysis::*;

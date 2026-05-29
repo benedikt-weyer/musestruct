@@ -18,13 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
-import { addLibraryPlaylistItem, createLibraryPlaylist } from '../services/libraryApi';
+import { importProviderPlaylist } from '../services/libraryApi';
 import {
-  fetchStreamingPlaylistTracks,
   fetchAvailableServices,
   fetchServiceStatus,
   fetchTrackStreamUrl,
-  saveAlbumToLibrary,
   saveTrackToLibrary,
   searchStreamingCatalog,
 } from '../services/streamingLibraryApi';
@@ -48,8 +46,6 @@ function showToast(message: string) {
   Alert.alert('Musestruct', message);
 }
 
-const PLAYLIST_IMPORT_PAGE_SIZE = 50;
-
 function formatDuration(duration?: number) {
   if (!duration) {
     return '--:--';
@@ -70,10 +66,10 @@ function getSearchPlaceholder(searchType: BrowseSearchType, searchScope: BrowseS
   }
 
   if (searchType === 'album') {
-    return searchScope === 'library' ? 'Search saved albums' : 'Search albums';
+    return searchScope === 'library' ? 'Search cached provider albums' : 'Search albums';
   }
 
-  return searchScope === 'library' ? 'Search saved playlists' : 'Search playlists';
+  return searchScope === 'library' ? 'Search provider library playlists' : 'Search playlists';
 }
 
 function getVisibleResultCount(
@@ -111,8 +107,8 @@ function getEmptyStateMessage({
   };
   const libraryMessages: Record<BrowseSearchType, string> = {
     track: 'Search your saved provider tracks to see matches here.',
-    album: 'Search your saved provider albums to see matches here.',
-    playlist: 'Search your saved provider playlists to see matches here.',
+    album: 'Search your cached provider albums to see matches here.',
+    playlist: 'Search your provider library playlists to see matches here.',
   };
   const allProviderMessages: Record<BrowseSearchType, string> = {
     track: 'Search across all connected providers to see matching tracks.',
@@ -219,10 +215,8 @@ function BrowseTrackCard({
 
 function BrowseAlbumCard({
   album,
-  onSave,
 }: Readonly<{
   album: StreamingAlbum;
-  onSave: (album: StreamingAlbum) => void;
 }>) {
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
@@ -253,15 +247,11 @@ function BrowseAlbumCard({
         </View>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
-        onPress={() => {
-          onSave(album);
-        }}
-      >
-        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add album to library</Text>
-      </Pressable>
+      <View className="mt-4 rounded-[18px] bg-slate-50 px-4 py-3 dark:bg-slate-950">
+        <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Albums are matched during provider sync and playlist import. They are no longer saved as a separate user library layer.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -309,7 +299,7 @@ function BrowsePlaylistCard({
           onSave(playlist);
         }}
       >
-        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add playlist to library</Text>
+        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Import watched playlist</Text>
       </Pressable>
     </View>
   );
@@ -588,28 +578,6 @@ export function BrowseScreen() {
     }
   }
 
-  async function handleSaveAlbum(album: StreamingAlbum) {
-    if (!authSession) {
-      showToast('Please log in before saving albums.');
-      return;
-    }
-
-    try {
-      await saveAlbumToLibrary(backendUrl, authSession, {
-        album_id: album.id,
-        title: album.title,
-        artist: album.artist,
-        release_date: album.release_date,
-        cover_url: album.cover_url,
-        source: album.source,
-        track_count: album.tracks.length,
-      });
-      showToast(`Added ${album.title} to your library.`);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to save album.');
-    }
-  }
-
   async function handleSavePlaylist(playlist: StreamingPlaylist) {
     if (!authSession) {
       showToast('Please log in before saving playlists.');
@@ -617,49 +585,18 @@ export function BrowseScreen() {
     }
 
     try {
-      const tracks: StreamingTrack[] = [];
-
-      for (let offset = 0; offset < playlist.track_count; offset += PLAYLIST_IMPORT_PAGE_SIZE) {
-        const page = await fetchStreamingPlaylistTracks(
-          backendUrl,
-          authSession,
-          playlist.id,
-          playlist.source,
-          PLAYLIST_IMPORT_PAGE_SIZE,
-          offset,
-        );
-
-        tracks.push(...page);
-
-        if (page.length < PLAYLIST_IMPORT_PAGE_SIZE) {
-          break;
-        }
-      }
-
-      const savedPlaylist = await createLibraryPlaylist(backendUrl, authSession, {
+      await importProviderPlaylist(backendUrl, authSession, {
+        source: playlist.source,
+        playlist_id: playlist.id,
         name: playlist.name,
-        description:
-          playlist.description ?? `Imported from ${playlist.source} by ${playlist.owner}`,
+        description: playlist.description ?? null,
+        owner: playlist.owner,
+        cover_url: playlist.cover_url ?? null,
         is_public: playlist.is_public,
+        watched: true,
       });
 
-      await Promise.all(
-        tracks.map((track, index) =>
-          addLibraryPlaylistItem(backendUrl, authSession, savedPlaylist.id, {
-            item_type: 'track',
-            item_id: track.id,
-            position: index,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            duration: track.duration ?? null,
-            source: track.source,
-            cover_url: track.cover_url ?? null,
-          }),
-        ),
-      );
-
-      showToast(`Added ${playlist.name} to your library.`);
+      showToast(`Imported ${playlist.name} as a watched playlist.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Failed to save playlist.');
     }
@@ -680,7 +617,7 @@ export function BrowseScreen() {
             <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
             <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
               Sign in first so the app can search connected providers, including your server music,
-              and add tracks or albums to your library.
+              and add tracks or import watched playlists into your library.
             </Text>
           </View>
 
@@ -712,7 +649,7 @@ export function BrowseScreen() {
           <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
           <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
             Search connected providers for tracks, albums, or playlists, including music from your
-            own server.
+            own server. Tracks save directly, and playlists import as watched read-only collections.
           </Text>
         </View>
 
@@ -927,7 +864,7 @@ export function BrowseScreen() {
             {albums.length > 0 ? (
               <View className="mt-3">
                 {albums.map((album) => (
-                  <BrowseAlbumCard album={album} key={`${album.source}:${album.id}`} onSave={handleSaveAlbum} />
+                  <BrowseAlbumCard album={album} key={`${album.source}:${album.id}`} />
                 ))}
               </View>
             ) : (

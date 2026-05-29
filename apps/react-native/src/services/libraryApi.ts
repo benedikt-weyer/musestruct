@@ -3,7 +3,6 @@ import type {
   LibraryPlaylistListResponse,
   LibraryPlaylist,
   LibraryPlaylistItem,
-  SavedAlbum,
   SavedTrack,
   SavedTracksListResponse,
 } from '../types/library';
@@ -136,24 +135,6 @@ export async function fetchSavedTracks(
   };
 }
 
-export async function fetchSavedAlbums(
-  backendUrl: string,
-  authSession: AuthSession,
-  page = 1,
-  limit = 100,
-): Promise<SavedAlbum[]> {
-  const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const searchParams = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
-  const response = await fetch(`${normalizedUrl}/api/albums/saved?${searchParams.toString()}`, {
-    headers: createAuthHeaders(authSession),
-  });
-
-  return parseApiResponse<SavedAlbum[]>(response);
-}
-
 export async function fetchLibraryPlaylists(
   backendUrl: string,
   authSession: AuthSession,
@@ -165,7 +146,7 @@ export async function fetchLibraryPlaylists(
     page: page.toString(),
     per_page: perPage.toString(),
   });
-  const response = await fetch(`${normalizedUrl}/api/v2/playlists?${searchParams.toString()}`, {
+  const response = await fetch(`${normalizedUrl}/api/playlists?${searchParams.toString()}`, {
     headers: createAuthHeaders(authSession),
   });
 
@@ -178,7 +159,7 @@ export async function fetchLibraryPlaylistItems(
   playlistId: string,
 ): Promise<LibraryPlaylistItem[]> {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${playlistId}/items`, {
+  const response = await fetch(`${normalizedUrl}/api/playlists/${playlistId}/items`, {
     headers: createAuthHeaders(authSession),
   });
 
@@ -198,7 +179,7 @@ export async function createLibraryPlaylist(
   },
 ): Promise<LibraryPlaylist> {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/v2/playlists`, {
+  const response = await fetch(`${normalizedUrl}/api/playlists`, {
     method: 'POST',
     headers: createAuthHeaders(authSession),
     body: JSON.stringify(payload),
@@ -225,13 +206,51 @@ export async function addLibraryPlaylistItem(
   },
 ) {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${playlistId}/items`, {
+  const response = await fetch(`${normalizedUrl}/api/playlists/${playlistId}/items`, {
     method: 'POST',
     headers: createAuthHeaders(authSession),
     body: JSON.stringify(payload),
   });
 
   return parseApiResponse<LibraryPlaylistItem>(response);
+}
+
+export async function importProviderPlaylist(
+  backendUrl: string,
+  authSession: AuthSession,
+  payload: {
+    source: string;
+    playlist_id: string;
+    name: string;
+    description?: string | null;
+    owner?: string | null;
+    cover_url?: string | null;
+    is_public?: boolean;
+    watched?: boolean;
+  },
+): Promise<LibraryPlaylist> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/playlists/import-provider`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<LibraryPlaylist>(response);
+}
+
+export async function refreshWatchedPlaylist(
+  backendUrl: string,
+  authSession: AuthSession,
+  playlistId: string,
+): Promise<LibraryPlaylist> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/playlists/${playlistId}/refresh`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<LibraryPlaylist>(response);
 }
 
 export async function deleteSavedTrack(
@@ -248,27 +267,13 @@ export async function deleteSavedTrack(
   return parseMutationResponse(response);
 }
 
-export async function deleteSavedAlbum(
-  backendUrl: string,
-  authSession: AuthSession,
-  id: string,
-) {
-  const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/albums/saved/${id}`, {
-    method: 'DELETE',
-    headers: createAuthHeaders(authSession),
-  });
-
-  return parseMutationResponse(response);
-}
-
 export async function deleteLibraryPlaylist(
   backendUrl: string,
   authSession: AuthSession,
   id: string,
 ) {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/v2/playlists/${id}`, {
+  const response = await fetch(`${normalizedUrl}/api/playlists/${id}`, {
     method: 'DELETE',
     headers: createAuthHeaders(authSession),
   });

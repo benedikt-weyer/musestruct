@@ -1,7 +1,6 @@
 import type { AuthSession } from '../types/auth';
 import type {
   AvailableServicesResponse,
-  SavedAlbumPayload,
   SavedTrackPayload,
   ServiceStatusResponse,
   SpotifyAuthUrlResponse,
@@ -114,21 +113,6 @@ export async function saveTrackToLibrary(
 ) {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
   const response = await fetch(`${normalizedUrl}/api/saved-tracks`, {
-    method: 'POST',
-    headers: createAuthHeaders(authSession),
-    body: JSON.stringify(payload),
-  });
-
-  return parseApiResponse<unknown>(response);
-}
-
-export async function saveAlbumToLibrary(
-  backendUrl: string,
-  authSession: AuthSession,
-  payload: SavedAlbumPayload,
-) {
-  const normalizedUrl = normalizeBackendUrl(backendUrl);
-  const response = await fetch(`${normalizedUrl}/api/albums/save`, {
     method: 'POST',
     headers: createAuthHeaders(authSession),
     body: JSON.stringify(payload),
