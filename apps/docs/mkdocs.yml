@@ -14,6 +14,7 @@ nav:
   - Overview: index.md
   - Setup Overview: setup-overview.md
   - Backend:
+      - Caching Strategies: backend/caching-strategies.md
       - Database Schema: backend/database-schema.md
   - Providers:
       - Spotify: providers/spotify.md

@@ -5,6 +5,7 @@ This documentation site covers the current workspace layout, backend setup, and 
 ## What is in this docs app
 
 - A current high-level overview of the repo and runtime pieces.
+- A backend caching reference that reflects the current implementation.
 - A backend database schema reference with an ER diagram.
 - Backend setup guidance that matches the live Rust backend and React Native client.
 - Provider setup guides for Spotify and Tidal.
@@ -35,7 +36,8 @@ The docs app also exposes `dev`, `build`, and `check` scripts through its local 
 ## Recommended reading order
 
 1. [Setup Overview](setup-overview.md)
-2. [Database Schema](backend/database-schema.md)
-3. [Spotify](providers/spotify.md)
-4. [Tidal](providers/tidal.md)
-5. [Server / Local Source](sources/server-local.md)
+2. [Caching Strategies](backend/caching-strategies.md)
+3. [Database Schema](backend/database-schema.md)
+4. [Spotify](providers/spotify.md)
+5. [Tidal](providers/tidal.md)
+6. [Server / Local Source](sources/server-local.md)
