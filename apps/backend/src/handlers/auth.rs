@@ -11,13 +11,14 @@ use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::services::AuthService;
+use crate::services::{AuthService, ServerPreloadRegistry};
 use crate::models::{CreateUserDto, LoginDto, UserResponseDto};
 
 #[derive(Clone)]
 pub struct AppState {
     pub auth_service: AuthService,
     pub streaming_service: Arc<crate::services::streaming_service::StreamingService>,
+    pub server_preload_registry: ServerPreloadRegistry,
 }
 
 impl AppState {

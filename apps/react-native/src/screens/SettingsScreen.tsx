@@ -25,12 +25,18 @@ import { normalizeBackendUrl, testBackendConnection } from '../services/backendA
 import {
   connectQobuzProvider,
   disconnectStreamingProvider,
+  fetchServerPreloadStatus,
   fetchServiceStatus,
   fetchSpotifyAuthUrl,
   fetchTidalAuthUrl,
+  startServerPreload,
 } from '../services/streamingLibraryApi';
 import type { AuthSession } from '../types/auth';
-import type { ConnectedServiceInfo } from '../types/streaming';
+import type {
+  ConnectedServiceInfo,
+  ServerPreloadMode,
+  ServerPreloadProgress,
+} from '../types/streaming';
 
 const SPOTIFY_APP_REDIRECT_URL = 'musestruct://spotify';
 const TIDAL_APP_REDIRECT_URL = 'musestruct://tidal';
@@ -571,6 +577,237 @@ function ProviderSettingsCard({ authSession, backendUrl }: Readonly<ProviderSett
   );
 }
 
+function getServerPreloadPhaseLabel(progress: ServerPreloadProgress | null) {
+  if (!progress) {
+    return 'Idle';
+  }
+
+  switch (progress.phase) {
+    case 'scanning_files':
+      return 'Scanning files';
+    case 'importing_tracks':
+      return 'Importing tracks';
+    case 'syncing_albums':
+      return 'Syncing albums';
+    case 'syncing_playlists':
+      return 'Syncing playlists';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    default:
+      return progress.state === 'running' ? 'Running' : 'Idle';
+  }
+}
+
+function getServerPreloadProgressRatio(progress: ServerPreloadProgress | null) {
+  if (!progress) {
+    return 0;
+  }
+
+  if (progress.state === 'completed') {
+    return 1;
+  }
+
+  if (progress.total_files <= 0) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, progress.processed_files / progress.total_files));
+}
+
+type ServerPreloadCardProps = {
+  authSession: AuthSession | null;
+  backendUrl: string;
+};
+
+function ServerPreloadCard({ authSession, backendUrl }: Readonly<ServerPreloadCardProps>) {
+  const [progress, setProgress] = useState<ServerPreloadProgress | null>(null);
+  const [preloadAction, setPreloadAction] = useState<ServerPreloadMode | null>(null);
+  const [preloadErrorMessage, setPreloadErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authSession) {
+      setProgress(null);
+      setPreloadErrorMessage(null);
+      return;
+    }
+
+    void loadServerPreloadStatus();
+  }, [authSession, backendUrl]);
+
+  useEffect(() => {
+    if (!authSession || progress?.state !== 'running') {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      void loadServerPreloadStatus(false);
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [authSession, backendUrl, progress?.state]);
+
+  async function loadServerPreloadStatus(showErrors = true) {
+    if (!authSession) {
+      return;
+    }
+
+    try {
+      const nextProgress = await fetchServerPreloadStatus(backendUrl, authSession);
+      setProgress(nextProgress);
+      if (showErrors) {
+        setPreloadErrorMessage(null);
+      }
+    } catch (error) {
+      if (!showErrors) {
+        return;
+      }
+
+      setPreloadErrorMessage(
+        error instanceof Error ? error.message : 'Failed to load server preload status.',
+      );
+    }
+  }
+
+  async function handleStartPreload(mode: ServerPreloadMode) {
+    if (!authSession) {
+      showConnectionToast('Please log in before preloading server media.', true);
+      return;
+    }
+
+    setPreloadAction(mode);
+    setPreloadErrorMessage(null);
+
+    try {
+      const nextProgress = await startServerPreload(backendUrl, authSession, mode);
+      setProgress(nextProgress);
+      showConnectionToast(
+        mode === 'new_only'
+          ? 'Server preload started in new-only mode.'
+          : 'Server preload started in full recheck mode.',
+        false,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to start server preload.';
+      setPreloadErrorMessage(message);
+      showConnectionToast(message, true);
+
+      if (message.toLowerCase().includes('already running')) {
+        void loadServerPreloadStatus(false);
+      }
+    } finally {
+      setPreloadAction((currentMode) => (currentMode === mode ? null : currentMode));
+    }
+  }
+
+  const isRunning = progress?.state === 'running';
+  const progressRatio = getServerPreloadProgressRatio(progress);
+  const progressWidth: `${number}%` =
+    progressRatio <= 0 ? '0%' : `${Math.max(6, progressRatio * 100)}%`;
+
+  return (
+    <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+      <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
+        Server Library Preload
+      </Text>
+      <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+        Populate the server provider tables and canonical tables from your local server music. New-only mode imports unseen files by location. Full recheck re-reads every file and updates changed metadata. Both modes remove entries for files that no longer exist.
+      </Text>
+
+      {authSession ? (
+        <>
+          {progress ? (
+            <View className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950">
+              <View className="flex-row items-center justify-between gap-4">
+                <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {getServerPreloadPhaseLabel(progress)}
+                </Text>
+                <Text className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  {progress.processed_files} / {progress.total_files}
+                </Text>
+              </View>
+
+              <View className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <View
+                  className="h-full rounded-full bg-teal-600"
+                  style={{ width: progressWidth }}
+                />
+              </View>
+
+              <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Tracks: {progress.imported_tracks} new, {progress.updated_tracks} updated, {progress.skipped_tracks} unchanged, {progress.deleted_tracks} removed.
+              </Text>
+              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Albums: {progress.imported_albums} new, {progress.updated_albums} updated, {progress.deleted_albums} removed.
+              </Text>
+              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Playlists: {progress.imported_playlists} new, {progress.updated_playlists} updated, {progress.deleted_playlists} removed.
+              </Text>
+              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Canonical links: {progress.canonical_tracks} tracks, {progress.canonical_albums} albums, {progress.canonical_playlists} playlists.
+              </Text>
+
+              {progress.current_item ? (
+                <Text className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Current file: {progress.current_item}
+                </Text>
+              ) : null}
+
+              {progress.error_message ? (
+                <Text className="mt-3 text-sm font-semibold text-rose-700">
+                  {progress.error_message}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <ProviderActionButton
+            busy={preloadAction === 'new_only'}
+            label="Import new files only"
+            onPress={() => {
+              void handleStartPreload('new_only');
+            }}
+            tone="primary"
+          />
+
+          <ProviderActionButton
+            busy={preloadAction === 'recheck_all'}
+            label="Recheck all files"
+            onPress={() => {
+              void handleStartPreload('recheck_all');
+            }}
+            tone="secondary"
+          />
+
+          <ProviderActionButton
+            busy={false}
+            label={isRunning ? 'Refresh running status' : 'Refresh preload status'}
+            onPress={() => {
+              void loadServerPreloadStatus();
+            }}
+            tone="secondary"
+          />
+
+          {preloadErrorMessage ? (
+            <View className="mt-4 rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4">
+              <Text className="text-sm font-semibold text-rose-900">Server preload failed</Text>
+              <Text className="mt-1 text-sm text-rose-700">{preloadErrorMessage}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Log in first to start or monitor server preloading.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
@@ -845,6 +1082,8 @@ export function SettingsScreen() {
         </View>
 
         <ProviderSettingsCard authSession={authSession} backendUrl={backendUrl} />
+
+        <ServerPreloadCard authSession={authSession} backendUrl={backendUrl} />
 
         <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">

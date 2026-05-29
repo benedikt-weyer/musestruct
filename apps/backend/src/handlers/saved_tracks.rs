@@ -11,7 +11,10 @@ use uuid::Uuid;
 use crate::{
     handlers::auth::{ApiResponse, AppState},
     models::{UserResponseDto, UserTrackColumn, UserTrackEntity, UserTrackModel},
-    services::{LibraryProvider, LibrarySyncService, UnresolvedMatchesResponse},
+    services::{
+        LibraryProvider, LibrarySyncService, ServerPreloadMode, ServerPreloadProgress,
+        UnresolvedMatchesResponse,
+    },
 };
 
 #[derive(Deserialize, Debug)]
@@ -67,6 +70,11 @@ pub struct RefreshProviderResponse {
     pub unresolved_tracks: usize,
     pub unresolved_albums: usize,
     pub unresolved_playlists: usize,
+}
+
+#[derive(Deserialize)]
+pub struct StartServerPreloadRequest {
+    pub mode: String,
 }
 
 pub async fn save_track(
@@ -201,6 +209,42 @@ pub async fn refresh_provider_library(
         unresolved_albums: summary.unresolved_albums,
         unresolved_playlists: summary.unresolved_playlists,
     })))
+}
+
+pub async fn get_server_preload_status(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+) -> Result<Json<ApiResponse<ServerPreloadProgress>>, StatusCode> {
+    let progress = LibrarySyncService::server_preload_status(&state.server_preload_registry, user.id).await;
+    Ok(Json(ApiResponse::success(progress)))
+}
+
+pub async fn start_server_preload(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Json(request): Json<StartServerPreloadRequest>,
+) -> Result<Json<ApiResponse<ServerPreloadProgress>>, StatusCode> {
+    let mode = request
+        .mode
+        .parse::<ServerPreloadMode>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let progress = LibrarySyncService::start_server_preload(
+        state.db(),
+        user.id,
+        state.server_preload_registry.clone(),
+        mode,
+    )
+    .await
+    .map_err(|error| {
+        if error.to_string().contains("already running") {
+            StatusCode::CONFLICT
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    })?;
+
+    Ok(Json(ApiResponse::success(progress)))
 }
 
 pub async fn get_unresolved_matches(

@@ -81,3 +81,30 @@ export type SavedTrackPayload = {
   source: string;
   cover_url?: string;
 };
+
+export type ServerPreloadMode = 'recheck_all' | 'new_only';
+
+export type ServerPreloadState = 'idle' | 'running' | 'completed' | 'failed';
+
+export type ServerPreloadProgress = {
+  state: ServerPreloadState;
+  mode: ServerPreloadMode;
+  phase: string;
+  total_files: number;
+  processed_files: number;
+  current_item?: string | null;
+  imported_tracks: number;
+  updated_tracks: number;
+  skipped_tracks: number;
+  deleted_tracks: number;
+  imported_albums: number;
+  updated_albums: number;
+  deleted_albums: number;
+  imported_playlists: number;
+  updated_playlists: number;
+  deleted_playlists: number;
+  canonical_tracks: number;
+  canonical_albums: number;
+  canonical_playlists: number;
+  error_message?: string | null;
+};

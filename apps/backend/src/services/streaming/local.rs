@@ -62,19 +62,114 @@ impl LocalMusicService {
         }
     }
 
-    async fn scan_music_files(&self) -> Result<Vec<LocalTrack>, String> {
-        let mut tracks = Vec::new();
-        
+    pub fn music_dir(&self) -> &Path {
+        &self.music_dir
+    }
+
+    pub async fn list_audio_files(&self) -> Result<Vec<PathBuf>, String> {
+        let mut file_paths = Vec::new();
+
         if !self.music_dir.exists() {
-            // Create the directory if it doesn't exist
-            if let Err(e) = fs::create_dir_all(&self.music_dir).await {
-                return Err(format!("Failed to create music directory: {}", e));
+            if let Err(error) = fs::create_dir_all(&self.music_dir).await {
+                return Err(format!("Failed to create music directory: {}", error));
             }
-            return Ok(tracks);
+
+            return Ok(file_paths);
         }
 
-        // Recursively scan the directory and its subdirectories
-        self.scan_directory_recursive(&self.music_dir, &mut tracks).await?;
+        self.collect_audio_files_recursive(&self.music_dir, &mut file_paths)
+            .await?;
+        file_paths.sort();
+
+        Ok(file_paths)
+    }
+
+    pub async fn load_track_from_path(&self, file_path: &Path) -> Result<LocalTrack, String> {
+        let file_name = file_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let metadata = self.extract_metadata(file_path).await;
+
+        Ok(LocalTrack {
+            file_path: file_path.to_path_buf(),
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
+            duration: metadata.duration,
+            file_name,
+            cover_url: metadata.cover_url,
+            track_number: metadata.track_number,
+            year: metadata.year,
+        })
+    }
+
+    pub fn streaming_track_from_local_track(&self, track: &LocalTrack) -> StreamingTrack {
+        StreamingTrack {
+            id: format!("server_{}", track.file_path.to_string_lossy()),
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            album: track.album.clone(),
+            duration: track.duration.map(|duration| duration as i32),
+            stream_url: Some(self.get_stream_url_for_track(track)),
+            cover_url: track.cover_url.clone(),
+            source: "server".to_string(),
+            quality: Some("Original".to_string()),
+            bitrate: None,
+            sample_rate: None,
+            bit_depth: None,
+        }
+    }
+
+    pub fn build_albums_from_tracks(&self, tracks: &[LocalTrack]) -> Vec<StreamingAlbum> {
+        self.search_albums(tracks, "")
+    }
+
+    pub async fn list_playlists(&self) -> Result<Vec<StreamingPlaylist>, String> {
+        self.scan_playlists().await
+    }
+
+    fn collect_audio_files_recursive<'a>(
+        &'a self,
+        dir: &'a std::path::Path,
+        file_paths: &'a mut Vec<PathBuf>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut entries = match fs::read_dir(dir).await {
+                Ok(entries) => entries,
+                Err(error) => return Err(format!("Failed to read directory {:?}: {}", dir, error)),
+            };
+
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|error| format!("Error reading directory entry: {}", error))?
+            {
+                let path = entry.path();
+
+                if path.is_file() {
+                    if let Some(extension) = path.extension() {
+                        let extension = extension.to_string_lossy().to_lowercase();
+                        if matches!(extension.as_str(), "mp3" | "flac" | "wav" | "m4a" | "ogg") {
+                            file_paths.push(path);
+                        }
+                    }
+                } else if path.is_dir() {
+                    self.collect_audio_files_recursive(&path, file_paths).await?;
+                }
+            }
+
+            Ok(())
+        })
+    }
+
+    async fn scan_music_files(&self) -> Result<Vec<LocalTrack>, String> {
+        let mut tracks = Vec::new();
+
+        for file_path in self.list_audio_files().await? {
+            tracks.push(self.load_track_from_path(&file_path).await?);
+        }
 
         Ok(tracks)
     }
@@ -97,20 +192,19 @@ impl LocalMusicService {
                                 .unwrap_or_default()
                                 .to_string_lossy()
                                 .to_string();
-                            
-                            // Extract metadata from file tags and directory structure
-                            let metadata = self.extract_metadata(&path).await;
-                            
+
+                            let track = self.load_track_from_path(&path).await?;
+
                             tracks.push(LocalTrack {
-                                file_path: path.clone(),
-                                title: metadata.title,
-                                artist: metadata.artist,
-                                album: metadata.album,
-                                duration: metadata.duration,
+                                file_path: track.file_path,
+                                title: track.title,
+                                artist: track.artist,
+                                album: track.album,
+                                duration: track.duration,
                                 file_name,
-                                cover_url: metadata.cover_url,
-                                track_number: metadata.track_number,
-                                year: metadata.year,
+                                cover_url: track.cover_url,
+                                track_number: track.track_number,
+                                year: track.year,
                             });
                         }
                     }

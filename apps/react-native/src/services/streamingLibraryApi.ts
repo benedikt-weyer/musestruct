@@ -2,6 +2,8 @@ import type { AuthSession } from '../types/auth';
 import type {
   AvailableServicesResponse,
   SavedTrackPayload,
+  ServerPreloadMode,
+  ServerPreloadProgress,
   ServiceStatusResponse,
   SpotifyAuthUrlResponse,
   StreamingTrack,
@@ -276,4 +278,31 @@ export async function fetchStreamingPlaylistTracks(
   );
 
   return parseApiResponse<StreamingTrack[]>(response);
+}
+
+export async function fetchServerPreloadStatus(
+  backendUrl: string,
+  authSession: AuthSession,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/library/server-preload`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<ServerPreloadProgress>(response);
+}
+
+export async function startServerPreload(
+  backendUrl: string,
+  authSession: AuthSession,
+  mode: ServerPreloadMode,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/library/server-preload`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify({ mode }),
+  });
+
+  return parseApiResponse<ServerPreloadProgress>(response);
 }
