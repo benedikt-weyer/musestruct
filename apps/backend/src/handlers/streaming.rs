@@ -907,6 +907,30 @@ async fn search_server_catalog(
     let offset = offset.unwrap_or(0) as u64;
     let all_types = search_type.is_none() || search_type == Some("all");
 
+    let track_total = if all_types || search_type == Some("track") {
+        count_server_tracks(db, user_id, &normalized_query)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        0
+    };
+
+    let album_total = if all_types || search_type == Some("album") {
+        count_server_albums(db, user_id, &normalized_query)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        0
+    };
+
+    let playlist_total = if all_types || search_type == Some("playlist") {
+        count_server_playlists(db, user_id, &normalized_query)
+            .await
+            .map_err(|error| error.to_string())?
+    } else {
+        0
+    };
+
     let tracks = if all_types || search_type == Some("track") {
         search_server_tracks(db, user_id, &normalized_query, limit, offset)
             .await
@@ -932,10 +956,10 @@ async fn search_server_catalog(
     };
 
     let total = match search_type {
-        Some("track") => tracks.len() as u32,
-        Some("album") => albums.len() as u32,
-        Some("playlist") => playlists.len() as u32,
-        _ => (tracks.len() + albums.len() + playlists.len()) as u32,
+        Some("track") => track_total,
+        Some("album") => album_total,
+        Some("playlist") => playlist_total,
+        _ => track_total + album_total + playlist_total,
     };
 
     Ok(SearchResults {
@@ -946,6 +970,63 @@ async fn search_server_catalog(
         offset: offset as u32,
         limit: limit as u32,
     })
+}
+
+async fn count_server_tracks(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+) -> anyhow::Result<u32> {
+    let mut query = ServerTrackEntity::find().filter(ServerTrackColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerTrackColumn::Title
+                .contains(normalized_query)
+                .or(ServerTrackColumn::Artist.contains(normalized_query))
+                .or(ServerTrackColumn::AlbumName.contains(normalized_query))
+                .or(ServerTrackColumn::ProviderTrackId.contains(normalized_query)),
+        );
+    }
+
+    Ok(query.count(db).await? as u32)
+}
+
+async fn count_server_albums(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+) -> anyhow::Result<u32> {
+    let mut query = ServerAlbumEntity::find().filter(ServerAlbumColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerAlbumColumn::Name
+                .contains(normalized_query)
+                .or(ServerAlbumColumn::Artist.contains(normalized_query)),
+        );
+    }
+
+    Ok(query.count(db).await? as u32)
+}
+
+async fn count_server_playlists(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+) -> anyhow::Result<u32> {
+    let mut query = ServerPlaylistEntity::find().filter(ServerPlaylistColumn::UserId.eq(user_id));
+
+    if !normalized_query.is_empty() {
+        query = query.filter(
+            ServerPlaylistColumn::Name
+                .contains(normalized_query)
+                .or(ServerPlaylistColumn::Description.contains(normalized_query))
+                .or(ServerPlaylistColumn::OwnerName.contains(normalized_query)),
+        );
+    }
+
+    Ok(query.count(db).await? as u32)
 }
 
 async fn search_server_tracks(
@@ -970,7 +1051,6 @@ async fn search_server_tracks(
     let rows = query
         .order_by_asc(ServerTrackColumn::Artist)
         .order_by_asc(ServerTrackColumn::Title)
-        .offset(offset)
         .offset(offset)
         .limit(limit)
         .all(db)

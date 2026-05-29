@@ -500,6 +500,7 @@ export function BrowseScreen() {
   const [albums, setAlbums] = useState<StreamingAlbum[]>([]);
   const [playlists, setPlaylists] = useState<StreamingPlaylist[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
+  const [totalResults, setTotalResults] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -689,6 +690,7 @@ export function BrowseScreen() {
       setTracks(results.tracks);
       setAlbums(results.albums);
       setPlaylists(results.playlists);
+      setTotalResults(results.total);
       setResultMode(includeAllTypes ? 'all' : request.searchType);
       setCurrentPage(page);
       setHasSearched(true);
@@ -819,13 +821,9 @@ export function BrowseScreen() {
   }
 
   const visibleResultCount = getVisibleResultCount(resultMode, tracks, albums, playlists);
+  const totalPageCount = Math.max(1, Math.ceil(totalResults / SEARCH_PAGE_SIZE));
   const hasPreviousPage = currentPage > 0;
-  const hasNextPage =
-    resultMode === 'all'
-      ? tracks.length === SEARCH_PAGE_SIZE ||
-        albums.length === SEARCH_PAGE_SIZE ||
-        playlists.length === SEARCH_PAGE_SIZE
-      : visibleResultCount === SEARCH_PAGE_SIZE;
+  const hasNextPage = currentPage + 1 < totalPageCount;
 
   if (!authSession) {
     return (
@@ -965,7 +963,7 @@ export function BrowseScreen() {
           <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
             <View className="flex-row items-center justify-between gap-3">
               <Text className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                Page {currentPage + 1}
+                Page {currentPage + 1} / {totalPageCount}
               </Text>
               <View className="flex-row gap-3">
                 <Pressable
