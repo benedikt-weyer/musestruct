@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PLAYABLE_AUDIO_EXTENSIONS } from '../constants/audio';
 import { PlaylistArtwork } from '../components/PlaylistArtwork';
 import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
+import { MusicFolderAccess } from '../native/MusicFolderAccess';
 import type { RootStackParamList } from '../navigation/types';
 import {
   addFavouriteTrack,
@@ -29,6 +31,7 @@ import {
 } from '../services/libraryApi';
 import { fetchStreamingTrack, fetchTrackStreamUrl } from '../services/streamingLibraryApi';
 import type { FavouriteTrack, LibraryPlaylist, LibraryPlaylistItem, LibrarySection, SavedTrack } from '../types/library';
+import type { MusicFile } from '../types/music';
 import type { PlayerPlayMode, QueueTrack } from '../types/player';
 
 type LibrarySectionOption = {
@@ -38,6 +41,11 @@ type LibrarySectionOption = {
 };
 
 const LIBRARY_SECTIONS: LibrarySectionOption[] = [
+  {
+    key: 'local',
+    label: 'Local',
+    subtitle: 'Device-folder tracks kept fully isolated from the backend library.',
+  },
   {
     key: 'favourites',
     label: 'Favourites',
@@ -77,6 +85,31 @@ function formatDate(value?: string | null) {
   }
 
   return date.toLocaleDateString();
+}
+
+function formatFileSize(size: number) {
+  if (size <= 0) {
+    return 'Unknown size';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = size;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatModifiedAt(modifiedAt: number) {
+  if (!modifiedAt) {
+    return 'Unknown date';
+  }
+
+  return new Date(modifiedAt).toLocaleDateString();
 }
 
 function getTrackPlayLabel(isCurrentTrack: boolean, isPlaying: boolean) {
@@ -253,6 +286,53 @@ function mapFavouriteToSavedTrack(track: FavouriteTrack): SavedTrack {
   };
 }
 
+function LocalTrackLibraryCard({
+  file,
+  isCurrentTrack,
+  isPlaying,
+  onPlay,
+}: Readonly<{
+  file: MusicFile;
+  isCurrentTrack: boolean;
+  isPlaying: boolean;
+  onPlay: (file: MusicFile) => void;
+}>) {
+  const playLabel = getTrackPlayLabel(isCurrentTrack, isPlaying);
+
+  return (
+    <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{file.name}</Text>
+          <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{file.pathLabel}</Text>
+        </View>
+        <View className="rounded-full bg-teal-100 px-3 py-1 dark:bg-teal-950/60">
+          <Text className="text-xs font-semibold uppercase tracking-[1px] text-teal-700">{file.extension}</Text>
+        </View>
+      </View>
+
+      <View className="mt-4 flex-row justify-between">
+        <Text className="text-xs font-medium uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
+          {formatFileSize(file.size)}
+        </Text>
+        <Text className="text-xs font-medium uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
+          {formatModifiedAt(file.modifiedAt)}
+        </Text>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+        onPress={() => {
+          onPlay(file);
+        }}
+      >
+        <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">{playLabel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function PlaylistBadge({ label }: Readonly<{ label: string }>) {
   return (
     <View className="rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-800">
@@ -402,7 +482,7 @@ function LibraryLoginState({
     <View className="mt-4 rounded-[24px] bg-white px-4 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
       <Text className="text-lg font-semibold text-slate-900 dark:text-slate-100">Login required</Text>
       <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-        Your saved tracks and imported playlists are loaded from the backend account.
+        Saved tracks, favourites, and imported playlists are loaded from the backend account.
       </Text>
 
       <Pressable
@@ -432,11 +512,17 @@ function ActiveLibrarySection({
   deletingItemKey,
   favouriteActionKey,
   favourites,
+  isLocalLoading,
   isPlaying,
+  localFiles,
+  localFolderName,
+  localTrackError,
   onOpenPlaylist,
   onPlayPlaylist,
+  onPlayLocalTrack,
   onToggleFavourite,
   onPlayTrack,
+  onRefreshLocalTracks,
   onRefreshPlaylist,
   onRemovePlaylist,
   onRemoveTrack,
@@ -452,11 +538,17 @@ function ActiveLibrarySection({
   deletingItemKey: string | null;
   favouriteActionKey: string | null;
   favourites: FavouriteTrack[];
+  isLocalLoading: boolean;
   isPlaying: boolean;
+  localFiles: MusicFile[];
+  localFolderName: string | null;
+  localTrackError: string | null;
   onOpenPlaylist: (playlist: LibraryPlaylist) => void;
   onPlayPlaylist: (playlist: LibraryPlaylist, playMode: PlayerPlayMode) => void;
+  onPlayLocalTrack: (file: MusicFile) => void;
   onToggleFavourite: (track: SavedTrack) => void;
   onPlayTrack: (track: SavedTrack) => void;
+  onRefreshLocalTracks: () => void;
   onRefreshPlaylist: (playlist: LibraryPlaylist) => void;
   onRemovePlaylist: (playlist: LibraryPlaylist) => void;
   onRemoveTrack: (track: SavedTrack) => void;
@@ -465,6 +557,73 @@ function ActiveLibrarySection({
   refreshingPlaylistId: string | null;
   tracks: SavedTrack[];
 }>) {
+  if (activeSection === 'local') {
+    if (!localFolderName) {
+      return (
+        <EmptyLibraryState
+          description="Choose a device folder in Settings to show isolated local tracks here. These tracks stay outside the backend library and are never saved to the database."
+          title="No local folder selected"
+        />
+      );
+    }
+
+    if (localTrackError) {
+      return (
+        <View className="rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4">
+          <Text className="text-sm font-semibold text-rose-900">Local tracks failed to load</Text>
+          <Text className="mt-1 text-sm text-rose-700">{localTrackError}</Text>
+          <Pressable
+            accessibilityRole="button"
+            className="mt-4 rounded-full border border-rose-200 bg-white px-4 py-3 active:bg-rose-100"
+            onPress={onRefreshLocalTracks}
+          >
+            <Text className="text-center text-sm font-semibold text-rose-700">Retry scan</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (isLocalLoading) {
+      return (
+        <View className="rounded-[24px] bg-white px-5 py-10 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <ActivityIndicator color="#0f766e" />
+        </View>
+      );
+    }
+
+    return localFiles.length === 0 ? (
+      <EmptyLibraryState
+        description="The selected device folder does not contain any playable local files yet."
+        title="No local tracks found"
+      />
+    ) : (
+      <>
+        <View className="mb-4 rounded-[20px] bg-slate-50 px-4 py-4 dark:bg-slate-950">
+          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{localFolderName}</Text>
+          <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Local tracks are isolated from your backend library. They cannot be favourited, added to playlists, or persisted in the database.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:active:bg-slate-800"
+            onPress={onRefreshLocalTracks}
+          >
+            <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Refresh local tracks</Text>
+          </Pressable>
+        </View>
+        {localFiles.map((file) => (
+          <LocalTrackLibraryCard
+            file={file}
+            isCurrentTrack={currentTrackKey === `device:${file.id}`}
+            isPlaying={isPlaying}
+            key={file.id}
+            onPlay={onPlayLocalTrack}
+          />
+        ))}
+      </>
+    );
+  }
+
   if (activeSection === 'favourites') {
     return favourites.length === 0 ? (
       <EmptyLibraryState
@@ -551,7 +710,7 @@ function ActiveLibrarySection({
 
 export function LibraryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { authSession, backendUrl } = useSettings();
+  const { authSession, backendUrl, selectedFolder } = useSettings();
   const {
     currentPlayMode,
     currentPlaylistId,
@@ -563,14 +722,17 @@ export function LibraryScreen() {
   } = usePlayer();
   const [activeSection, setActiveSection] = useState<LibrarySection>('tracks');
   const [favourites, setFavourites] = useState<FavouriteTrack[]>([]);
+  const [localFiles, setLocalFiles] = useState<MusicFile[]>([]);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
   const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
   const [favouriteActionKey, setFavouriteActionKey] = useState<string | null>(null);
   const [playlistActionKey, setPlaylistActionKey] = useState<string | null>(null);
   const [refreshingPlaylistId, setRefreshingPlaylistId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [localTrackError, setLocalTrackError] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async () => {
     if (!authSession) {
@@ -605,9 +767,40 @@ export function LibraryScreen() {
     void loadLibrary();
   }, [authSession, backendUrl]);
 
+  const loadLocalTracks = useCallback(async () => {
+    if (!selectedFolder) {
+      setLocalFiles([]);
+      setLocalTrackError(null);
+      return;
+    }
+
+    setIsLocalLoading(true);
+    setLocalTrackError(null);
+
+    try {
+      const nextFiles = await MusicFolderAccess.listPlayableFiles(
+        selectedFolder.id,
+        [...PLAYABLE_AUDIO_EXTENSIONS],
+      );
+      setLocalFiles(nextFiles);
+    } catch (error) {
+      setLocalTrackError(
+        error instanceof Error ? error.message : 'The selected folder could not be scanned.',
+      );
+      setLocalFiles([]);
+    } finally {
+      setIsLocalLoading(false);
+    }
+  }, [selectedFolder?.id]);
+
+  useEffect(() => {
+    void loadLocalTracks();
+  }, [loadLocalTracks]);
+
   const currentTrackKey = currentTrack?.key ?? null;
   const sectionCounts: Record<LibrarySection, number> = {
     favourites: favourites.length,
+    local: localFiles.length,
     playlists: playlists.length,
     tracks: tracks.length,
   };
@@ -658,6 +851,27 @@ export function LibraryScreen() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to play track.');
     }
+  }
+
+  function handlePlayLocalTrack(file: MusicFile) {
+    const playerKey = `device:${file.id}`;
+
+    if (currentTrack?.key === playerKey) {
+      togglePlayPause();
+      return;
+    }
+
+    playTrack({
+      id: file.id,
+      key: playerKey,
+      title: file.name,
+      artist: 'Local file',
+      album: selectedFolder?.name,
+      description: file.pathLabel,
+      duration: undefined,
+      source: 'device',
+      url: file.uri,
+    });
   }
 
   function createQueueTracks(playlist: LibraryPlaylist, items: LibraryPlaylistItem[]): QueueTrack[] {
@@ -893,105 +1107,114 @@ export function LibraryScreen() {
           </Text>
           <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Your Music Library</Text>
           <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Browse your saved tracks and imported playlists without the removed album layer.
+            Browse isolated local tracks, saved backend tracks, favourites, and imported playlists.
           </Text>
         </View>
 
-        {authSession ? (
-          <>
-            <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-              <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
-                Sections
+        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
+            Sections
+          </Text>
+
+          <ScrollView className="mt-4" horizontal showsHorizontalScrollIndicator={false}>
+            {LIBRARY_SECTIONS.map((section) => (
+              <LibrarySectionButton
+                key={section.key}
+                active={activeSection === section.key}
+                count={sectionCounts[section.key]}
+                label={section.label}
+                onPress={() => {
+                  setActiveSection(section.key);
+                }}
+              />
+            ))}
+          </ScrollView>
+
+          <View className="mt-4 rounded-[20px] bg-slate-50 px-4 py-4 dark:bg-slate-950">
+            <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{activeSectionMeta.label}</Text>
+            <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              {activeSectionMeta.subtitle}
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:active:bg-slate-800"
+              disabled={activeSection === 'local' ? isLocalLoading : isLoading}
+              onPress={() => {
+                if (activeSection === 'local') {
+                  void loadLocalTracks();
+                  return;
+                }
+
+                void loadLibrary();
+              }}
+            >
+              <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {activeSection === 'local' ? 'Refresh local tracks' : 'Refresh library'}
               </Text>
+            </Pressable>
+          </View>
+        </View>
 
-              <ScrollView className="mt-4" horizontal showsHorizontalScrollIndicator={false}>
-                {LIBRARY_SECTIONS.map((section) => (
-                  <LibrarySectionButton
-                    key={section.key}
-                    active={activeSection === section.key}
-                    count={sectionCounts[section.key]}
-                    label={section.label}
-                    onPress={() => {
-                      setActiveSection(section.key);
-                    }}
-                  />
-                ))}
-              </ScrollView>
+        {activeSection !== 'local' && errorMessage ? (
+          <View className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4">
+            <Text className="text-sm font-semibold text-rose-900">Library failed to load</Text>
+            <Text className="mt-1 text-sm text-rose-700">{errorMessage}</Text>
+          </View>
+        ) : null}
 
-              <View className="mt-4 rounded-[20px] bg-slate-50 px-4 py-4 dark:bg-slate-950">
-                <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{activeSectionMeta.label}</Text>
-                <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                  {activeSectionMeta.subtitle}
-                </Text>
-
-                <Pressable
-                  accessibilityRole="button"
-                  className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:active:bg-slate-800"
-                  disabled={isLoading}
-                  onPress={() => {
-                    void loadLibrary();
-                  }}
-                >
-                  <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    Refresh library
-                  </Text>
-                </Pressable>
-              </View>
+        <View className="mt-4">
+          {activeSection !== 'local' && !authSession ? (
+            <LibraryLoginState
+              onLogin={() => {
+                navigation.navigate('Login');
+              }}
+              onRegister={() => {
+                navigation.navigate('Register');
+              }}
+            />
+          ) : isLoading && activeSection !== 'local' ? (
+            <View className="rounded-[24px] bg-white px-5 py-10 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+              <ActivityIndicator color="#0f766e" />
             </View>
-
-            {errorMessage ? (
-              <View className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4">
-                <Text className="text-sm font-semibold text-rose-900">Library failed to load</Text>
-                <Text className="mt-1 text-sm text-rose-700">{errorMessage}</Text>
-              </View>
-            ) : null}
-
-            <View className="mt-4">
-              {isLoading ? (
-                <View className="rounded-[24px] bg-white px-5 py-10 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-                  <ActivityIndicator color="#0f766e" />
-                </View>
-              ) : (
-                <ActiveLibrarySection
-                  activeSection={activeSection}
-                  currentPlayMode={currentPlayMode}
-                  currentPlaylistId={currentPlaylistId}
-                  currentTrackKey={currentTrackKey}
-                  deletingItemKey={deletingItemKey}
-                  favouriteActionKey={favouriteActionKey}
-                  favourites={favourites}
-                  isPlaying={isPlaying}
-                  onOpenPlaylist={(playlist) => {
-                    navigation.navigate('PlaylistDetails', {
-                      playlistDescription: playlist.description,
-                      playlistId: playlist.id,
-                      playlistName: playlist.name,
-                    });
-                  }}
-                  onPlayPlaylist={handlePlayPlaylist}
-                  onToggleFavourite={toggleFavouriteTrack}
-                  onPlayTrack={handlePlayTrack}
-                  onRefreshPlaylist={handleRefreshPlaylist}
-                  onRemovePlaylist={handleRemovePlaylist}
-                  onRemoveTrack={handleRemoveTrack}
-                  playlistActionKey={playlistActionKey}
-                  playlists={playlists}
-                  refreshingPlaylistId={refreshingPlaylistId}
-                  tracks={tracks}
-                />
-              )}
-            </View>
-          </>
-        ) : (
-          <LibraryLoginState
-            onLogin={() => {
-              navigation.navigate('Login');
-            }}
-            onRegister={() => {
-              navigation.navigate('Register');
-            }}
-          />
-        )}
+          ) : (
+            <ActiveLibrarySection
+              activeSection={activeSection}
+              currentPlayMode={currentPlayMode}
+              currentPlaylistId={currentPlaylistId}
+              currentTrackKey={currentTrackKey}
+              deletingItemKey={deletingItemKey}
+              favouriteActionKey={favouriteActionKey}
+              favourites={favourites}
+              isLocalLoading={isLocalLoading}
+              isPlaying={isPlaying}
+              localFiles={localFiles}
+              localFolderName={selectedFolder?.name ?? null}
+              localTrackError={localTrackError}
+              onOpenPlaylist={(playlist) => {
+                navigation.navigate('PlaylistDetails', {
+                  playlistDescription: playlist.description,
+                  playlistId: playlist.id,
+                  playlistName: playlist.name,
+                });
+              }}
+              onPlayLocalTrack={handlePlayLocalTrack}
+              onPlayPlaylist={handlePlayPlaylist}
+              onToggleFavourite={toggleFavouriteTrack}
+              onPlayTrack={handlePlayTrack}
+              onRefreshLocalTracks={() => {
+                void loadLocalTracks();
+              }}
+              onRefreshPlaylist={handleRefreshPlaylist}
+              onRemovePlaylist={handleRemovePlaylist}
+              onRemoveTrack={handleRemoveTrack}
+              playlistActionKey={playlistActionKey}
+              playlists={playlists}
+              refreshingPlaylistId={refreshingPlaylistId}
+              tracks={tracks}
+            />
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

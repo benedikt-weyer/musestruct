@@ -82,4 +82,4 @@ export type LibraryPlaylistListResponse = {
   per_page: number;
 };
 
-export type LibrarySection = 'playlists' | 'tracks' | 'favourites';
+export type LibrarySection = 'playlists' | 'tracks' | 'favourites' | 'local';
