@@ -56,6 +56,26 @@ function getAllLibraryButtonLabel(searchType: BrowseSearchType) {
   return 'Search All Playlists In My Library';
 }
 
+function getSearchAllButtonLabel(
+  searchType: BrowseSearchType,
+  searchScope: BrowseSearchScope,
+  isServerOnlySelected: boolean,
+) {
+  if (isServerOnlySelected) {
+    if (searchType === 'track') {
+      return 'Search All Tracks On Server';
+    }
+
+    if (searchType === 'album') {
+      return 'Search All Albums On Server';
+    }
+
+    return 'Search All Playlists On Server';
+  }
+
+  return getAllLibraryButtonLabel(searchType);
+}
+
 function showToast(message: string) {
   if (Platform.OS === 'android') {
     ToastAndroid.show(message, ToastAndroid.SHORT);
@@ -803,7 +823,7 @@ export function BrowseScreen() {
             )}
           </Pressable>
 
-          {searchScope === 'library' ? (
+          {searchScope === 'library' || isServerOnlySelected ? (
             <Pressable
               accessibilityRole="button"
               className="mt-3 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
@@ -811,12 +831,12 @@ export function BrowseScreen() {
               onPress={() => {
                 void handleSearch(0, {
                   allowEmptyQuery: true,
-                  forceScope: 'library',
+                  forceScope: isServerOnlySelected ? 'all' : 'library',
                 });
               }}
             >
               <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
-                {getAllLibraryButtonLabel(searchType)}
+                {getSearchAllButtonLabel(searchType, searchScope, isServerOnlySelected)}
               </Text>
             </Pressable>
           ) : null}
