@@ -835,6 +835,7 @@ export function LibraryScreen() {
       playTrack({
         id: track.track_id,
         key: playerKey,
+        userTrackId: track.id,
         title: playbackTrack?.title ?? track.title,
         artist: playbackTrack?.artist ?? track.artist,
         album: playbackTrack?.album ?? track.album,
@@ -887,6 +888,7 @@ export function LibraryScreen() {
         key: `${item.source}:${item.item_id}`,
         source: item.source ?? 'unknown',
         title: item.title ?? 'Unknown Track',
+        userTrackId: item.user_track_id ?? undefined,
       }));
   }
 

@@ -1,6 +1,7 @@
 export type PlayerTrack = {
   id: string;
   key: string;
+  userTrackId?: string;
   title: string;
   artist: string;
   album?: string;

@@ -19,7 +19,8 @@ use crate::models::{
     CanonicalAlbumTrackEntity, CanonicalPlaylistActiveModel, CanonicalPlaylistColumn, CanonicalPlaylistEntity,
     CanonicalPlaylistTrackActiveModel, CanonicalPlaylistTrackEntity, CanonicalTrackActiveModel,
     CanonicalTrackColumn, CanonicalTrackEntity, FavouriteTrackActiveModel, FavouriteTrackColumn,
-    FavouriteTrackEntity, FavouriteTrackModel, QobuzAlbumActiveModel, QobuzAlbumColumn, QobuzAlbumEntity,
+    FavouriteTrackEntity, FavouriteTrackModel, LastPlayedTrackActiveModel, LastPlayedTrackColumn,
+    LastPlayedTrackEntity, LastPlayedTrackModel, QobuzAlbumActiveModel, QobuzAlbumColumn, QobuzAlbumEntity,
     QobuzAlbumTrackActiveModel, QobuzAlbumTrackEntity, QobuzPlaylistActiveModel, QobuzPlaylistColumn,
     QobuzPlaylistEntity, QobuzPlaylistTrackActiveModel, QobuzPlaylistTrackEntity, QobuzTrackActiveModel,
     QobuzTrackColumn, QobuzTrackEntity, ServerAlbumActiveModel, ServerAlbumColumn, ServerAlbumEntity,
@@ -217,6 +218,22 @@ pub struct FavouriteTrackSummary {
     pub album_name: Option<String>,
     pub duration: Option<i32>,
     pub cover_url: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LastPlayedTrackSummary {
+    pub id: Uuid,
+    pub canonical_track_id: Uuid,
+    pub provider_track_id: String,
+    pub source: String,
+    pub title: String,
+    pub artist: String,
+    pub album_name: Option<String>,
+    pub duration: Option<i32>,
+    pub cover_url: Option<String>,
+    pub played_at: chrono::NaiveDateTime,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
@@ -666,6 +683,70 @@ impl LibrarySyncService {
         Ok(existing.is_some())
     }
 
+    pub async fn record_last_played_track(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        user_track_id: Uuid,
+    ) -> Result<LastPlayedTrackModel> {
+        UserTrackEntity::find_by_id(user_track_id)
+            .filter(UserTrackColumn::UserId.eq(user_id))
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow!("User track not found"))?;
+
+        if let Some(existing) = LastPlayedTrackEntity::find()
+            .filter(LastPlayedTrackColumn::UserId.eq(user_id))
+            .filter(LastPlayedTrackColumn::UserTrackId.eq(user_track_id))
+            .one(db)
+            .await?
+        {
+            let mut active = existing.into_active_model();
+            active.played_at = Set(chrono::Utc::now().naive_utc());
+            return active.update(db).await.map_err(Into::into);
+        }
+
+        LastPlayedTrackActiveModel {
+            user_id: Set(user_id),
+            user_track_id: Set(user_track_id),
+            ..LastPlayedTrackActiveModel::new()
+        }
+        .insert(db)
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn list_last_played_tracks(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        limit: u64,
+    ) -> Result<Vec<LastPlayedTrackSummary>> {
+        let rows = LastPlayedTrackEntity::find()
+            .filter(LastPlayedTrackColumn::UserId.eq(user_id))
+            .order_by_desc(LastPlayedTrackColumn::PlayedAt)
+            .limit(limit)
+            .all(db)
+            .await?;
+
+        let user_track_ids = rows.iter().map(|row| row.user_track_id).collect::<Vec<_>>();
+        let user_track_map = UserTrackEntity::find()
+            .filter(UserTrackColumn::UserId.eq(user_id))
+            .filter(UserTrackColumn::Id.is_in(user_track_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|track| (track.id, track))
+            .collect::<HashMap<_, _>>();
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                user_track_map
+                    .get(&row.user_track_id)
+                    .map(|user_track| last_played_track_summary(row, user_track))
+            })
+            .collect())
+    }
+
     pub async fn remove_user_track(db: &DatabaseConnection, user_id: Uuid, user_track_id: Uuid) -> Result<bool> {
         let result = UserTrackEntity::delete_many()
             .filter(UserTrackColumn::Id.eq(user_track_id))
@@ -844,6 +925,26 @@ fn favourite_track_summary(
         cover_url: favourite.cover_url,
         created_at: favourite.created_at,
         updated_at: favourite.updated_at,
+    }
+}
+
+fn last_played_track_summary(
+    last_played: LastPlayedTrackModel,
+    user_track: &crate::models::UserTrackModel,
+) -> LastPlayedTrackSummary {
+    LastPlayedTrackSummary {
+        id: user_track.id,
+        canonical_track_id: user_track.canonical_track_id,
+        provider_track_id: user_track.provider_track_id.clone(),
+        source: user_track.source.clone(),
+        title: user_track.title.clone(),
+        artist: user_track.artist.clone(),
+        album_name: user_track.album_name.clone(),
+        duration: user_track.duration,
+        cover_url: user_track.cover_url.clone(),
+        played_at: last_played.played_at,
+        created_at: user_track.created_at,
+        updated_at: user_track.updated_at,
     }
 }
 

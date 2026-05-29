@@ -1,10 +1,12 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
 } from 'react';
+import { colorScheme } from 'nativewind';
 
 import {
   getStoredAuthSession,
@@ -19,6 +21,8 @@ import {
 } from '../storage/settingsStorage';
 import type { AuthSession } from '../types/auth';
 import type { MusicFolder } from '../types/music';
+
+colorScheme.set(getStoredThemePreference());
 
 type SettingsContextValue = {
   selectedFolder: MusicFolder | null;
@@ -44,6 +48,12 @@ export function SettingsProvider({ children }: Readonly<PropsWithChildren>) {
   const [storedThemePreference, setStoredThemePreference] = useState<ThemePreference>(() =>
     getStoredThemePreference(),
   );
+
+  useEffect(() => {
+    if (colorScheme.get() !== storedThemePreference) {
+      colorScheme.set(storedThemePreference);
+    }
+  }, [storedThemePreference]);
 
   function setSelectedFolder(folder: MusicFolder | null) {
     persistMusicFolder(folder);

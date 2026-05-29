@@ -249,6 +249,7 @@ export function PlaylistDetailsScreen() {
         sessionToken: item.source === 'tidal' ? authSession.sessionToken : undefined,
         source: item.source,
         title: playbackTrack?.title ?? item.title ?? 'Unknown Track',
+        userTrackId: item.user_track_id ?? undefined,
         url:
           item.source === 'tidal'
             ? ''

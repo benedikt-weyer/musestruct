@@ -77,11 +77,43 @@ pub struct FavouriteTracksListResponse {
     pub limit: u64,
 }
 
+#[derive(Serialize)]
+pub struct LastPlayedTrackResponse {
+    pub id: Uuid,
+    pub canonical_track_id: Uuid,
+    pub track_id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration: Option<i32>,
+    pub source: String,
+    pub cover_url: Option<String>,
+    pub played_at: chrono::NaiveDateTime,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Serialize)]
+pub struct LastPlayedTracksListResponse {
+    pub tracks: Vec<LastPlayedTrackResponse>,
+    pub limit: u64,
+}
+
 #[derive(Deserialize)]
 pub struct GetSavedTracksQuery {
     pub page: Option<u64>,
     pub limit: Option<u64>,
     pub search: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GetLastPlayedTracksQuery {
+    pub limit: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct RecordLastPlayedTrackRequest {
+    pub user_track_id: Uuid,
 }
 
 #[derive(Serialize)]
@@ -328,6 +360,41 @@ pub async fn is_track_favourite(
     Ok(Json(ApiResponse::success(favourite)))
 }
 
+pub async fn record_last_played_track(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Json(request): Json<RecordLastPlayedTrackRequest>,
+) -> Result<Json<ApiResponse<LastPlayedTrackResponse>>, StatusCode> {
+    let track = LibrarySyncService::record_last_played_track(state.db(), user.id, request.user_track_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let summary = LibrarySyncService::list_last_played_tracks(state.db(), user.id, 1)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|item| item.id == track.user_track_id)
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(last_played_track_response(summary))))
+}
+
+pub async fn get_last_played_tracks(
+    State(state): State<AppState>,
+    Extension(user): Extension<UserResponseDto>,
+    Query(params): Query<GetLastPlayedTracksQuery>,
+) -> Result<Json<ApiResponse<LastPlayedTracksListResponse>>, StatusCode> {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let tracks = LibrarySyncService::list_last_played_tracks(state.db(), user.id, limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(LastPlayedTracksListResponse {
+        tracks: tracks.into_iter().map(last_played_track_response).collect(),
+        limit,
+    })))
+}
+
 pub async fn refresh_provider_library(
     State(state): State<AppState>,
     Extension(user): Extension<UserResponseDto>,
@@ -447,6 +514,23 @@ fn favourite_track_summary_response(track: crate::services::FavouriteTrackSummar
         duration: track.duration,
         source: track.source,
         cover_url: cache_cover_url(track.cover_url),
+        created_at: track.created_at,
+        updated_at: track.updated_at,
+    }
+}
+
+fn last_played_track_response(track: crate::services::LastPlayedTrackSummary) -> LastPlayedTrackResponse {
+    LastPlayedTrackResponse {
+        id: track.id,
+        canonical_track_id: track.canonical_track_id,
+        track_id: track.provider_track_id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album_name.unwrap_or_default(),
+        duration: track.duration,
+        source: track.source,
+        cover_url: cache_cover_url(track.cover_url),
+        played_at: track.played_at,
         created_at: track.created_at,
         updated_at: track.updated_at,
     }

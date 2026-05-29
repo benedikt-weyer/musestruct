@@ -1,10 +1,8 @@
 import './global.css';
 
-import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { colorScheme } from 'nativewind';
 
 import { PlayerProvider } from './src/context/PlayerContext';
 import { SettingsProvider, useSettings } from './src/context/SettingsContext';
@@ -13,10 +11,6 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 function AppShell() {
   const { themePreference } = useSettings();
   const isDarkMode = themePreference === 'dark';
-
-  useEffect(() => {
-    colorScheme.set(themePreference);
-  }, [themePreference]);
 
   return (
     <>
@@ -31,13 +25,13 @@ function AppShell() {
 
 function App() {
   return (
-    <GestureHandlerRootView className="flex-1 bg-slate-50 dark:bg-slate-950">
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <PlayerProvider>
-          <SettingsProvider>
+        <SettingsProvider>
+          <PlayerProvider>
             <AppShell />
-          </SettingsProvider>
-        </PlayerProvider>
+          </PlayerProvider>
+        </SettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

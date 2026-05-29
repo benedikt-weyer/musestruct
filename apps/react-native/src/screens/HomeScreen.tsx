@@ -1,145 +1,127 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Image,
   Pressable,
-  RefreshControl,
+  ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePlayer } from '../context/PlayerContext';
-import { PLAYABLE_AUDIO_EXTENSIONS } from '../constants/audio';
 import { useSettings } from '../context/SettingsContext';
-import { MusicFolderAccess } from '../native/MusicFolderAccess';
-import type { MusicFile } from '../types/music';
+import { fetchLastPlayedTracks } from '../services/libraryApi';
+import { fetchStreamingTrack, fetchTrackStreamUrl } from '../services/streamingLibraryApi';
+import type { LastPlayedTrack } from '../types/library';
 
-function formatFileSize(size: number) {
-  if (size <= 0) {
-    return 'Unknown size';
+function formatDuration(duration?: number | null) {
+  if (!duration || duration <= 0) {
+    return '--:--';
   }
 
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = size;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  const minutes = Math.floor(duration / 60);
+  const seconds = duration % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function formatModifiedAt(modifiedAt: number) {
-  if (!modifiedAt) {
+function formatDate(value?: string | null) {
+  if (!value) {
     return 'Unknown date';
   }
 
-  return new Date(modifiedAt).toLocaleDateString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function LastPlayedTrackCard({
+  isDarkMode,
+  isCurrentTrack,
+  isPlaying,
+  onPlay,
+  track,
+}: Readonly<{
+  isDarkMode: boolean;
+  isCurrentTrack: boolean;
+  isPlaying: boolean;
+  onPlay: (track: LastPlayedTrack) => void;
+  track: LastPlayedTrack;
+}>) {
+  let playLabel = 'Play track';
+  if (isCurrentTrack && isPlaying) {
+    playLabel = 'Pause track';
+  } else if (isCurrentTrack) {
+    playLabel = 'Resume track';
+  }
+
+  return (
+    <View style={[styles.trackCard, isDarkMode && styles.cardDark]}>
+      <View style={styles.trackRow}>
+        {track.cover_url ? (
+          <Image
+            resizeMode="cover"
+            source={{ uri: track.cover_url }}
+            style={[styles.coverImage, isDarkMode && styles.coverImageDark]}
+          />
+        ) : (
+          <View style={[styles.coverFallback, isDarkMode && styles.coverFallbackDark]}>
+            <Text style={[styles.sourceText, isDarkMode && styles.sourceTextDark]}>
+              {track.source}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.trackInfo}>
+          <Text style={[styles.trackTitle, isDarkMode && styles.trackTitleDark]}>{track.title}</Text>
+          <Text style={[styles.trackArtist, isDarkMode && styles.trackArtistDark]}>{track.artist}</Text>
+          <Text style={[styles.trackAlbum, isDarkMode && styles.trackAlbumDark]}>{track.album}</Text>
+          <View style={styles.trackMetaRow}>
+            <Text style={[styles.trackMetaText, isDarkMode && styles.trackMetaTextDark]}>
+              {track.source}
+            </Text>
+            <Text style={[styles.trackMetaText, isDarkMode && styles.trackMetaTextDark]}>
+              {formatDuration(track.duration)}
+            </Text>
+          </View>
+          <Text style={[styles.playedAtText, isDarkMode && styles.playedAtTextDark]}>
+            Played {formatDate(track.played_at)}
+          </Text>
+        </View>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          onPlay(track);
+        }}
+        style={({ pressed }) => [
+          styles.trackActionButton,
+          isDarkMode && styles.trackActionButtonDark,
+          pressed && (isDarkMode ? styles.trackActionButtonPressedDark : styles.trackActionButtonPressed),
+        ]}
+      >
+        <Text style={[styles.trackActionText, isDarkMode && styles.trackActionTextDark]}>{playLabel}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 export function HomeScreen() {
-  const { selectedFolder } = useSettings();
+  const { authSession, backendUrl, themePreference } = useSettings();
   const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
-  const [files, setFiles] = useState<MusicFile[]>([]);
+  const [tracks, setTracks] = useState<LastPlayedTrack[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const hasSelectedFolder = selectedFolder !== null;
-  const folderContent = hasSelectedFolder ? (
-    <FlatList
-      className="mt-4"
-      contentContainerStyle={{ paddingBottom: 24 }}
-      data={files}
-      keyExtractor={(item) => item.id}
-      refreshControl={<RefreshControl refreshing={isLoading} onRefresh={() => void loadFiles()} />}
-      ListEmptyComponent={
-        isLoading ? (
-          <View className="items-center justify-center py-16">
-            <ActivityIndicator color="#0f766e" size="large" />
-            <Text className="mt-4 text-sm text-slate-600 dark:text-slate-400">Scanning folders recursively…</Text>
-          </View>
-        ) : (
-          <View className="rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-6 dark:border-slate-700 dark:bg-slate-900">
-            <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              No playable files found
-            </Text>
-            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-              The selected folder does not contain any supported audio files yet.
-            </Text>
-          </View>
-        )
-      }
-      renderItem={({ item }) => {
-        const playerKey = `device:${item.id}`;
-        const isCurrentTrack = currentTrack?.key === playerKey;
+  const isDarkMode = themePreference === 'dark';
 
-        return (
-        <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-          <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.name}</Text>
-              <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{item.pathLabel}</Text>
-            </View>
-            <View className="rounded-full bg-teal-100 px-3 py-1 dark:bg-teal-950/60">
-              <Text className="text-xs font-semibold uppercase tracking-[1px] text-teal-700">
-                {item.extension}
-              </Text>
-            </View>
-          </View>
-          <View className="mt-4 flex-row justify-between">
-            <Text className="text-xs font-medium uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
-              {formatFileSize(item.size)}
-            </Text>
-            <Text className="text-xs font-medium uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
-              {formatModifiedAt(item.modifiedAt)}
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            className="mt-4 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
-            onPress={() => {
-              if (isCurrentTrack) {
-                togglePlayPause();
-                return;
-              }
-
-              playTrack({
-                id: item.id,
-                key: playerKey,
-                title: item.name,
-                artist: 'Local file',
-                album: selectedFolder?.name,
-                description: item.pathLabel,
-                duration: undefined,
-                source: 'device',
-                url: item.uri,
-              });
-            }}
-          >
-            <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {isCurrentTrack && isPlaying ? 'Pause track' : isCurrentTrack ? 'Resume track' : 'Play track'}
-            </Text>
-          </Pressable>
-        </View>
-      );
-      }}
-    />
-  ) : (
-    <View className="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-white px-4 py-6 dark:border-slate-700 dark:bg-slate-900">
-      <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">No folder selected yet</Text>
-      <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-        Move to the Settings tab and choose a folder from your device. The app will scan it
-        recursively for {PLAYABLE_AUDIO_EXTENSIONS.join(', ')} files.
-      </Text>
-    </View>
-  );
-
-  async function loadFiles() {
-    if (!selectedFolder) {
-      setFiles([]);
+  async function loadRecentTracks() {
+    if (!authSession) {
+      setTracks([]);
       setErrorMessage(null);
       return;
     }
@@ -148,75 +130,435 @@ export function HomeScreen() {
     setErrorMessage(null);
 
     try {
-      const nextFiles = await MusicFolderAccess.listPlayableFiles(
-        selectedFolder.id,
-        [...PLAYABLE_AUDIO_EXTENSIONS],
-      );
-      setFiles(nextFiles);
+      const response = await fetchLastPlayedTracks(backendUrl, authSession, 20);
+      setTracks(response.tracks);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'The selected folder could not be scanned.',
-      );
-      setFiles([]);
+      setErrorMessage(error instanceof Error ? error.message : 'Recent tracks could not be loaded.');
+      setTracks([]);
     } finally {
       setIsLoading(false);
     }
   }
 
+  async function handlePlayTrack(track: LastPlayedTrack) {
+    const playerKey = `${track.source}:${track.track_id}`;
+    if (currentTrack?.key === playerKey) {
+      togglePlayPause();
+      return;
+    }
+
+    if (!authSession) {
+      return;
+    }
+
+    if (track.source === 'spotify') {
+      setErrorMessage('Spotify playback from recent tracks is only available for tracks with a preview clip.');
+      return;
+    }
+
+    try {
+      const playbackTrack =
+        track.source === 'tidal'
+          ? await fetchStreamingTrack(backendUrl, authSession, track.track_id, track.source)
+          : null;
+
+      playTrack({
+        id: track.track_id,
+        key: playerKey,
+        userTrackId: track.id,
+        title: playbackTrack?.title ?? track.title,
+        artist: playbackTrack?.artist ?? track.artist,
+        album: playbackTrack?.album ?? track.album,
+        artworkUrl: playbackTrack?.cover_url ?? track.cover_url,
+        duration: playbackTrack?.duration ?? track.duration ?? undefined,
+        source: track.source,
+        url:
+          track.source === 'tidal'
+            ? ''
+            : await fetchTrackStreamUrl(backendUrl, authSession, track.track_id, track.source),
+        backendUrl: track.source === 'tidal' ? backendUrl : undefined,
+        sessionToken: track.source === 'tidal' ? authSession.sessionToken : undefined,
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to play recent track.');
+    }
+  }
+
   useEffect(() => {
-    void loadFiles();
-  }, [selectedFolder?.id]);
+    void loadRecentTracks();
+  }, [authSession, backendUrl]);
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={["left", "right"]}>
-      <View className="flex-1 px-5 pb-6 pt-4">
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
+    <SafeAreaView style={[styles.safeArea, isDarkMode && styles.safeAreaDark]} edges={['left', 'right']}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.heroCard, isDarkMode && styles.cardDark]}>
+          <Text style={[styles.heroEyebrow, isDarkMode && styles.heroEyebrowDark]}>
             Home
           </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Music Library
-          </Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            {selectedFolder
-              ? `Showing playable files from ${selectedFolder.name}.`
-              : 'Select a music folder in Settings to start scanning your files.'}
+          <Text style={[styles.heroTitle, isDarkMode && styles.heroTitleDark]}>Recently Played</Text>
+          <Text style={[styles.heroDescription, isDarkMode && styles.heroDescriptionDark]}>
+            Resume the saved user-library tracks you played most recently.
           </Text>
         </View>
 
-        {selectedFolder ? (
-          <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
-            <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
-              Selected Folder
-            </Text>
-            <Text className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
-              {selectedFolder.name}
-            </Text>
-            <Text className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedFolder.pathLabel}</Text>
-            <View className="mt-4 flex-row items-center justify-between">
-              <Text className="text-sm text-slate-600 dark:text-slate-400">{files.length} playable files found</Text>
-              <Pressable
-                accessibilityRole="button"
-                className="rounded-full bg-slate-900 px-4 py-2 active:bg-slate-700"
-                onPress={() => {
-                  void loadFiles();
-                }}
-              >
-                <Text className="text-sm font-semibold text-white">Refresh</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
         {errorMessage ? (
-          <View className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-4">
-            <Text className="text-sm font-semibold text-rose-900">Folder scan failed</Text>
-            <Text className="mt-1 text-sm text-rose-700">{errorMessage}</Text>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Recent tracks failed to load</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
           </View>
         ) : null}
 
-        {folderContent}
-      </View>
+        <View style={[styles.refreshCard, isDarkMode && styles.cardDark]}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isLoading}
+            onPress={() => {
+              void loadRecentTracks();
+            }}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              isDarkMode && styles.refreshButtonDark,
+              pressed && (isDarkMode ? styles.refreshButtonPressedDark : styles.refreshButtonPressed),
+              isLoading && styles.disabledButton,
+            ]}
+          >
+            <Text style={[styles.refreshButtonText, isDarkMode && styles.refreshButtonTextDark]}>
+              Refresh recent tracks
+            </Text>
+          </Pressable>
+        </View>
+
+        {!authSession ? (
+          <View style={[styles.emptyStateCard, isDarkMode && styles.emptyStateCardDark]}>
+            <Text style={[styles.emptyStateTitle, isDarkMode && styles.emptyStateTitleDark]}>Login required</Text>
+            <Text style={[styles.emptyStateDescription, isDarkMode && styles.emptyStateDescriptionDark]}>
+              Recently played history is tracked for saved backend user tracks, so sign in to see it here.
+            </Text>
+          </View>
+        ) : isLoading ? (
+          <View style={[styles.loadingCard, isDarkMode && styles.cardDark]}>
+            <ActivityIndicator color="#0f766e" />
+          </View>
+        ) : tracks.length === 0 ? (
+          <View style={[styles.emptyStateCard, isDarkMode && styles.emptyStateCardDark]}>
+            <Text style={[styles.emptyStateTitle, isDarkMode && styles.emptyStateTitleDark]}>No recent tracks yet</Text>
+            <Text style={[styles.emptyStateDescription, isDarkMode && styles.emptyStateDescriptionDark]}>
+              Start playback from your saved tracks or playlists and those user tracks will appear here.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.trackList}>
+            {tracks.map((track) => (
+              <LastPlayedTrackCard
+                isDarkMode={isDarkMode}
+                isCurrentTrack={currentTrack?.key === `${track.source}:${track.track_id}`}
+                isPlaying={isPlaying}
+                key={track.id}
+                onPlay={(selectedTrack) => {
+                  void handlePlayTrack(selectedTrack);
+                }}
+                track={track}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  safeAreaDark: {
+    backgroundColor: '#020617',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  cardDark: {
+    backgroundColor: '#0f172a',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  heroCard: {
+    borderRadius: 28,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    shadowColor: '#cbd5e1',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  heroEyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: '#64748b',
+  },
+  heroEyebrowDark: {
+    color: '#94a3b8',
+  },
+  heroTitle: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  heroTitleDark: {
+    color: '#f1f5f9',
+  },
+  heroDescription: {
+    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  heroDescriptionDark: {
+    color: '#94a3b8',
+  },
+  errorCard: {
+    marginTop: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    backgroundColor: '#fff1f2',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#881337',
+  },
+  errorMessage: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#be123c',
+  },
+  refreshCard: {
+    marginTop: 16,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: '#cbd5e1',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  refreshButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  refreshButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#020617',
+  },
+  refreshButtonPressed: {
+    backgroundColor: '#f1f5f9',
+  },
+  refreshButtonPressedDark: {
+    backgroundColor: '#1e293b',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  refreshButtonText: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  refreshButtonTextDark: {
+    color: '#e2e8f0',
+  },
+  emptyStateCard: {
+    marginTop: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+  },
+  emptyStateCardDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0f172a',
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  emptyStateTitleDark: {
+    color: '#f1f5f9',
+  },
+  emptyStateDescription: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  emptyStateDescriptionDark: {
+    color: '#94a3b8',
+  },
+  loadingCard: {
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+    shadowColor: '#cbd5e1',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  trackList: {
+    marginTop: 16,
+  },
+  trackCard: {
+    marginBottom: 12,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: '#cbd5e1',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  trackRow: {
+    flexDirection: 'row',
+    columnGap: 16,
+  },
+  coverImage: {
+    height: 64,
+    width: 64,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+  },
+  coverImageDark: {
+    backgroundColor: '#1e293b',
+  },
+  coverFallback: {
+    height: 64,
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+  },
+  coverFallbackDark: {
+    backgroundColor: '#1e293b',
+  },
+  sourceText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: '#64748b',
+  },
+  sourceTextDark: {
+    color: '#94a3b8',
+  },
+  trackInfo: {
+    flex: 1,
+  },
+  trackTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  trackTitleDark: {
+    color: '#f1f5f9',
+  },
+  trackArtist: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#475569',
+  },
+  trackArtistDark: {
+    color: '#cbd5e1',
+  },
+  trackAlbum: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#64748b',
+  },
+  trackAlbumDark: {
+    color: '#94a3b8',
+  },
+  trackMetaRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  trackMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: '#94a3b8',
+  },
+  trackMetaTextDark: {
+    color: '#64748b',
+  },
+  playedAtText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  playedAtTextDark: {
+    color: '#64748b',
+  },
+  trackActionButton: {
+    marginTop: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  trackActionButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#020617',
+  },
+  trackActionButtonPressed: {
+    backgroundColor: '#f1f5f9',
+  },
+  trackActionButtonPressedDark: {
+    backgroundColor: '#1e293b',
+  },
+  trackActionText: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  trackActionTextDark: {
+    color: '#e2e8f0',
+  },
+});

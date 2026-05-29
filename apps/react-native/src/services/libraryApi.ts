@@ -2,6 +2,8 @@ import type { AuthSession } from '../types/auth';
 import type {
   FavouriteTrack,
   FavouriteTracksListResponse,
+  LastPlayedTrack,
+  LastPlayedTracksListResponse,
   LibraryPlaylistListResponse,
   LibraryPlaylist,
   LibraryPlaylistItem,
@@ -89,6 +91,30 @@ async function refreshSavedTidalTrackMetadata(
   }
 }
 
+async function refreshLastPlayedTidalTrackMetadata(
+  backendUrl: string,
+  authSession: AuthSession,
+  track: LastPlayedTrack,
+): Promise<LastPlayedTrack> {
+  if (!hasStaleTidalMetadata(track)) {
+    return track;
+  }
+
+  try {
+    const liveTrack = await fetchStreamingTrack(backendUrl, authSession, track.track_id, 'tidal');
+    return {
+      ...track,
+      title: liveTrack.title || track.title,
+      artist: liveTrack.artist || track.artist,
+      album: liveTrack.album || track.album,
+      duration: liveTrack.duration ?? track.duration,
+      cover_url: liveTrack.cover_url ?? track.cover_url,
+    };
+  } catch {
+    return track;
+  }
+}
+
 async function refreshPlaylistItemTidalMetadata(
   backendUrl: string,
   authSession: AuthSession,
@@ -154,6 +180,43 @@ export async function fetchFavouriteTracks(
   });
 
   return parseApiResponse<FavouriteTracksListResponse>(response);
+}
+
+export async function fetchLastPlayedTracks(
+  backendUrl: string,
+  authSession: AuthSession,
+  limit = 20,
+): Promise<LastPlayedTracksListResponse> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams({
+    limit: limit.toString(),
+  });
+  const response = await fetch(`${normalizedUrl}/api/last-played-tracks?${searchParams.toString()}`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  const payload = await parseApiResponse<LastPlayedTracksListResponse>(response);
+  return {
+    ...payload,
+    tracks: await Promise.all(
+      payload.tracks.map((track) => refreshLastPlayedTidalTrackMetadata(backendUrl, authSession, track)),
+    ),
+  };
+}
+
+export async function recordLastPlayedTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  userTrackId: string,
+): Promise<LastPlayedTrack> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/last-played-tracks`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify({ user_track_id: userTrackId }),
+  });
+
+  return parseApiResponse<LastPlayedTrack>(response);
 }
 
 async function addFavouriteTrackWithPayload(

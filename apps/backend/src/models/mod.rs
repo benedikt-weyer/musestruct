@@ -36,6 +36,7 @@ pub mod user_queue_item;
 pub mod user_session;
 pub mod user_track;
 pub mod favourite_track;
+pub mod last_played_track;
 pub mod saved_track;
 pub mod saved_album;
 pub mod queue_item;
@@ -79,6 +80,7 @@ pub use user_queue_item::{Entity as UserQueueItemEntity, Model as UserQueueItemM
 pub use user_session::{Entity as UserSessionEntity, Model as UserSessionModel, ActiveModel as UserSessionActiveModel, Column as UserSessionColumn};
 pub use user_track::{Entity as UserTrackEntity, Model as UserTrackModel, ActiveModel as UserTrackActiveModel, Column as UserTrackColumn};
 pub use favourite_track::{Entity as FavouriteTrackEntity, Model as FavouriteTrackModel, ActiveModel as FavouriteTrackActiveModel, Column as FavouriteTrackColumn};
+pub use last_played_track::{Entity as LastPlayedTrackEntity, Model as LastPlayedTrackModel, ActiveModel as LastPlayedTrackActiveModel, Column as LastPlayedTrackColumn};
 pub use saved_track::{Entity as SavedTrackEntity, Model as SavedTrackModel, ActiveModel as SavedTrackActiveModel, Column as SavedTrackColumn};
 pub use saved_album::{Entity as SavedAlbumEntity, Model as SavedAlbumModel, ActiveModel as SavedAlbumActiveModel, Column as SavedAlbumColumn};
 pub use queue_item::{Entity as QueueItemEntity, Model as QueueItemModel, ActiveModel as QueueItemActiveModel, Column as QueueItemColumn};

@@ -6,6 +6,7 @@ mod m20250115_000007_create_user_streaming_services_table;
 mod m20250920_124747_add_account_username_to_streaming_services;
 mod m20260529_000001_create_provider_canonical_music_schema;
 mod m20260529_000002_create_favourite_tracks_table;
+mod m20260529_000003_create_last_played_tracks_table;
 
 pub struct Migrator;
 
@@ -19,6 +20,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250920_124747_add_account_username_to_streaming_services::Migration),
             Box::new(m20260529_000001_create_provider_canonical_music_schema::Migration),
             Box::new(m20260529_000002_create_favourite_tracks_table::Migration),
+            Box::new(m20260529_000003_create_last_played_tracks_table::Migration),
         ]
     }
 }

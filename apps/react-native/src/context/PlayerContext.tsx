@@ -13,6 +13,8 @@ import {
   stopPlayback,
   type PlaybackStatus,
 } from '../native/playback';
+import { recordLastPlayedTrack } from '../services/libraryApi';
+import { useSettings } from './SettingsContext';
 import type { PlayerLoopMode, PlayerPlayMode, PlayerTrack, QueueTrack } from '../types/player';
 
 type PlaylistTrackResolver = (track: QueueTrack) => Promise<PlayerTrack>;
@@ -161,6 +163,7 @@ function buildAdvancedSession(
 }
 
 export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
+  const { authSession, backendUrl } = useSettings();
   const [currentTrack, setCurrentTrack] = useState<PlayerTrack | null>(null);
   const [playlistSession, setPlaylistSession] = useState<PlaylistSession | null>(null);
   const [isPaused, setIsPaused] = useState(true);
@@ -171,6 +174,7 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const playlistResolverRef = useRef<PlaylistTrackResolver | null>(null);
   const lastStatusRef = useRef<PlaybackStatus | null>(null);
+  const lastRecordedTrackRef = useRef<string | null>(null);
 
   function updatePlaybackState(status: PlaybackStatus) {
     maybeAdvanceFinishedPlaylist(status);
@@ -339,6 +343,24 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentTrack?.userTrackId || !authSession) {
+      return;
+    }
+
+    const recordKey = `${currentTrack.key}:${currentTrack.userTrackId}`;
+    if (lastRecordedTrackRef.current === recordKey) {
+      return;
+    }
+
+    lastRecordedTrackRef.current = recordKey;
+    void recordLastPlayedTrack(backendUrl, authSession, currentTrack.userTrackId).catch(() => {
+      if (lastRecordedTrackRef.current === recordKey) {
+        lastRecordedTrackRef.current = null;
+      }
+    });
+  }, [authSession, backendUrl, currentTrack?.key, currentTrack?.userTrackId]);
 
   function playTrack(track: PlayerTrack) {
     playResolvedTrack(track, false);

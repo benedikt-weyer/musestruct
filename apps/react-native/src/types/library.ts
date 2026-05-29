@@ -42,6 +42,26 @@ export type FavouriteTracksListResponse = {
   limit: number;
 };
 
+export type LastPlayedTrack = {
+  id: string;
+  canonical_track_id: string;
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration?: number | null;
+  source: string;
+  cover_url?: string | null;
+  played_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LastPlayedTracksListResponse = {
+  tracks: LastPlayedTrack[];
+  limit: number;
+};
+
 export type LibraryPlaylist = {
   id: string;
   canonical_playlist_id?: string | null;
@@ -63,6 +83,7 @@ export type LibraryPlaylistItem = {
   id: string;
   item_type: string;
   item_id: string;
+  user_track_id?: string | null;
   position: number;
   added_at: string;
   title?: string | null;
