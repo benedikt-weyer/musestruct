@@ -13,6 +13,8 @@ theme:
 nav:
   - Overview: index.md
   - Setup Overview: setup-overview.md
+  - Backend:
+      - Database Schema: backend/database-schema.md
   - Providers:
       - Spotify: providers/spotify.md
       - Tidal: providers/tidal.md
@@ -21,5 +23,10 @@ nav:
 markdown_extensions:
   - admonition
   - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - toc:
       permalink: true
