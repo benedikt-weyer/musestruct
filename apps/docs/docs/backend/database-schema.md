@@ -2,12 +2,12 @@
 
 This page documents the current PostgreSQL schema used by the backend after the music-library rewrite.
 
-The source of truth is the migration set registered in `apps/backend/src/migrator/mod.rs`, especially `m20260529_000001_create_provider_canonical_music_schema.rs`. Historical migration files may still exist in the repository, but only the migrations listed in `Migrator::migrations()` define the active schema. The active model is split into four layers:
+The source of truth is the migration set registered in `apps/backend/src/migrator/mod.rs`, especially `m20260529_000001_create_provider_canonical_music_schema.rs` and `m20260529_000002_create_favourite_tracks_table.rs`. Historical migration files may still exist in the repository, but only the migrations listed in `Migrator::migrations()` define the active schema. The active model is split into four layers:
 
 - identity and auth tables
 - provider cache tables per user and provider
 - canonical cross-provider tables for track, album, and playlist matching
-- user-facing library tables for saved tracks, playlists, playlist items, and queue state
+- user-facing library tables for saved tracks, favourite tracks, playlists, playlist items, and queue state
 
 ## Layer Overview
 
@@ -55,6 +55,7 @@ The canonical layer deduplicates equivalent items across providers. Each canonic
 ### User library tables
 
 - `user_tracks`
+- `favourite_tracks`
 - `user_playlists`
 - `user_playlist_items`
 - `queue_items`
@@ -62,6 +63,7 @@ The canonical layer deduplicates equivalent items across providers. Each canonic
 These tables define the actual user-facing library and queue.
 
 - `user_tracks` stores saved tracks and preserves the chosen playback source through `source` and `provider_track_id`.
+- `favourite_tracks` references `user_tracks` and duplicates display/search metadata so the favourites view can be served without another provider lookup.
 - `user_playlists` stores both editable playlists and imported watched playlists through `is_read_only`, `is_watched`, and `last_synced_at`.
 - `user_playlist_items` links playlists to `user_tracks` or nested playlists.
 - `queue_items` references `user_tracks` only. Queue metadata is no longer duplicated into the queue table.
@@ -81,7 +83,7 @@ The active migration also creates operational indexes beyond the table definitio
     - `canonical_tracks(normalized_title, normalized_artist)`
     - `canonical_albums(normalized_name, normalized_artist)`
     - `canonical_playlists(normalized_name)`
-- user-scoped indexes on `user_tracks.user_id`, `user_playlists.user_id`, `user_playlist_items.playlist_id`, and `queue_items.user_id`
+- user-scoped indexes on `user_tracks.user_id`, `favourite_tracks.user_id`, `user_playlists.user_id`, `user_playlist_items.playlist_id`, and `queue_items.user_id`
 
 ## ER Diagram
 
@@ -343,6 +345,17 @@ erDiagram
         string album_name
     }
 
+    favourite_tracks {
+        uuid id PK
+        uuid user_id FK
+        uuid user_track_id FK
+        string source
+        string provider_track_id
+        string title
+        string artist
+        string album_name
+    }
+
     user_playlists {
         uuid id PK
         uuid user_id FK
@@ -430,6 +443,8 @@ erDiagram
 
     users ||--o{ user_tracks : saves
     canonical_tracks ||--o{ user_tracks : materialized_as
+    users ||--o{ favourite_tracks : hearts
+    user_tracks ||--o{ favourite_tracks : favorited_as
     users ||--o{ user_playlists : owns
     canonical_playlists ||--o{ user_playlists : imported_as
     user_playlists ||--o{ user_playlist_items : contains
@@ -445,6 +460,7 @@ erDiagram
 - Canonical rows are the cross-provider reconciliation layer. They are not directly user-owned.
 - `match_status` and `unresolved_reason` allow the backend to represent ambiguous canonical matches instead of forcing a bad merge.
 - `user_tracks` is the playback boundary for saved tracks. Queue items and playlist items resolve through user tracks instead of embedding provider metadata in multiple places.
+- `favourite_tracks` is a thin, user-scoped overlay on `user_tracks`, so removing a saved track also removes any favourite that points to it.
 - `user_playlists` supports two modes: editable user playlists and watched read-only imports.
 - `user_playlist_items` uses real foreign keys instead of the previous stringly typed `item_id` approach.
 

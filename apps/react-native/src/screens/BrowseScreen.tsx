@@ -20,7 +20,7 @@ import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { AuthSession } from '../types/auth';
-import { importProviderPlaylist } from '../services/libraryApi';
+import { addFavouriteStreamingTrack, importProviderPlaylist } from '../services/libraryApi';
 import {
   getStoredBrowseSearchScope,
   getStoredBrowseSearchType,
@@ -207,12 +207,14 @@ function getEmptyStateMessage({
 function BrowseTrackCard({
   isCurrentTrack,
   isPlaying,
+  onFavourite,
   onPlay,
   onSave,
   track,
 }: Readonly<{
   isCurrentTrack: boolean;
   isPlaying: boolean;
+  onFavourite: (track: StreamingTrack) => void;
   onPlay: (track: StreamingTrack) => void;
   onSave: (track: StreamingTrack) => void;
   track: StreamingTrack;
@@ -275,6 +277,16 @@ function BrowseTrackCard({
           }}
         >
           <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Add track to library</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+          onPress={() => {
+            onFavourite(track);
+          }}
+        >
+          <Text className="text-center text-sm font-semibold text-rose-700">Heart</Text>
         </Pressable>
       </View>
     </View>
@@ -688,6 +700,28 @@ export function BrowseScreen() {
     }
   }
 
+  async function handleFavouriteTrack(track: StreamingTrack) {
+    if (!authSession) {
+      showToast('Please log in before hearting tracks.');
+      return;
+    }
+
+    try {
+      await addFavouriteStreamingTrack(backendUrl, authSession, {
+        track_id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration ?? 0,
+        source: track.source,
+        cover_url: track.cover_url ?? undefined,
+      });
+      showToast(`Hearted ${track.title}.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to favourite track.');
+    }
+  }
+
   async function handlePlayTrack(track: StreamingTrack) {
     const playerKey = `${track.source}:${track.id}`;
     const isCurrentTrack = currentTrack?.key === playerKey;
@@ -947,6 +981,7 @@ export function BrowseScreen() {
                     isCurrentTrack={currentTrack?.key === `${track.source}:${track.id}`}
                     isPlaying={isPlaying}
                     key={`${track.source}:${track.id}`}
+                    onFavourite={handleFavouriteTrack}
                     onPlay={handlePlayTrack}
                     onSave={handleSaveTrack}
                     track={track}

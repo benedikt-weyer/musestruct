@@ -8,12 +8,35 @@ export type SavedTrack = {
   duration?: number | null;
   source: string;
   cover_url?: string | null;
+  is_favourite: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FavouriteTrack = {
+  id: string;
+  user_track_id: string;
+  canonical_track_id: string;
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration?: number | null;
+  source: string;
+  cover_url?: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type SavedTracksListResponse = {
   tracks: SavedTrack[];
+  total_count: number;
+  page: number;
+  limit: number;
+};
+
+export type FavouriteTracksListResponse = {
+  tracks: FavouriteTrack[];
   total_count: number;
   page: number;
   limit: number;
@@ -59,4 +82,4 @@ export type LibraryPlaylistListResponse = {
   per_page: number;
 };
 
-export type LibrarySection = 'playlists' | 'tracks';
+export type LibrarySection = 'playlists' | 'tracks' | 'favourites';

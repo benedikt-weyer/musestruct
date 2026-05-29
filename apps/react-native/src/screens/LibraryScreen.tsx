@@ -17,15 +17,18 @@ import { usePlayer } from '../context/PlayerContext';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import {
+  addFavouriteTrack,
+  deleteFavouriteTrack,
   deleteLibraryPlaylist,
   deleteSavedTrack,
+  fetchFavouriteTracks,
   fetchLibraryPlaylistItems,
   fetchLibraryPlaylists,
   fetchSavedTracks,
   refreshWatchedPlaylist,
 } from '../services/libraryApi';
 import { fetchStreamingTrack, fetchTrackStreamUrl } from '../services/streamingLibraryApi';
-import type { LibraryPlaylist, LibraryPlaylistItem, LibrarySection, SavedTrack } from '../types/library';
+import type { FavouriteTrack, LibraryPlaylist, LibraryPlaylistItem, LibrarySection, SavedTrack } from '../types/library';
 import type { PlayerPlayMode, QueueTrack } from '../types/player';
 
 type LibrarySectionOption = {
@@ -35,6 +38,11 @@ type LibrarySectionOption = {
 };
 
 const LIBRARY_SECTIONS: LibrarySectionOption[] = [
+  {
+    key: 'favourites',
+    label: 'Favourites',
+    subtitle: 'Hearted tracks layered on top of your saved library tracks.',
+  },
   {
     key: 'playlists',
     label: 'Playlists',
@@ -128,16 +136,22 @@ function EmptyLibraryState({
 }
 
 function TrackLibraryCard({
+  heartLabel,
   isRemoving,
   isCurrentTrack,
+  isUpdatingFavourite,
   isPlaying,
+  onHeart,
   onPlay,
   onRemove,
   track,
 }: Readonly<{
+  heartLabel?: string;
   isRemoving: boolean;
   isCurrentTrack: boolean;
+  isUpdatingFavourite?: boolean;
   isPlaying: boolean;
+  onHeart?: (track: SavedTrack) => void;
   onPlay: (track: SavedTrack) => void;
   onRemove: (track: SavedTrack) => void;
   track: SavedTrack;
@@ -190,6 +204,21 @@ function TrackLibraryCard({
           </Text>
         </Pressable>
 
+        {onHeart ? (
+          <Pressable
+            accessibilityRole="button"
+            className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
+            disabled={isUpdatingFavourite}
+            onPress={() => {
+              onHeart(track);
+            }}
+          >
+            <Text className="text-center text-sm font-semibold text-rose-700">
+              {isUpdatingFavourite ? 'Updating...' : heartLabel ?? 'Heart'}
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           className="rounded-full border border-rose-200 bg-rose-50 px-4 py-3 active:bg-rose-100"
@@ -205,6 +234,23 @@ function TrackLibraryCard({
       </View>
     </View>
   );
+}
+
+function mapFavouriteToSavedTrack(track: FavouriteTrack): SavedTrack {
+  return {
+    id: track.user_track_id,
+    canonical_track_id: track.canonical_track_id,
+    track_id: track.track_id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    duration: track.duration,
+    source: track.source,
+    cover_url: track.cover_url,
+    is_favourite: true,
+    created_at: track.created_at,
+    updated_at: track.updated_at,
+  };
 }
 
 function PlaylistBadge({ label }: Readonly<{ label: string }>) {
@@ -384,9 +430,12 @@ function ActiveLibrarySection({
   currentPlaylistId,
   currentTrackKey,
   deletingItemKey,
+  favouriteActionKey,
+  favourites,
   isPlaying,
   onOpenPlaylist,
   onPlayPlaylist,
+  onToggleFavourite,
   onPlayTrack,
   onRefreshPlaylist,
   onRemovePlaylist,
@@ -401,9 +450,12 @@ function ActiveLibrarySection({
   currentPlaylistId: string | null;
   currentTrackKey: string | null;
   deletingItemKey: string | null;
+  favouriteActionKey: string | null;
+  favourites: FavouriteTrack[];
   isPlaying: boolean;
   onOpenPlaylist: (playlist: LibraryPlaylist) => void;
   onPlayPlaylist: (playlist: LibraryPlaylist, playMode: PlayerPlayMode) => void;
+  onToggleFavourite: (track: SavedTrack) => void;
   onPlayTrack: (track: SavedTrack) => void;
   onRefreshPlaylist: (playlist: LibraryPlaylist) => void;
   onRemovePlaylist: (playlist: LibraryPlaylist) => void;
@@ -413,6 +465,32 @@ function ActiveLibrarySection({
   refreshingPlaylistId: string | null;
   tracks: SavedTrack[];
 }>) {
+  if (activeSection === 'favourites') {
+    return favourites.length === 0 ? (
+      <EmptyLibraryState
+        description="Heart tracks from Browse or your saved tracks list and they will show up here."
+        title="No favourites yet"
+      />
+    ) : (
+      <>
+        {favourites.map((track) => (
+          <TrackLibraryCard
+            heartLabel="Unheart"
+            isRemoving={deletingItemKey === `track:${track.user_track_id}`}
+            isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
+            isPlaying={isPlaying}
+            isUpdatingFavourite={favouriteActionKey === `track:${track.user_track_id}`}
+            key={track.id}
+            onHeart={onToggleFavourite}
+            onPlay={onPlayTrack}
+            onRemove={onRemoveTrack}
+            track={mapFavouriteToSavedTrack(track)}
+          />
+        ))}
+      </>
+    );
+  }
+
   if (activeSection === 'playlists') {
     return playlists.length === 0 ? (
       <EmptyLibraryState
@@ -455,9 +533,12 @@ function ActiveLibrarySection({
     <>
       {tracks.map((track) => (
         <TrackLibraryCard
+          heartLabel={track.is_favourite ? 'Unheart' : 'Heart'}
           isRemoving={deletingItemKey === `track:${track.id}`}
           isCurrentTrack={currentTrackKey === `${track.source}:${track.track_id}`}
           isPlaying={isPlaying}
+          isUpdatingFavourite={favouriteActionKey === `track:${track.id}`}
+          onHeart={onToggleFavourite}
           key={track.id}
           onPlay={onPlayTrack}
           onRemove={onRemoveTrack}
@@ -481,16 +562,19 @@ export function LibraryScreen() {
     togglePlayPause,
   } = usePlayer();
   const [activeSection, setActiveSection] = useState<LibrarySection>('tracks');
+  const [favourites, setFavourites] = useState<FavouriteTrack[]>([]);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingItemKey, setDeletingItemKey] = useState<string | null>(null);
+  const [favouriteActionKey, setFavouriteActionKey] = useState<string | null>(null);
   const [playlistActionKey, setPlaylistActionKey] = useState<string | null>(null);
   const [refreshingPlaylistId, setRefreshingPlaylistId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async () => {
     if (!authSession) {
+      setFavourites([]);
       setTracks([]);
       setPlaylists([]);
       setErrorMessage(null);
@@ -501,11 +585,13 @@ export function LibraryScreen() {
     setErrorMessage(null);
 
     try {
-      const [savedTracksResponse, playlistsResponse] = await Promise.all([
+      const [savedTracksResponse, favouriteTracksResponse, playlistsResponse] = await Promise.all([
         fetchSavedTracks(backendUrl, authSession),
+        fetchFavouriteTracks(backendUrl, authSession),
         fetchLibraryPlaylists(backendUrl, authSession),
       ]);
 
+      setFavourites(favouriteTracksResponse.tracks);
       setTracks(savedTracksResponse.tracks);
       setPlaylists(playlistsResponse.playlists);
     } catch (error) {
@@ -521,6 +607,7 @@ export function LibraryScreen() {
 
   const currentTrackKey = currentTrack?.key ?? null;
   const sectionCounts: Record<LibrarySection, number> = {
+    favourites: favourites.length,
     playlists: playlists.length,
     tracks: tracks.length,
   };
@@ -684,12 +771,54 @@ export function LibraryScreen() {
 
     try {
       await deleteSavedTrack(backendUrl, authSession, track.id);
+      setFavourites((currentFavourites) =>
+        currentFavourites.filter((item) => item.user_track_id !== track.id),
+      );
       setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id));
       setErrorMessage(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
     } finally {
       setDeletingItemKey((currentKey) => (currentKey === itemKey ? null : currentKey));
+    }
+  }
+
+  async function toggleFavouriteTrack(track: SavedTrack) {
+    if (!authSession) {
+      return;
+    }
+
+    const itemKey = `track:${track.id}`;
+    setFavouriteActionKey(itemKey);
+
+    try {
+      if (track.is_favourite) {
+        await deleteFavouriteTrack(backendUrl, authSession, track.id);
+        setFavourites((currentFavourites) =>
+          currentFavourites.filter((item) => item.user_track_id !== track.id),
+        );
+        setTracks((currentTracks) =>
+          currentTracks.map((item) =>
+            item.id === track.id ? { ...item, is_favourite: false } : item,
+          ),
+        );
+      } else {
+        const favourite = await addFavouriteTrack(backendUrl, authSession, track);
+        setFavourites((currentFavourites) => {
+          const next = currentFavourites.filter((item) => item.user_track_id !== track.id);
+          return [favourite, ...next];
+        });
+        setTracks((currentTracks) =>
+          currentTracks.map((item) =>
+            item.id === track.id ? { ...item, is_favourite: true } : item,
+          ),
+        );
+      }
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to update favourite track.');
+    } finally {
+      setFavouriteActionKey((currentKey) => (currentKey === itemKey ? null : currentKey));
     }
   }
 
@@ -829,6 +958,8 @@ export function LibraryScreen() {
                   currentPlaylistId={currentPlaylistId}
                   currentTrackKey={currentTrackKey}
                   deletingItemKey={deletingItemKey}
+                  favouriteActionKey={favouriteActionKey}
+                  favourites={favourites}
                   isPlaying={isPlaying}
                   onOpenPlaylist={(playlist) => {
                     navigation.navigate('PlaylistDetails', {
@@ -838,6 +969,7 @@ export function LibraryScreen() {
                     });
                   }}
                   onPlayPlaylist={handlePlayPlaylist}
+                  onToggleFavourite={toggleFavouriteTrack}
                   onPlayTrack={handlePlayTrack}
                   onRefreshPlaylist={handleRefreshPlaylist}
                   onRemovePlaylist={handleRemovePlaylist}

@@ -1,11 +1,14 @@
 import type { AuthSession } from '../types/auth';
 import type {
+  FavouriteTrack,
+  FavouriteTracksListResponse,
   LibraryPlaylistListResponse,
   LibraryPlaylist,
   LibraryPlaylistItem,
   SavedTrack,
   SavedTracksListResponse,
 } from '../types/library';
+import type { SavedTrackPayload } from '../types/streaming';
 import { normalizeBackendUrl } from './backendApi';
 import { fetchStreamingTrack } from './streamingLibraryApi';
 
@@ -135,6 +138,63 @@ export async function fetchSavedTracks(
   };
 }
 
+export async function fetchFavouriteTracks(
+  backendUrl: string,
+  authSession: AuthSession,
+  page = 1,
+  limit = 100,
+): Promise<FavouriteTracksListResponse> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const searchParams = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+  const response = await fetch(`${normalizedUrl}/api/favourite-tracks?${searchParams.toString()}`, {
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseApiResponse<FavouriteTracksListResponse>(response);
+}
+
+async function addFavouriteTrackWithPayload(
+  backendUrl: string,
+  authSession: AuthSession,
+  payload: SavedTrackPayload,
+): Promise<FavouriteTrack> {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/favourite-tracks`, {
+    method: 'POST',
+    headers: createAuthHeaders(authSession),
+    body: JSON.stringify(payload),
+  });
+
+  return parseApiResponse<FavouriteTrack>(response);
+}
+
+export async function addFavouriteTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  track: SavedTrack,
+): Promise<FavouriteTrack> {
+  return addFavouriteTrackWithPayload(backendUrl, authSession, {
+    track_id: track.track_id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    duration: track.duration ?? 0,
+    source: track.source,
+    cover_url: track.cover_url ?? undefined,
+  });
+}
+
+export async function addFavouriteStreamingTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  payload: SavedTrackPayload,
+): Promise<FavouriteTrack> {
+  return addFavouriteTrackWithPayload(backendUrl, authSession, payload);
+}
+
 export async function fetchLibraryPlaylists(
   backendUrl: string,
   authSession: AuthSession,
@@ -260,6 +320,20 @@ export async function deleteSavedTrack(
 ) {
   const normalizedUrl = normalizeBackendUrl(backendUrl);
   const response = await fetch(`${normalizedUrl}/api/saved-tracks/${id}`, {
+    method: 'DELETE',
+    headers: createAuthHeaders(authSession),
+  });
+
+  return parseMutationResponse(response);
+}
+
+export async function deleteFavouriteTrack(
+  backendUrl: string,
+  authSession: AuthSession,
+  userTrackId: string,
+) {
+  const normalizedUrl = normalizeBackendUrl(backendUrl);
+  const response = await fetch(`${normalizedUrl}/api/favourite-tracks/${userTrackId}`, {
     method: 'DELETE',
     headers: createAuthHeaders(authSession),
   });

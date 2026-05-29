@@ -18,7 +18,8 @@ use crate::models::{
     CanonicalAlbumActiveModel, CanonicalAlbumColumn, CanonicalAlbumEntity, CanonicalAlbumTrackActiveModel,
     CanonicalAlbumTrackEntity, CanonicalPlaylistActiveModel, CanonicalPlaylistColumn, CanonicalPlaylistEntity,
     CanonicalPlaylistTrackActiveModel, CanonicalPlaylistTrackEntity, CanonicalTrackActiveModel,
-    CanonicalTrackColumn, CanonicalTrackEntity, QobuzAlbumActiveModel, QobuzAlbumColumn, QobuzAlbumEntity,
+    CanonicalTrackColumn, CanonicalTrackEntity, FavouriteTrackActiveModel, FavouriteTrackColumn,
+    FavouriteTrackEntity, FavouriteTrackModel, QobuzAlbumActiveModel, QobuzAlbumColumn, QobuzAlbumEntity,
     QobuzAlbumTrackActiveModel, QobuzAlbumTrackEntity, QobuzPlaylistActiveModel, QobuzPlaylistColumn,
     QobuzPlaylistEntity, QobuzPlaylistTrackActiveModel, QobuzPlaylistTrackEntity, QobuzTrackActiveModel,
     QobuzTrackColumn, QobuzTrackEntity, ServerAlbumActiveModel, ServerAlbumColumn, ServerAlbumEntity,
@@ -201,6 +202,23 @@ pub struct UserTrackSummary {
     pub album_name: Option<String>,
     pub duration: Option<i32>,
     pub cover_url: Option<String>,
+    pub is_favourite: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FavouriteTrackSummary {
+    pub id: Uuid,
+    pub user_track_id: Uuid,
+    pub canonical_track_id: Uuid,
+    pub provider_track_id: String,
+    pub source: String,
+    pub title: String,
+    pub artist: String,
+    pub album_name: Option<String>,
+    pub duration: Option<i32>,
+    pub cover_url: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -486,7 +504,166 @@ impl LibrarySyncService {
             .all(db)
             .await?;
 
-        Ok((rows.into_iter().map(user_track_summary).collect(), total))
+        let favourite_track_ids = FavouriteTrackEntity::find()
+            .filter(FavouriteTrackColumn::UserId.eq(user_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|favourite| favourite.user_track_id)
+            .collect::<HashSet<_>>();
+
+        Ok((
+            rows.into_iter()
+                .map(|row| {
+                    let is_favourite = favourite_track_ids.contains(&row.id);
+                    user_track_summary(row, is_favourite)
+                })
+                .collect(),
+            total,
+        ))
+    }
+
+    pub async fn ensure_favourite_track_from_input(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        provider: LibraryProvider,
+        provider_track_id: &str,
+        title: &str,
+        artist: &str,
+        album_name: Option<&str>,
+        duration: Option<i32>,
+        cover_url: Option<&str>,
+    ) -> Result<(FavouriteTrackModel, crate::models::UserTrackModel)> {
+        let user_track = Self::ensure_user_track_from_input(
+            db,
+            user_id,
+            provider,
+            provider_track_id,
+            title,
+            artist,
+            album_name,
+            duration,
+            cover_url,
+        )
+        .await?;
+
+        let favourite = Self::ensure_favourite_track(db, user_id, &user_track).await?;
+        Ok((favourite, user_track))
+    }
+
+    pub async fn ensure_favourite_track(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        user_track: &crate::models::UserTrackModel,
+    ) -> Result<FavouriteTrackModel> {
+        if let Some(existing) = FavouriteTrackEntity::find()
+            .filter(FavouriteTrackColumn::UserId.eq(user_id))
+            .filter(FavouriteTrackColumn::UserTrackId.eq(user_track.id))
+            .one(db)
+            .await?
+        {
+            let mut active = existing.into_active_model();
+            active.source = Set(user_track.source.clone());
+            active.provider_track_id = Set(user_track.provider_track_id.clone());
+            active.title = Set(user_track.title.clone());
+            active.artist = Set(user_track.artist.clone());
+            active.album_name = Set(user_track.album_name.clone());
+            active.duration = Set(user_track.duration);
+            active.cover_url = Set(user_track.cover_url.clone());
+            return active.update(db).await.map_err(Into::into);
+        }
+
+        FavouriteTrackActiveModel {
+            user_id: Set(user_id),
+            user_track_id: Set(user_track.id),
+            source: Set(user_track.source.clone()),
+            provider_track_id: Set(user_track.provider_track_id.clone()),
+            title: Set(user_track.title.clone()),
+            artist: Set(user_track.artist.clone()),
+            album_name: Set(user_track.album_name.clone()),
+            duration: Set(user_track.duration),
+            cover_url: Set(user_track.cover_url.clone()),
+            ..FavouriteTrackActiveModel::new()
+        }
+        .insert(db)
+        .await
+        .map_err(Into::into)
+    }
+
+    pub async fn list_favourite_tracks(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        search: Option<&str>,
+        page: u64,
+        limit: u64,
+    ) -> Result<(Vec<FavouriteTrackSummary>, u64)> {
+        let mut query = FavouriteTrackEntity::find().filter(FavouriteTrackColumn::UserId.eq(user_id));
+        if let Some(search_value) = search.filter(|value| !value.trim().is_empty()) {
+            query = query.filter(
+                FavouriteTrackColumn::Title
+                    .contains(search_value)
+                    .or(FavouriteTrackColumn::Artist.contains(search_value))
+                    .or(FavouriteTrackColumn::AlbumName.contains(search_value)),
+            );
+        }
+
+        let total = query.clone().count(db).await?;
+        let rows = query
+            .order_by_asc(FavouriteTrackColumn::Artist)
+            .order_by_asc(FavouriteTrackColumn::Title)
+            .offset((page.saturating_sub(1)) * limit)
+            .limit(limit)
+            .all(db)
+            .await?;
+
+        let user_track_ids = rows.iter().map(|row| row.user_track_id).collect::<Vec<_>>();
+        let user_track_map = UserTrackEntity::find()
+            .filter(UserTrackColumn::UserId.eq(user_id))
+            .filter(UserTrackColumn::Id.is_in(user_track_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|track| (track.id, track))
+            .collect::<HashMap<_, _>>();
+
+        Ok((
+            rows.into_iter()
+                .filter_map(|row| {
+                    user_track_map
+                        .get(&row.user_track_id)
+                        .map(|user_track| favourite_track_summary(row, user_track))
+                })
+                .collect(),
+            total,
+        ))
+    }
+
+    pub async fn remove_favourite_track(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        user_track_id: Uuid,
+    ) -> Result<bool> {
+        let result = FavouriteTrackEntity::delete_many()
+            .filter(FavouriteTrackColumn::UserId.eq(user_id))
+            .filter(FavouriteTrackColumn::UserTrackId.eq(user_track_id))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected > 0)
+    }
+
+    pub async fn is_track_favourite(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        provider: LibraryProvider,
+        provider_track_id: &str,
+    ) -> Result<bool> {
+        let existing = FavouriteTrackEntity::find()
+            .filter(FavouriteTrackColumn::UserId.eq(user_id))
+            .filter(FavouriteTrackColumn::Source.eq(provider.as_str()))
+            .filter(FavouriteTrackColumn::ProviderTrackId.eq(provider_track_id))
+            .one(db)
+            .await?;
+        Ok(existing.is_some())
     }
 
     pub async fn remove_user_track(db: &DatabaseConnection, user_id: Uuid, user_track_id: Uuid) -> Result<bool> {
@@ -635,7 +812,7 @@ impl LibrarySyncService {
     }
 }
 
-fn user_track_summary(model: crate::models::UserTrackModel) -> UserTrackSummary {
+fn user_track_summary(model: crate::models::UserTrackModel, is_favourite: bool) -> UserTrackSummary {
     UserTrackSummary {
         id: model.id,
         canonical_track_id: model.canonical_track_id,
@@ -646,6 +823,27 @@ fn user_track_summary(model: crate::models::UserTrackModel) -> UserTrackSummary 
         album_name: model.album_name,
         duration: model.duration,
         cover_url: model.cover_url,
+        is_favourite,
+    }
+}
+
+fn favourite_track_summary(
+    favourite: FavouriteTrackModel,
+    user_track: &crate::models::UserTrackModel,
+) -> FavouriteTrackSummary {
+    FavouriteTrackSummary {
+        id: favourite.id,
+        user_track_id: favourite.user_track_id,
+        canonical_track_id: user_track.canonical_track_id,
+        provider_track_id: favourite.provider_track_id,
+        source: favourite.source,
+        title: favourite.title,
+        artist: favourite.artist,
+        album_name: favourite.album_name,
+        duration: favourite.duration,
+        cover_url: favourite.cover_url,
+        created_at: favourite.created_at,
+        updated_at: favourite.updated_at,
     }
 }
 
