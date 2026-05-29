@@ -608,7 +608,7 @@ pub async fn search_music(
     MultiValueQuery(params): MultiValueQuery<StreamingSearchQuery>,
 ) -> Result<Json<ApiResponse<SearchResults>>, (StatusCode, Json<ApiResponse<()>>)> {
     // Determine which services to search
-    let services_to_search = if let Some(services) = &params.services {
+    let mut services_to_search = if let Some(services) = &params.services {
         if services.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
@@ -622,6 +622,9 @@ pub async fn search_music(
         vec!["qobuz".to_string()] // Default to qobuz
     };
 
+    services_to_search.sort();
+    services_to_search.dedup();
+
     let mut all_tracks = Vec::new();
     let mut all_albums = Vec::new();
     let mut all_playlists = Vec::new();
@@ -631,6 +634,19 @@ pub async fn search_music(
     // Determine search type and mode
     let search_type = params.r#type.as_deref().unwrap_or("track");
     let is_library_search = params.library.as_deref() == Some("true");
+    let requested_offset = params.offset.unwrap_or(0);
+    let requested_limit = params.limit.unwrap_or(20);
+    let use_global_pagination = services_to_search.len() > 1;
+    let per_service_offset = if use_global_pagination {
+        Some(0)
+    } else {
+        params.offset
+    };
+    let per_service_limit = if use_global_pagination {
+        Some(requested_offset.saturating_add(requested_limit))
+    } else {
+        params.limit
+    };
     println!("Backend: Search type: {}, Library search: {}", search_type, is_library_search);
     println!("Backend: Services to search: {:?}", services_to_search);
 
@@ -641,7 +657,7 @@ pub async fn search_music(
                 if is_library_search {
                     // Library search
                     println!("Backend: Searching library on {} for query: {} with type: {}", service_name, params.q, search_type);
-                    match service.search_library(&params.q, Some(search_type), params.limit, params.offset).await {
+                    match service.search_library(&params.q, Some(search_type), per_service_limit, per_service_offset).await {
                         Ok(results) => {
                             all_tracks.extend(results.tracks);
                             all_albums.extend(results.albums);
@@ -656,7 +672,7 @@ pub async fn search_music(
                 } else if search_type == "playlist" {
                     // Search for playlists
                     println!("Backend: Searching playlists on {} for query: {}", service_name, params.q);
-                    match service.search_playlists(&params.q, params.limit, params.offset).await {
+                    match service.search_playlists(&params.q, per_service_limit, per_service_offset).await {
                         Ok(playlists) => {
                             let playlist_count = playlists.len() as u32;
                             println!("Backend: Found {} playlists on {}", playlist_count, service_name);
@@ -670,7 +686,7 @@ pub async fn search_music(
                     }
                 } else {
                     // Search for tracks and albums
-                    match service.search(&params.q, params.limit, params.offset).await {
+                    match service.search(&params.q, per_service_limit, per_service_offset).await {
                         Ok(results) => {
                             all_tracks.extend(results.tracks);
                             all_albums.extend(results.albums);
@@ -712,27 +728,51 @@ pub async fn search_music(
         }
     }
 
-    total_results = match search_type {
-        "album" => all_albums.len() as u32,
-        "playlist" => all_playlists.len() as u32,
-        _ => all_tracks.len() as u32,
-    };
+    all_tracks.sort_by(|a, b| {
+        a.title
+            .to_lowercase()
+            .cmp(&b.title.to_lowercase())
+            .then_with(|| a.title.cmp(&b.title))
+    });
+    all_albums.sort_by(|a, b| {
+        a.title
+            .to_lowercase()
+            .cmp(&b.title.to_lowercase())
+            .then_with(|| a.title.cmp(&b.title))
+    });
+    all_playlists.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
-    // Sort tracks by relevance (you could implement more sophisticated sorting)
-    all_tracks.sort_by(|a, b| a.title.cmp(&b.title));
-    all_albums.sort_by(|a, b| a.title.cmp(&b.title));
-    all_playlists.sort_by(|a, b| a.name.cmp(&b.name));
-    
-    // Limit results if needed
-    let limit = params.limit.unwrap_or(20) as usize;
-    if all_tracks.len() > limit {
-        all_tracks.truncate(limit);
+    if !use_global_pagination {
+        total_results = match search_type {
+            "album" => all_albums.len() as u32,
+            "playlist" => all_playlists.len() as u32,
+            _ => all_tracks.len() as u32,
+        };
     }
-    if all_albums.len() > limit {
-        all_albums.truncate(limit);
-    }
-    if all_playlists.len() > limit {
-        all_playlists.truncate(limit);
+
+    if use_global_pagination {
+        let start = requested_offset as usize;
+        let end = start.saturating_add(requested_limit as usize);
+
+        all_tracks = all_tracks.into_iter().skip(start).take(end.saturating_sub(start)).collect();
+        all_albums = all_albums.into_iter().skip(start).take(end.saturating_sub(start)).collect();
+        all_playlists = all_playlists.into_iter().skip(start).take(end.saturating_sub(start)).collect();
+    } else {
+        let limit = requested_limit as usize;
+        if all_tracks.len() > limit {
+            all_tracks.truncate(limit);
+        }
+        if all_albums.len() > limit {
+            all_albums.truncate(limit);
+        }
+        if all_playlists.len() > limit {
+            all_playlists.truncate(limit);
+        }
     }
 
     let combined_results = SearchResults {
@@ -740,8 +780,8 @@ pub async fn search_music(
         albums: all_albums,
         playlists: all_playlists.clone(),
         total: total_results,
-        offset: params.offset.unwrap_or(0),
-        limit: params.limit.unwrap_or(20),
+        offset: requested_offset,
+        limit: requested_limit,
     };
 
     println!("Backend: Returning search results - {} tracks, {} albums, {} playlists", 
