@@ -17,7 +17,7 @@ type ApiResponse<T> = {
 
 type SearchOptions = {
   services?: string[];
-  type?: 'track' | 'album' | 'playlist';
+  type?: 'all' | 'track' | 'album' | 'playlist';
   library?: boolean;
   limit?: number;
   offset?: number;
@@ -44,7 +44,7 @@ function createSearchQuery(query: string, options: SearchOptions) {
   const searchParams = new URLSearchParams();
   searchParams.set('q', query);
 
-  if (options.type) {
+  if (options.type && options.type !== 'all') {
     searchParams.set('type', options.type);
   }
 

@@ -35,6 +35,7 @@ import type {
 } from '../types/streaming';
 
 type BrowseSearchType = 'track' | 'album' | 'playlist';
+type BrowseResultMode = 'all' | BrowseSearchType;
 type BrowseSearchScope = 'all' | 'library';
 
 function showToast(message: string) {
@@ -73,16 +74,20 @@ function getSearchPlaceholder(searchType: BrowseSearchType, searchScope: BrowseS
 }
 
 function getVisibleResultCount(
-  searchType: BrowseSearchType,
+  resultMode: BrowseResultMode,
   tracks: StreamingTrack[],
   albums: StreamingAlbum[],
   playlists: StreamingPlaylist[],
 ) {
-  if (searchType === 'track') {
+  if (resultMode === 'all') {
+    return tracks.length + albums.length + playlists.length;
+  }
+
+  if (resultMode === 'track') {
     return tracks.length;
   }
 
-  if (searchType === 'album') {
+  if (resultMode === 'album') {
     return albums.length;
   }
 
@@ -100,22 +105,26 @@ function getEmptyStateMessage({
   searchScope: BrowseSearchScope;
   searchType: BrowseSearchType;
 }>) {
-  const serverOnlyMessages: Record<BrowseSearchType, string> = {
+  const serverOnlyMessages: Record<BrowseResultMode, string> = {
+    all: 'Search your server music to see matching tracks, albums, and playlists here.',
     track: 'Search your server music to see matching tracks here.',
     album: 'Search your server music to see matching albums here.',
     playlist: 'Search your server music to see matching playlists here.',
   };
-  const libraryMessages: Record<BrowseSearchType, string> = {
+  const libraryMessages: Record<BrowseResultMode, string> = {
+    all: 'Search your provider library for tracks, cached albums, and playlists all at once.',
     track: 'Search your saved provider tracks to see matches here.',
     album: 'Search your cached provider albums to see matches here.',
     playlist: 'Search your provider library playlists to see matches here.',
   };
-  const allProviderMessages: Record<BrowseSearchType, string> = {
+  const allProviderMessages: Record<BrowseResultMode, string> = {
+    all: 'Search across all connected providers to see matching tracks, albums, and playlists.',
     track: 'Search across all connected providers to see matching tracks.',
     album: 'Search across all connected providers to see matching albums.',
     playlist: 'Search across all connected providers to see matching playlists.',
   };
-  const singleProviderMessages: Record<BrowseSearchType, string> = {
+  const singleProviderMessages: Record<BrowseResultMode, string> = {
+    all: 'Search a connected provider to see matching tracks, albums, and playlists.',
     track: 'Search a connected provider to see matching tracks.',
     album: 'Search a connected provider to see matching albums.',
     playlist: 'Search a connected provider to see matching playlists.',
@@ -355,6 +364,7 @@ export function BrowseScreen() {
   const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<BrowseSearchType>('track');
+  const [resultMode, setResultMode] = useState<BrowseResultMode>('track');
   const [searchScope, setSearchScope] = useState<BrowseSearchScope>('all');
   const [availableServices, setAvailableServices] = useState<AvailableService[]>([]);
   const [serviceStatus, setServiceStatus] = useState<ConnectedServiceInfo[]>([]);
@@ -469,14 +479,25 @@ export function BrowseScreen() {
     );
   }
 
-  async function handleSearch(page = 0) {
+  async function handleSearch(
+    page = 0,
+    options?: {
+      allowEmptyQuery?: boolean;
+      forceScope?: BrowseSearchScope;
+      includeAllTypes?: boolean;
+    },
+  ) {
     if (!authSession) {
       setErrorMessage('Please log in before browsing providers.');
       return;
     }
 
     const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
+    const allowEmptyQuery = options?.allowEmptyQuery ?? false;
+    const nextScope = options?.forceScope ?? searchScope;
+    const includeAllTypes = options?.includeAllTypes ?? false;
+
+    if (!trimmedQuery && !allowEmptyQuery) {
       setErrorMessage('Enter a search term first.');
       return;
     }
@@ -492,8 +513,8 @@ export function BrowseScreen() {
     try {
       const results = await searchStreamingCatalog(backendUrl, authSession, trimmedQuery, {
         services: selectedServices,
-        type: searchType,
-        library: searchScope === 'library',
+        type: includeAllTypes ? 'all' : searchType,
+        library: nextScope === 'library',
         limit: SEARCH_PAGE_SIZE,
         offset: page * SEARCH_PAGE_SIZE,
       });
@@ -501,6 +522,7 @@ export function BrowseScreen() {
       setTracks(results.tracks);
       setAlbums(results.albums);
       setPlaylists(results.playlists);
+      setResultMode(includeAllTypes ? 'all' : searchType);
       setCurrentPage(page);
       setHasSearched(true);
     } catch (error) {
@@ -602,9 +624,14 @@ export function BrowseScreen() {
     }
   }
 
-  const visibleResultCount = getVisibleResultCount(searchType, tracks, albums, playlists);
+  const visibleResultCount = getVisibleResultCount(resultMode, tracks, albums, playlists);
   const hasPreviousPage = currentPage > 0;
-  const hasNextPage = visibleResultCount === SEARCH_PAGE_SIZE;
+  const hasNextPage =
+    resultMode === 'all'
+      ? tracks.length === SEARCH_PAGE_SIZE ||
+        albums.length === SEARCH_PAGE_SIZE ||
+        playlists.length === SEARCH_PAGE_SIZE
+      : visibleResultCount === SEARCH_PAGE_SIZE;
 
   if (!authSession) {
     return (
@@ -694,7 +721,7 @@ export function BrowseScreen() {
                 Scope
               </Text>
               <View className="mt-2 flex-row flex-wrap gap-2">
-                <FilterChip disabled={isServerOnlySelected} isSelected={searchScope === 'all'} label="All" onPress={() => {
+                <FilterChip disabled={isServerOnlySelected} isSelected={searchScope === 'all'} label="Providers" onPress={() => {
                   setSearchScope('all');
                 }} />
                 <FilterChip disabled={isServerOnlySelected} isSelected={searchScope === 'library'} label="My Library" onPress={() => {
@@ -775,6 +802,25 @@ export function BrowseScreen() {
               <Text className="text-center text-base font-semibold text-white">Search providers</Text>
             )}
           </Pressable>
+
+          {searchScope === 'library' ? (
+            <Pressable
+              accessibilityRole="button"
+              className="mt-3 rounded-full border border-slate-200 bg-white px-5 py-4 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+              disabled={isSearching || isBootstrapping}
+              onPress={() => {
+                void handleSearch(0, {
+                  allowEmptyQuery: true,
+                  forceScope: 'library',
+                  includeAllTypes: true,
+                });
+              }}
+            >
+              <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
+                Search All In My Library
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
@@ -823,7 +869,7 @@ export function BrowseScreen() {
           </View>
         ) : null}
 
-        {searchType === 'track' ? (
+        {resultMode === 'all' || resultMode === 'track' ? (
           <View className="mt-4">
             <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
               Tracks
@@ -856,7 +902,7 @@ export function BrowseScreen() {
           </View>
         ) : null}
 
-        {searchType === 'album' ? (
+        {resultMode === 'all' || resultMode === 'album' ? (
           <View className="mt-4">
             <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
               Albums
@@ -882,7 +928,7 @@ export function BrowseScreen() {
           </View>
         ) : null}
 
-        {searchType === 'playlist' ? (
+        {resultMode === 'all' || resultMode === 'playlist' ? (
           <View className="mt-4">
             <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
               Playlists

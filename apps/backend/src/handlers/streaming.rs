@@ -632,7 +632,8 @@ pub async fn search_music(
     let mut search_errors = Vec::new();
 
     // Determine search type and mode
-    let search_type = params.r#type.as_deref().unwrap_or("track");
+    let search_type = params.r#type.as_deref();
+    let is_all_types_search = search_type.is_none() || search_type == Some("all");
     let is_library_search = params.library.as_deref() == Some("true");
     let requested_offset = params.offset.unwrap_or(0);
     let requested_limit = params.limit.unwrap_or(20);
@@ -647,7 +648,11 @@ pub async fn search_music(
     } else {
         params.limit
     };
-    println!("Backend: Search type: {}, Library search: {}", search_type, is_library_search);
+    println!(
+        "Backend: Search type: {}, Library search: {}",
+        search_type.unwrap_or("all"),
+        is_library_search
+    );
     println!("Backend: Services to search: {:?}", services_to_search);
 
     // Search each service
@@ -655,9 +660,58 @@ pub async fn search_music(
         match get_authenticated_streaming_service(service_name, user.id, state.db()).await {
             Ok(service) => {
                 if is_library_search {
-                    // Library search
-                    println!("Backend: Searching library on {} for query: {} with type: {}", service_name, params.q, search_type);
-                    match service.search_library(&params.q, Some(search_type), per_service_limit, per_service_offset).await {
+                    if is_all_types_search {
+                        for library_type in ["track", "album", "playlist"] {
+                            println!(
+                                "Backend: Searching library on {} for query: {} with type: {}",
+                                service_name,
+                                params.q,
+                                library_type
+                            );
+                            match service
+                                .search_library(
+                                    &params.q,
+                                    Some(library_type),
+                                    per_service_limit,
+                                    per_service_offset,
+                                )
+                                .await
+                            {
+                                Ok(results) => {
+                                    all_tracks.extend(results.tracks);
+                                    all_albums.extend(results.albums);
+                                    all_playlists.extend(results.playlists);
+                                    total_results += results.total;
+                                }
+                                Err(err) => {
+                                    println!(
+                                        "Backend: Error searching library on {} for type {}: {}",
+                                        service_name,
+                                        library_type,
+                                        err
+                                    );
+                                    search_errors.push(format!("{} {}: {}", service_name, library_type, err));
+                                }
+                            }
+                        }
+                    } else {
+                        let search_type = search_type.unwrap();
+                        println!("Backend: Searching library on {} for query: {} with type: {}", service_name, params.q, search_type);
+                        match service.search_library(&params.q, Some(search_type), per_service_limit, per_service_offset).await {
+                            Ok(results) => {
+                                all_tracks.extend(results.tracks);
+                                all_albums.extend(results.albums);
+                                all_playlists.extend(results.playlists);
+                                total_results += results.total;
+                            },
+                            Err(err) => {
+                                println!("Backend: Error searching library on {}: {}", service_name, err);
+                                search_errors.push(format!("{}: {}", service_name, err));
+                            }
+                        }
+                    }
+                } else if is_all_types_search {
+                    match service.search(&params.q, per_service_limit, per_service_offset).await {
                         Ok(results) => {
                             all_tracks.extend(results.tracks);
                             all_albums.extend(results.albums);
@@ -665,11 +719,21 @@ pub async fn search_music(
                             total_results += results.total;
                         },
                         Err(err) => {
-                            println!("Backend: Error searching library on {}: {}", service_name, err);
                             search_errors.push(format!("{}: {}", service_name, err));
                         }
                     }
-                } else if search_type == "playlist" {
+
+                    match service.search_playlists(&params.q, per_service_limit, per_service_offset).await {
+                        Ok(playlists) => {
+                            let playlist_count = playlists.len() as u32;
+                            all_playlists.extend(playlists);
+                            total_results += playlist_count;
+                        },
+                        Err(err) => {
+                            search_errors.push(format!("{} playlists: {}", service_name, err));
+                        }
+                    }
+                } else if search_type == Some("playlist") {
                     // Search for playlists
                     println!("Backend: Searching playlists on {} for query: {}", service_name, params.q);
                     match service.search_playlists(&params.q, per_service_limit, per_service_offset).await {
@@ -714,18 +778,19 @@ pub async fn search_music(
     }
 
     match search_type {
-        "album" => {
+        Some("album") => {
             all_tracks.clear();
             all_playlists.clear();
         }
-        "playlist" => {
+        Some("playlist") => {
             all_tracks.clear();
             all_albums.clear();
         }
-        _ => {
+        Some("track") => {
             all_albums.clear();
             all_playlists.clear();
         }
+        _ => {}
     }
 
     all_tracks.sort_by(|a, b| {
@@ -749,9 +814,10 @@ pub async fn search_music(
 
     if !use_global_pagination {
         total_results = match search_type {
-            "album" => all_albums.len() as u32,
-            "playlist" => all_playlists.len() as u32,
-            _ => all_tracks.len() as u32,
+            Some("album") => all_albums.len() as u32,
+            Some("playlist") => all_playlists.len() as u32,
+            Some("track") => all_tracks.len() as u32,
+            _ => all_tracks.len() as u32 + all_albums.len() as u32 + all_playlists.len() as u32,
         };
     }
 
