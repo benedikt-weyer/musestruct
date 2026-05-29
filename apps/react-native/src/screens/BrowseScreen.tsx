@@ -47,6 +47,15 @@ type BrowseSearchType = 'track' | 'album' | 'playlist';
 type BrowseResultMode = 'all' | BrowseSearchType;
 type BrowseSearchScope = 'all' | 'library';
 
+type BrowseSearchRequest = {
+  allowEmptyQuery: boolean;
+  includeAllTypes: boolean;
+  query: string;
+  scope: BrowseSearchScope;
+  searchType: BrowseSearchType;
+  services: string[];
+};
+
 function getAllLibraryButtonLabel(searchType: BrowseSearchType) {
   if (searchType === 'track') {
     return 'Search All Tracks In My Library';
@@ -494,6 +503,7 @@ export function BrowseScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [lastSearchRequest, setLastSearchRequest] = useState<BrowseSearchRequest | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -636,17 +646,30 @@ export function BrowseScreen() {
       return;
     }
 
-    const trimmedQuery = query.trim();
-    const allowEmptyQuery = options?.allowEmptyQuery ?? false;
-    const nextScope = options?.forceScope ?? searchScope;
-    const includeAllTypes = options?.includeAllTypes ?? false;
+    const isPaginationRequest = page > 0 || (page === 0 && currentPage > 0 && !options);
+    const request: BrowseSearchRequest =
+      isPaginationRequest && lastSearchRequest
+        ? lastSearchRequest
+        : {
+            allowEmptyQuery: options?.allowEmptyQuery ?? false,
+            includeAllTypes: options?.includeAllTypes ?? false,
+            query,
+            scope: options?.forceScope ?? searchScope,
+            searchType,
+            services: selectedServices,
+          };
+
+    const trimmedQuery = request.query.trim();
+    const allowEmptyQuery = request.allowEmptyQuery;
+    const nextScope = request.scope;
+    const includeAllTypes = request.includeAllTypes;
 
     if (!trimmedQuery && !allowEmptyQuery) {
       setErrorMessage('Enter a search term first.');
       return;
     }
 
-    if (selectedServices.length === 0) {
+    if (request.services.length === 0) {
       setErrorMessage('Select at least one connected provider to search.');
       return;
     }
@@ -656,8 +679,8 @@ export function BrowseScreen() {
 
     try {
       const results = await searchStreamingCatalog(backendUrl, authSession, trimmedQuery, {
-        services: selectedServices,
-        type: includeAllTypes ? 'all' : searchType,
+        services: request.services,
+        type: includeAllTypes ? 'all' : request.searchType,
         library: nextScope === 'library',
         limit: SEARCH_PAGE_SIZE,
         offset: page * SEARCH_PAGE_SIZE,
@@ -666,9 +689,10 @@ export function BrowseScreen() {
       setTracks(results.tracks);
       setAlbums(results.albums);
       setPlaylists(results.playlists);
-      setResultMode(includeAllTypes ? 'all' : searchType);
+      setResultMode(includeAllTypes ? 'all' : request.searchType);
       setCurrentPage(page);
       setHasSearched(true);
+      setLastSearchRequest(request);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'Music search failed unexpectedly.',
