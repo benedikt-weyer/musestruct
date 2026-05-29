@@ -8,8 +8,12 @@ const SELECTED_FOLDER_KEY = 'settings.selectedMusicFolder';
 const BACKEND_URL_KEY = 'settings.backendUrl';
 const AUTH_SESSION_KEY = 'settings.authSession';
 const THEME_PREFERENCE_KEY = 'settings.themePreference';
+const BROWSE_SEARCH_TYPE_KEY = 'settings.browseSearchType';
+const BROWSE_SEARCH_SCOPE_KEY = 'settings.browseSearchScope';
 
 export type ThemePreference = 'light' | 'dark';
+export type StoredBrowseSearchType = 'track' | 'album' | 'playlist';
+export type StoredBrowseSearchScope = 'all' | 'library';
 
 export const settingsStorage = createMMKV({
   id: 'musestruct-native-settings',
@@ -83,4 +87,32 @@ export function getStoredThemePreference(): ThemePreference {
 
 export function persistThemePreference(themePreference: ThemePreference) {
   settingsStorage.set(THEME_PREFERENCE_KEY, themePreference);
+}
+
+export function getStoredBrowseSearchType(): StoredBrowseSearchType {
+  const browseSearchType = settingsStorage.getString(BROWSE_SEARCH_TYPE_KEY);
+
+  if (browseSearchType === 'album' || browseSearchType === 'playlist') {
+    return browseSearchType;
+  }
+
+  return 'track';
+}
+
+export function persistBrowseSearchType(browseSearchType: StoredBrowseSearchType) {
+  settingsStorage.set(BROWSE_SEARCH_TYPE_KEY, browseSearchType);
+}
+
+export function getStoredBrowseSearchScope(): StoredBrowseSearchScope {
+  const browseSearchScope = settingsStorage.getString(BROWSE_SEARCH_SCOPE_KEY);
+
+  if (browseSearchScope === 'library') {
+    return 'library';
+  }
+
+  return 'all';
+}
+
+export function persistBrowseSearchScope(browseSearchScope: StoredBrowseSearchScope) {
+  settingsStorage.set(BROWSE_SEARCH_SCOPE_KEY, browseSearchScope);
 }

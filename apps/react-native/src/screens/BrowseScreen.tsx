@@ -20,6 +20,12 @@ import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList } from '../navigation/types';
 import { importProviderPlaylist } from '../services/libraryApi';
 import {
+  getStoredBrowseSearchScope,
+  getStoredBrowseSearchType,
+  persistBrowseSearchScope,
+  persistBrowseSearchType,
+} from '../storage/settingsStorage';
+import {
   fetchAvailableServices,
   fetchServiceStatus,
   fetchTrackStreamUrl,
@@ -389,9 +395,9 @@ export function BrowseScreen() {
   const { authSession, backendUrl } = useSettings();
   const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayer();
   const [query, setQuery] = useState('');
-  const [searchType, setSearchType] = useState<BrowseSearchType>('track');
+  const [searchType, setSearchType] = useState<BrowseSearchType>(() => getStoredBrowseSearchType());
   const [resultMode, setResultMode] = useState<BrowseResultMode>('track');
-  const [searchScope, setSearchScope] = useState<BrowseSearchScope>('all');
+  const [searchScope, setSearchScope] = useState<BrowseSearchScope>(() => getStoredBrowseSearchScope());
   const [availableServices, setAvailableServices] = useState<AvailableService[]>([]);
   const [serviceStatus, setServiceStatus] = useState<ConnectedServiceInfo[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -441,10 +447,15 @@ export function BrowseScreen() {
     void loadServices();
   }, [authSession, backendUrl]);
 
-  const connectedServices = useMemo(
-    () => serviceStatus.filter((service) => service.is_connected),
-    [serviceStatus],
-  );
+  const connectedServices = useMemo(() => {
+    const connectedNames = new Set(
+      serviceStatus
+        .filter((service) => service.is_connected)
+        .map((service) => service.name),
+    );
+
+    return availableServices.filter((service) => connectedNames.has(service.name));
+  }, [availableServices, serviceStatus]);
   const connectedServiceNames = useMemo(
     () => sortServiceNames(connectedServices.map((service) => service.name)),
     [connectedServices],
@@ -468,31 +479,52 @@ export function BrowseScreen() {
     }
   }, [isServerOnlySelected, searchScope]);
 
-  const searchPlaceholder = getSearchPlaceholder(searchType, searchScope);
+  useEffect(() => {
+    persistBrowseSearchType(searchType);
+  }, [searchType]);
 
-  let connectedProvidersContent = (
-    <Text className="mt-3 text-sm leading-6 text-slate-600">
+  useEffect(() => {
+    persistBrowseSearchScope(searchScope);
+  }, [searchScope]);
+
+  const searchPlaceholder = getSearchPlaceholder(searchType, searchScope);
+  let providerFilterContent = (
+    <Text className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
       No providers are currently connected for this account.
     </Text>
   );
 
   if (isBootstrapping) {
-    connectedProvidersContent = (
-      <View className="py-6">
+    providerFilterContent = (
+      <View className="mt-3 py-4">
         <ActivityIndicator color="#0f766e" />
       </View>
     );
   } else if (connectedServices.length > 0) {
-    connectedProvidersContent = (
-      <View className="mt-3 gap-3">
-        {connectedServices.map((service) => (
-          <View key={service.name} className="rounded-[18px] bg-slate-50 px-4 py-3">
-            <Text className="text-sm font-semibold text-slate-900">{service.display_name}</Text>
-            <Text className="mt-1 text-sm text-slate-600">
-              {service.account_username ?? 'Connected'}
-            </Text>
-          </View>
-        ))}
+    providerFilterContent = (
+      <View className="mt-2 flex-row flex-wrap gap-2">
+        {connectedServices.map((service) => {
+          const isSelected = selectedServices.includes(service.name);
+          const chipClassName = isSelected
+            ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:bg-teal-950/40'
+            : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950';
+          const textClassName = isSelected
+            ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700'
+            : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200';
+
+          return (
+            <Pressable
+              key={service.name}
+              accessibilityRole="button"
+              className={chipClassName}
+              onPress={() => {
+                toggleService(service.name);
+              }}
+            >
+              <Text className={textClassName}>{service.display_name}</Text>
+            </Pressable>
+          );
+        })}
       </View>
     );
   }
@@ -667,16 +699,10 @@ export function BrowseScreen() {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-950" edges={['left', 'right']}>
         <View className="flex-1 px-5 pb-6 pt-4">
-          <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-            <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
-              Browse
-            </Text>
-            <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
-            <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-              Sign in first so the app can search connected providers, including your server music,
-              and add tracks or import watched playlists into your library.
-            </Text>
-          </View>
+          <Text className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Sign in first so the app can search connected providers, including your server music,
+            and add tracks or import playlists into your library.
+          </Text>
 
           <Pressable
             accessibilityRole="button"
@@ -699,18 +725,7 @@ export function BrowseScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 16 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="rounded-[28px] bg-white px-5 py-5 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-          <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-500 dark:text-slate-400">
-            Browse
-          </Text>
-          <Text className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">Music Providers</Text>
-          <Text className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Search connected providers for tracks, albums, or playlists, including music from your
-            own server. Tracks save directly, and playlists import as watched read-only collections.
-          </Text>
-        </View>
-
-        <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+        <View className="rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
           <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-teal-700">
             Search
           </Text>
@@ -764,58 +779,13 @@ export function BrowseScreen() {
                 </Text>
               ) : null}
             </View>
-          </View>
 
-          <View className="mt-4 flex-row flex-wrap gap-2">
-            <Pressable
-              accessibilityRole="button"
-              className={
-                isAllProvidersSelected
-                  ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:bg-teal-950/40'
-                  : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950'
-              }
-              disabled={connectedServiceNames.length === 0}
-              onPress={() => {
-                setSelectedServices(connectedServiceNames);
-              }}
-            >
-              <Text
-                className={
-                  isAllProvidersSelected
-                    ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700'
-                    : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200'
-                }
-              >
-                All providers
+            <View>
+              <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
+                Providers
               </Text>
-            </Pressable>
-            {availableServices.map((service) => {
-              const status = serviceStatus.find((entry) => entry.name === service.name);
-              const isSelected = selectedServices.includes(service.name);
-              const isConnected = status?.is_connected === true;
-              const chipClassName = isSelected
-                ? 'rounded-full border border-teal-200 bg-teal-50 px-3 py-2 dark:bg-teal-950/40'
-                : 'rounded-full border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950';
-              const textClassName = isSelected
-                ? 'text-xs font-semibold uppercase tracking-[1px] text-teal-700'
-                : 'text-xs font-semibold uppercase tracking-[1px] text-slate-700 dark:text-slate-200';
-
-              return (
-                <Pressable
-                  key={service.name}
-                  accessibilityRole="button"
-                  className={chipClassName}
-                  disabled={!isConnected}
-                  onPress={() => {
-                    toggleService(service.name);
-                  }}
-                >
-                  <Text className={textClassName}>
-                    {service.display_name} {isConnected ? '' : 'offline'}
-                  </Text>
-                </Pressable>
-              );
-            })}
+              {providerFilterContent}
+            </View>
           </View>
 
           <Pressable
@@ -850,13 +820,6 @@ export function BrowseScreen() {
               </Text>
             </Pressable>
           ) : null}
-        </View>
-
-        <View className="mt-4 rounded-[24px] border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
-          <Text className="text-xs font-semibold uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
-            Connected Providers
-          </Text>
-          {connectedProvidersContent}
         </View>
 
         {errorMessage ? (
