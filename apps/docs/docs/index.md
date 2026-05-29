@@ -6,7 +6,7 @@ This documentation site covers the current workspace layout, backend setup, and 
 
 - A current high-level overview of the repo and runtime pieces.
 - A backend caching reference that reflects the current implementation.
-- A backend database schema reference with an ER diagram.
+- A backend database schema reference for the provider-cache, canonical-match, and user-library layers.
 - Backend setup guidance that matches the live Rust backend and React Native client.
 - Provider setup guides for Spotify and Tidal.
 - Local/server source instructions for the backend-managed music directory.

@@ -1,8 +1,58 @@
 # Database Schema
 
-This page documents the current PostgreSQL schema used by the backend.
+This page documents the current PostgreSQL schema used by the backend after the music-library rewrite.
 
-The source of truth is the migration set in `apps/backend/src/migrator`, and the ER diagram below reflects the active tables and foreign-key relationships defined there.
+The source of truth is the migration set in `apps/backend/src/migrator`, especially `m20260529_000001_create_provider_canonical_music_schema.rs`. The active model is now split into four layers:
+
+- identity and auth tables
+- provider cache tables per user and provider
+- canonical cross-provider tables for track, album, and playlist matching
+- user-facing library tables for saved tracks, playlists, playlist items, and queue state
+
+## Layer Overview
+
+### Identity and auth
+
+- `users`
+- `user_sessions`
+- `user_streaming_services`
+
+These tables remain the entry point for authentication and provider connectivity. `user_streaming_services` stores provider credentials and account metadata used to refresh each provider cache.
+
+### Provider cache tables
+
+Each provider now has its own cache family:
+
+- Spotify: `spotify_tracks`, `spotify_albums`, `spotify_playlists`, `spotify_album_tracks`, `spotify_playlist_tracks`
+- Tidal: `tidal_tracks`, `tidal_albums`, `tidal_playlists`, `tidal_album_tracks`, `tidal_playlist_tracks`
+- Qobuz: `qobuz_tracks`, `qobuz_albums`, `qobuz_playlists`, `qobuz_album_tracks`, `qobuz_playlist_tracks`
+- Server/local: `server_tracks`, `server_albums`, `server_playlists`, `server_album_tracks`, `server_playlist_tracks`
+
+These tables are user-scoped caches of provider state. Each row preserves the provider's native identifier plus `provider_metadata` so the backend can rehydrate canonical matches and watched playlist imports without storing one generic provider table.
+
+### Canonical tables
+
+- `canonical_tracks`
+- `canonical_albums`
+- `canonical_playlists`
+- `canonical_album_tracks`
+- `canonical_playlist_tracks`
+
+The canonical layer deduplicates equivalent items across providers. Each canonical row can point at one provider row per provider family, and uses `match_status` plus `unresolved_reason` to represent ambiguous matches that still need resolution.
+
+### User library tables
+
+- `user_tracks`
+- `user_playlists`
+- `user_playlist_items`
+- `queue_items`
+
+These tables define the actual user-facing library and queue.
+
+- `user_tracks` stores saved tracks and preserves the chosen playback source through `source` and `provider_track_id`.
+- `user_playlists` stores both editable playlists and imported watched playlists through `is_read_only`, `is_watched`, and `last_synced_at`.
+- `user_playlist_items` links playlists to `user_tracks` or nested playlists.
+- `queue_items` references `user_tracks` only. Queue metadata is no longer duplicated into the queue table.
 
 ## ER Diagram
 
@@ -40,126 +90,342 @@ erDiagram
         timestamp updated_at
     }
 
-    albums {
-        uuid id PK
-        string title
-        string artist
-        date release_date
-        text cover_url
-        string external_id
-        string source
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    songs {
-        uuid id PK
-        uuid album_id FK
-        string title
-        string artist
-        integer duration
-        integer track_number
-        string external_id
-        text stream_url
-        text local_path
-        string source
-        string quality
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    playlists {
+    spotify_tracks {
         uuid id PK
         uuid user_id FK
-        string name
-        text description
-        boolean is_public
-        timestamp created_at
-        timestamp updated_at
+        string provider_track_id
+        string title
+        string artist
+        string album_name
+        integer duration
+        text cover_url
     }
 
-    playlist_songs {
+    spotify_albums {
+        uuid id PK
+        uuid user_id FK
+        string provider_album_id
+        string name
+        string artist
+        string track_signature
+    }
+
+    spotify_playlists {
+        uuid id PK
+        uuid user_id FK
+        string provider_playlist_id
+        string name
+        string owner_name
+        string content_signature
+    }
+
+    spotify_album_tracks {
+        uuid id PK
+        uuid album_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    spotify_playlist_tracks {
         uuid id PK
         uuid playlist_id FK
-        uuid song_id FK
+        uuid track_id FK
         integer position
-        timestamp added_at
     }
 
-    playlist_items {
+    tidal_tracks {
+        uuid id PK
+        uuid user_id FK
+        string provider_track_id
+        string title
+        string artist
+    }
+
+    tidal_albums {
+        uuid id PK
+        uuid user_id FK
+        string provider_album_id
+        string name
+        string artist
+    }
+
+    tidal_playlists {
+        uuid id PK
+        uuid user_id FK
+        string provider_playlist_id
+        string name
+        string owner_name
+    }
+
+    tidal_album_tracks {
+        uuid id PK
+        uuid album_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    tidal_playlist_tracks {
+        uuid id PK
+        uuid playlist_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    qobuz_tracks {
+        uuid id PK
+        uuid user_id FK
+        string provider_track_id
+        string title
+        string artist
+    }
+
+    qobuz_albums {
+        uuid id PK
+        uuid user_id FK
+        string provider_album_id
+        string name
+        string artist
+    }
+
+    qobuz_playlists {
+        uuid id PK
+        uuid user_id FK
+        string provider_playlist_id
+        string name
+        string owner_name
+    }
+
+    qobuz_album_tracks {
+        uuid id PK
+        uuid album_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    qobuz_playlist_tracks {
+        uuid id PK
+        uuid playlist_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    server_tracks {
+        uuid id PK
+        uuid user_id FK
+        string provider_track_id
+        string title
+        string artist
+    }
+
+    server_albums {
+        uuid id PK
+        uuid user_id FK
+        string provider_album_id
+        string name
+        string artist
+    }
+
+    server_playlists {
+        uuid id PK
+        uuid user_id FK
+        string provider_playlist_id
+        string name
+        string owner_name
+    }
+
+    server_album_tracks {
+        uuid id PK
+        uuid album_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    server_playlist_tracks {
+        uuid id PK
+        uuid playlist_id FK
+        uuid track_id FK
+        integer position
+    }
+
+    canonical_tracks {
+        uuid id PK
+        string title
+        string artist
+        string normalized_title
+        string normalized_artist
+        string match_status
+        string unresolved_reason
+        uuid spotify_track_id FK
+        uuid tidal_track_id FK
+        uuid qobuz_track_id FK
+        uuid server_track_id FK
+    }
+
+    canonical_albums {
+        uuid id PK
+        string name
+        string artist
+        string normalized_name
+        string normalized_artist
+        string track_signature
+        string match_status
+        uuid spotify_album_id FK
+        uuid tidal_album_id FK
+        uuid qobuz_album_id FK
+        uuid server_album_id FK
+    }
+
+    canonical_playlists {
+        uuid id PK
+        string name
+        string normalized_name
+        string content_signature
+        string match_status
+        uuid spotify_playlist_id FK
+        uuid tidal_playlist_id FK
+        uuid qobuz_playlist_id FK
+        uuid server_playlist_id FK
+    }
+
+    canonical_album_tracks {
+        uuid id PK
+        uuid album_id FK
+        uuid canonical_track_id FK
+        integer position
+    }
+
+    canonical_playlist_tracks {
+        uuid id PK
+        uuid playlist_id FK
+        uuid canonical_track_id FK
+        integer position
+    }
+
+    user_tracks {
+        uuid id PK
+        uuid user_id FK
+        uuid canonical_track_id FK
+        string source
+        string provider_track_id
+        string title
+        string artist
+        string album_name
+    }
+
+    user_playlists {
+        uuid id PK
+        uuid user_id FK
+        uuid canonical_playlist_id FK
+        string source
+        string provider_playlist_id
+        string name
+        boolean is_public
+        boolean is_read_only
+        boolean is_watched
+        timestamp last_synced_at
+    }
+
+    user_playlist_items {
         uuid id PK
         uuid playlist_id FK
         string item_type
-        string item_id
+        uuid user_track_id FK
+        uuid nested_playlist_id FK
         integer position
-        timestamp added_at
-        string title
-        string artist
-        string album
-        integer duration
-        string source
-        string cover_url
-        string playlist_name
-    }
-
-    saved_tracks {
-        uuid id PK
-        uuid user_id FK
-        string track_id
-        string title
-        string artist
-        string album
-        integer duration
-        string source
-        string cover_url
-        float bpm
-        string key_name
-        string camelot
-        float key_confidence
-        timestamp created_at
-    }
-
-    saved_albums {
-        uuid id PK
-        uuid user_id FK
-        string album_id
-        string title
-        string artist
-        string release_date
-        string cover_url
-        string source
-        integer track_count
-        timestamp created_at
     }
 
     queue_items {
         uuid id PK
         uuid user_id FK
-        string track_id
-        string title
-        string artist
-        string album
-        integer duration
-        string source
-        string cover_url
+        uuid user_track_id FK
         integer position
         timestamp added_at
     }
 
     users ||--o{ user_sessions : has
     users ||--o{ user_streaming_services : connects
-    users ||--o{ playlists : owns
-    users ||--o{ saved_tracks : saves
-    users ||--o{ saved_albums : saves
+
+    users ||--o{ spotify_tracks : caches
+    users ||--o{ spotify_albums : caches
+    users ||--o{ spotify_playlists : caches
+    spotify_albums ||--o{ spotify_album_tracks : contains
+    spotify_tracks ||--o{ spotify_album_tracks : appears_in
+    spotify_playlists ||--o{ spotify_playlist_tracks : contains
+    spotify_tracks ||--o{ spotify_playlist_tracks : appears_in
+
+    users ||--o{ tidal_tracks : caches
+    users ||--o{ tidal_albums : caches
+    users ||--o{ tidal_playlists : caches
+    tidal_albums ||--o{ tidal_album_tracks : contains
+    tidal_tracks ||--o{ tidal_album_tracks : appears_in
+    tidal_playlists ||--o{ tidal_playlist_tracks : contains
+    tidal_tracks ||--o{ tidal_playlist_tracks : appears_in
+
+    users ||--o{ qobuz_tracks : caches
+    users ||--o{ qobuz_albums : caches
+    users ||--o{ qobuz_playlists : caches
+    qobuz_albums ||--o{ qobuz_album_tracks : contains
+    qobuz_tracks ||--o{ qobuz_album_tracks : appears_in
+    qobuz_playlists ||--o{ qobuz_playlist_tracks : contains
+    qobuz_tracks ||--o{ qobuz_playlist_tracks : appears_in
+
+    users ||--o{ server_tracks : caches
+    users ||--o{ server_albums : caches
+    users ||--o{ server_playlists : caches
+    server_albums ||--o{ server_album_tracks : contains
+    server_tracks ||--o{ server_album_tracks : appears_in
+    server_playlists ||--o{ server_playlist_tracks : contains
+    server_tracks ||--o{ server_playlist_tracks : appears_in
+
+    spotify_tracks ||--o| canonical_tracks : resolves_to
+    tidal_tracks ||--o| canonical_tracks : resolves_to
+    qobuz_tracks ||--o| canonical_tracks : resolves_to
+    server_tracks ||--o| canonical_tracks : resolves_to
+
+    spotify_albums ||--o| canonical_albums : resolves_to
+    tidal_albums ||--o| canonical_albums : resolves_to
+    qobuz_albums ||--o| canonical_albums : resolves_to
+    server_albums ||--o| canonical_albums : resolves_to
+
+    spotify_playlists ||--o| canonical_playlists : resolves_to
+    tidal_playlists ||--o| canonical_playlists : resolves_to
+    qobuz_playlists ||--o| canonical_playlists : resolves_to
+    server_playlists ||--o| canonical_playlists : resolves_to
+
+    canonical_albums ||--o{ canonical_album_tracks : contains
+    canonical_tracks ||--o{ canonical_album_tracks : appears_in
+    canonical_playlists ||--o{ canonical_playlist_tracks : contains
+    canonical_tracks ||--o{ canonical_playlist_tracks : appears_in
+
+    users ||--o{ user_tracks : saves
+    canonical_tracks ||--o{ user_tracks : materialized_as
+    users ||--o{ user_playlists : owns
+    canonical_playlists ||--o{ user_playlists : imported_as
+    user_playlists ||--o{ user_playlist_items : contains
+    user_tracks ||--o{ user_playlist_items : track_item
+    user_playlists ||--o{ user_playlist_items : nested_playlist
     users ||--o{ queue_items : queues
-    albums ||--o{ songs : contains
-    playlists ||--o{ playlist_songs : links
-    songs ||--o{ playlist_songs : appears_in
-    playlists ||--o{ playlist_items : contains
+    user_tracks ||--o{ queue_items : queued_as
 ```
 
-## Notes
+## Important Behaviors
 
-- `playlist_items` is the newer polymorphic playlist-content table. `item_type` distinguishes track entries from nested playlist entries, and `item_id` stores the referenced track or playlist identifier without a database-level foreign key.
-- `playlist_songs` still exists for the older local-song playlist model, while provider-backed and nested playlist content is represented through `playlist_items`.
-- `saved_tracks` stores additional analysis metadata such as BPM and harmonic key fields (`key_name`, `camelot`, and `key_confidence`).
+- Provider cache rows are user-scoped. Two users can cache the same provider item independently.
+- Canonical rows are the cross-provider reconciliation layer. They are not directly user-owned.
+- `match_status` and `unresolved_reason` allow the backend to represent ambiguous canonical matches instead of forcing a bad merge.
+- `user_tracks` is the playback boundary for saved tracks. Queue items and playlist items resolve through user tracks instead of embedding provider metadata in multiple places.
+- `user_playlists` supports two modes: editable user playlists and watched read-only imports.
+- `user_playlist_items` uses real foreign keys instead of the previous stringly typed `item_id` approach.
+
+## Removed Legacy Tables
+
+The older local-library tables are no longer part of the active schema:
+
+- `albums`
+- `songs`
+- `playlist_songs`
+- `playlist_items` in its old denormalized form
+- `saved_tracks`
+- `saved_albums`
+
+If a doc or client flow still refers to those tables, it is describing the pre-rewrite model and should be treated as stale.
