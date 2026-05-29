@@ -9,4 +9,9 @@ export type RootStackParamList = {
   Tabs: undefined;
   Login: undefined;
   Register: undefined;
+  PlaylistDetails: {
+    playlistId: string;
+    playlistName: string;
+    playlistDescription?: string | null;
+  };
 };

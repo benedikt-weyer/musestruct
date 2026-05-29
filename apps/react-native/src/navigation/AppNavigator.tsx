@@ -20,6 +20,7 @@ import { BrowseScreen } from '../screens/BrowseScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LibraryScreen } from '../screens/LibraryScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import { PlaylistDetailsScreen } from '../screens/PlaylistDetailsScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
@@ -123,6 +124,13 @@ export function AppNavigator() {
             {() => <RootTabs isDarkMode={isDarkMode} />}
           </Stack.Screen>
           <Stack.Screen component={LoginScreen} name="Login" options={{ title: 'Login' }} />
+          <Stack.Screen
+            component={PlaylistDetailsScreen}
+            name="PlaylistDetails"
+            options={({ route }) => ({
+              title: route.params.playlistName,
+            })}
+          />
           <Stack.Screen
             component={RegisterScreen}
             name="Register"

@@ -287,6 +287,7 @@ function PlaylistLibraryCard({
   isRemoving,
   isStarting,
   isPlaying,
+  onOpen,
   onPlay,
   onRemove,
   onShuffle,
@@ -297,6 +298,7 @@ function PlaylistLibraryCard({
   isRemoving: boolean;
   isStarting: boolean;
   isPlaying: boolean;
+  onOpen: (playlist: LibraryPlaylist) => void;
   onPlay: (playlist: LibraryPlaylist) => void;
   onRemove: (playlist: LibraryPlaylist) => void;
   onShuffle: (playlist: LibraryPlaylist) => void;
@@ -313,25 +315,29 @@ function PlaylistLibraryCard({
 
   return (
     <View className="mb-3 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
-      <View className="flex-row items-start justify-between gap-4">
-        <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
-          <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            {playlist.description ?? 'No description yet.'}
-          </Text>
-          <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
-            {playlist.item_count} items • {playlist.is_public ? 'Public' : 'Private'}
-          </Text>
-          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-            Updated {formatDate(playlist.updated_at)}
-          </Text>
+      <Pressable accessibilityRole="button" onPress={() => {
+        onOpen(playlist);
+      }}>
+        <View className="flex-row items-start justify-between gap-4">
+          <View className="flex-1">
+            <Text className="text-base font-semibold text-slate-900 dark:text-slate-100">{playlist.name}</Text>
+            <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              {playlist.description ?? 'No description yet.'}
+            </Text>
+            <Text className="mt-3 text-xs font-semibold uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
+              {playlist.item_count} items • {playlist.is_public ? 'Public' : 'Private'}
+            </Text>
+            <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Updated {formatDate(playlist.updated_at)}
+            </Text>
+          </View>
+          <View className="rounded-full bg-slate-100 px-3 py-2 dark:bg-slate-800">
+            <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
+              Playlist
+            </Text>
+          </View>
         </View>
-        <View className="rounded-full bg-slate-100 px-3 py-2 dark:bg-slate-800">
-          <Text className="text-xs font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
-            Playlist
-          </Text>
-        </View>
-      </View>
+      </Pressable>
 
       <View className="mt-4 flex-row gap-3">
         <Pressable
@@ -418,6 +424,7 @@ function ActiveLibrarySection({
   currentPlayMode,
   currentPlaylistId,
   isPlaying,
+  onOpenPlaylist,
   onPlayPlaylist,
   onPlayTrack,
   onRemoveAlbum,
@@ -435,6 +442,7 @@ function ActiveLibrarySection({
   deletingItemKey: string | null;
   favouriteTracks: SavedTrack[];
   isPlaying: boolean;
+  onOpenPlaylist: (playlist: LibraryPlaylist) => void;
   onPlayPlaylist: (playlist: LibraryPlaylist, playMode: PlayerPlayMode) => void;
   onPlayTrack: (track: SavedTrack) => void;
   onRemoveAlbum: (album: SavedAlbum) => void;
@@ -461,6 +469,7 @@ function ActiveLibrarySection({
             isStarting={playlistActionKey === `playlist:${playlist.id}`}
             isPlaying={isPlaying}
             key={playlist.id}
+            onOpen={onOpenPlaylist}
             onPlay={(selectedPlaylist) => {
               onPlayPlaylist(selectedPlaylist, 'normal');
             }}
@@ -932,6 +941,13 @@ export function LibraryScreen() {
                   deletingItemKey={deletingItemKey}
                   favouriteTracks={favouriteTracks}
                   isPlaying={isPlaying}
+                  onOpenPlaylist={(playlist) => {
+                    navigation.navigate('PlaylistDetails', {
+                      playlistDescription: playlist.description,
+                      playlistId: playlist.id,
+                      playlistName: playlist.name,
+                    });
+                  }}
                   onPlayPlaylist={handlePlayPlaylist}
                   onPlayTrack={handlePlayTrack}
                   onRemoveAlbum={handleRemoveAlbum}
