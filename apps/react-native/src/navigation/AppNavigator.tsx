@@ -12,6 +12,8 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+import { ExpandedPlayerSheet } from '../components/player/ExpandedPlayerSheet';
+import { MiniPlayerBar } from '../components/player/MiniPlayerBar';
 import { useSettings } from '../context/SettingsContext';
 import type { RootStackParamList, RootTabParamList } from './types';
 import { BrowseScreen } from '../screens/BrowseScreen';
@@ -20,7 +22,6 @@ import { LibraryScreen } from '../screens/LibraryScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { MiniPlayerBar } from '../components/player/MiniPlayerBar';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -76,7 +77,7 @@ function createScreenOptions({
   };
 }
 
-function PlayerAwareTabBar(props: BottomTabBarProps) {
+function PlayerAwareTabBar(props: Readonly<BottomTabBarProps>) {
   return (
     <>
       <MiniPlayerBar />
@@ -89,7 +90,7 @@ function RootTabs({ isDarkMode }: Readonly<{ isDarkMode: boolean }>) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => createScreenOptions({ isDarkMode, route })}
-      tabBar={(props) => <PlayerAwareTabBar {...props} />}
+      tabBar={PlayerAwareTabBar}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Library" component={LibraryScreen} options={{ title: 'Library' }} />
@@ -116,17 +117,20 @@ export function AppNavigator() {
 
   return (
     <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator>
-        <Stack.Screen name="Tabs" options={{ headerShown: false }}>
-          {() => <RootTabs isDarkMode={isDarkMode} />}
-        </Stack.Screen>
-        <Stack.Screen component={LoginScreen} name="Login" options={{ title: 'Login' }} />
-        <Stack.Screen
-          component={RegisterScreen}
-          name="Register"
-          options={{ title: 'Register' }}
-        />
-      </Stack.Navigator>
+      <>
+        <Stack.Navigator>
+          <Stack.Screen name="Tabs" options={{ headerShown: false }}>
+            {() => <RootTabs isDarkMode={isDarkMode} />}
+          </Stack.Screen>
+          <Stack.Screen component={LoginScreen} name="Login" options={{ title: 'Login' }} />
+          <Stack.Screen
+            component={RegisterScreen}
+            name="Register"
+            options={{ title: 'Register' }}
+          />
+        </Stack.Navigator>
+        <ExpandedPlayerSheet />
+      </>
     </NavigationContainer>
   );
 }

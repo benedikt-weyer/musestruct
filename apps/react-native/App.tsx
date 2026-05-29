@@ -6,7 +6,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colorScheme } from 'nativewind';
 
-import { ExpandedPlayerSheet } from './src/components/player/ExpandedPlayerSheet';
 import { PlayerProvider } from './src/context/PlayerContext';
 import { SettingsProvider, useSettings } from './src/context/SettingsContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -26,7 +25,6 @@ function AppShell() {
         backgroundColor={isDarkMode ? '#020617' : '#f8fafc'}
       />
       <AppNavigator />
-      <ExpandedPlayerSheet />
     </>
   );
 }
