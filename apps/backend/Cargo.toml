@@ -67,6 +67,7 @@ headers = "0.4"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
 urlencoding = "2.1"
 url = "2.5"
+tantivy = "0.22"
 
 # Audio analysis
 hound = "3.5"

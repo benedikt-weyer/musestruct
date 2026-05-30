@@ -4,6 +4,10 @@ use axum::{
     response::{Json, Html, Response},
 };
 use axum_extra::extract::Query as MultiValueQuery;
+use tantivy::collector::TopDocs;
+use tantivy::query::QueryParser;
+use tantivy::schema::{STORED, STRING, Schema, TEXT, Value};
+use tantivy::{Index, TantivyDocument, doc};
 use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1017,18 +1021,16 @@ async fn count_server_playlists(
     user_id: uuid::Uuid,
     normalized_query: &str,
 ) -> anyhow::Result<u32> {
-    let mut query = ServerPlaylistEntity::find().filter(ServerPlaylistColumn::UserId.eq(user_id));
-
     if !normalized_query.is_empty() {
-        query = query.filter(
-            ServerPlaylistColumn::Name
-                .contains(normalized_query)
-                .or(ServerPlaylistColumn::Description.contains(normalized_query))
-                .or(ServerPlaylistColumn::OwnerName.contains(normalized_query)),
-        );
+        return Ok(search_server_playlists_with_tantivy(db, user_id, normalized_query)
+            .await?
+            .len() as u32);
     }
 
-    Ok(query.count(db).await? as u32)
+    Ok(ServerPlaylistEntity::find()
+        .filter(ServerPlaylistColumn::UserId.eq(user_id))
+        .count(db)
+        .await? as u32)
 }
 
 async fn search_server_tracks(
@@ -1162,23 +1164,22 @@ async fn search_server_playlists(
     limit: u64,
     offset: u64,
 ) -> anyhow::Result<Vec<crate::services::streaming::StreamingPlaylist>> {
-    let mut query = ServerPlaylistEntity::find().filter(ServerPlaylistColumn::UserId.eq(user_id));
-
-    if !normalized_query.is_empty() {
-        query = query.filter(
-            ServerPlaylistColumn::Name
-                .contains(normalized_query)
-                .or(ServerPlaylistColumn::Description.contains(normalized_query))
-                .or(ServerPlaylistColumn::OwnerName.contains(normalized_query)),
-        );
-    }
-
-    let playlists = query
-        .order_by_asc(ServerPlaylistColumn::Name)
-        .offset(offset)
-        .limit(limit)
-        .all(db)
-        .await?;
+    let playlists = if normalized_query.is_empty() {
+        ServerPlaylistEntity::find()
+            .filter(ServerPlaylistColumn::UserId.eq(user_id))
+            .order_by_asc(ServerPlaylistColumn::Name)
+            .offset(offset)
+            .limit(limit)
+            .all(db)
+            .await?
+    } else {
+        search_server_playlists_with_tantivy(db, user_id, normalized_query)
+            .await?
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect()
+    };
 
     let mut results = Vec::with_capacity(playlists.len());
     for playlist in playlists {
@@ -1201,6 +1202,79 @@ async fn search_server_playlists(
     }
 
     Ok(results)
+}
+
+async fn search_server_playlists_with_tantivy(
+    db: &sea_orm::DatabaseConnection,
+    user_id: uuid::Uuid,
+    normalized_query: &str,
+) -> anyhow::Result<Vec<crate::models::server_playlist::Model>> {
+    let playlists = ServerPlaylistEntity::find()
+        .filter(ServerPlaylistColumn::UserId.eq(user_id))
+        .all(db)
+        .await?;
+
+    if playlists.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_terms = normalized_query
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|term| !term.is_empty())
+        .collect::<Vec<_>>();
+    if query_terms.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut schema_builder = Schema::builder();
+    let playlist_id_field = schema_builder.add_text_field("playlist_id", STRING | STORED);
+    let name_field = schema_builder.add_text_field("name", TEXT | STORED);
+    let description_field = schema_builder.add_text_field("description", TEXT | STORED);
+    let owner_field = schema_builder.add_text_field("owner", TEXT | STORED);
+    let schema = schema_builder.build();
+
+    let index = Index::create_in_ram(schema);
+    let mut writer = index.writer(15_000_000)?;
+    let playlist_map = playlists
+        .into_iter()
+        .map(|playlist| (playlist.id.to_string(), playlist))
+        .collect::<HashMap<_, _>>();
+
+    for playlist in playlist_map.values() {
+        writer.add_document(doc!(
+            playlist_id_field => playlist.id.to_string(),
+            name_field => playlist.name.clone(),
+            description_field => playlist.description.clone().unwrap_or_default(),
+            owner_field => playlist.owner_name.clone().unwrap_or_default(),
+        ))?;
+    }
+    writer.commit()?;
+
+    let reader = index.reader()?;
+    reader.reload()?;
+    let searcher = reader.searcher();
+
+    let query_string = query_terms.join(" ");
+    let query_parser = QueryParser::for_index(&index, vec![name_field, description_field, owner_field]);
+    let query = query_parser.parse_query(&query_string)?;
+    let top_docs = searcher.search(&query, &TopDocs::with_limit(playlist_map.len()))?;
+
+    let mut ranked_playlists = Vec::with_capacity(top_docs.len());
+    for (_score, doc_address) in top_docs {
+        let document: TantivyDocument = searcher.doc(doc_address)?;
+        let Some(playlist_id) = document
+            .get_first(playlist_id_field)
+            .and_then(|value| value.as_str())
+        else {
+            continue;
+        };
+
+        if let Some(playlist) = playlist_map.get(playlist_id) {
+            ranked_playlists.push(playlist.clone());
+        }
+    }
+
+    Ok(ranked_playlists)
 }
 
 pub async fn get_stream_url(
