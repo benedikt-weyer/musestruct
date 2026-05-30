@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -24,6 +26,9 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import kotlin.math.roundToInt
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
 
 internal data class PlaybackTrack(
   val backendUrl: String?,
@@ -145,8 +150,11 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   private lateinit var notificationManager: NotificationManager
   private lateinit var audioManager: AudioManager
   private lateinit var mediaSession: MediaSessionCompat
+  private val artworkExecutor = Executors.newSingleThreadExecutor()
 
   private var audioFocusRequest: AudioFocusRequest? = null
+  private var artworkBitmap: Bitmap? = null
+  private var artworkUrl: String? = null
   private var currentTrack: PlaybackTrack? = null
   private var errorMessage: String? = null
   private var isBuffering = false
@@ -208,6 +216,7 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     stopProgressUpdates()
     releasePlayer()
     abandonAudioFocus()
+    artworkExecutor.shutdownNow()
     mediaSession.release()
     isForegroundService = false
     super.onDestroy()
@@ -303,6 +312,7 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     releasePlayer()
 
     currentTrack = requestedTrack
+    refreshArtwork(requestedTrack)
     errorMessage = null
     isBuffering = true
     isPlaying = false
@@ -778,41 +788,42 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
         )
 
     return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-        .setContentIntent(contentIntent)
-        .setContentText(track.artist ?: track.album ?: track.source ?: getString(R.string.app_name))
-        .setContentTitle(track.title ?: getString(R.string.app_name))
-        .setDeleteIntent(stopPendingIntent)
-        .setOngoing(isPlaying || isBuffering)
-        .setOnlyAlertOnce(true)
-        .setShowWhen(false)
-        .setSmallIcon(android.R.drawable.ic_media_play)
-        .setStyle(
-            androidx.media.app.NotificationCompat.MediaStyle()
-                .setMediaSession(mediaSession.sessionToken)
-            .setShowActionsInCompactView(0, 1, 2)
-        )
-        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        .addAction(
-          android.R.drawable.ic_media_previous,
-          "Previous",
-          previousPendingIntent,
-        )
-        .addAction(
-            if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            if (isPlaying) "Pause" else "Play",
-            playPausePendingIntent,
-        )
-        .addAction(
-          android.R.drawable.ic_media_next,
-          "Next",
-          nextPendingIntent,
-        )
-        .addAction(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "Stop",
-            stopPendingIntent,
-        )
-        .build()
+      .setContentIntent(contentIntent)
+      .setContentText(track.artist ?: track.album ?: track.source ?: getString(R.string.app_name))
+      .setContentTitle(track.title ?: getString(R.string.app_name))
+      .setDeleteIntent(stopPendingIntent)
+      .setLargeIcon(artworkBitmap)
+      .setOngoing(isPlaying || isBuffering)
+      .setOnlyAlertOnce(true)
+      .setShowWhen(false)
+      .setSmallIcon(android.R.drawable.ic_media_play)
+      .setStyle(
+        androidx.media.app.NotificationCompat.MediaStyle()
+          .setMediaSession(mediaSession.sessionToken)
+          .setShowActionsInCompactView(0, 1, 2)
+      )
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+      .addAction(
+        android.R.drawable.ic_media_previous,
+        "Previous",
+        previousPendingIntent,
+      )
+      .addAction(
+        if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+        if (isPlaying) "Pause" else "Play",
+        playPausePendingIntent,
+      )
+      .addAction(
+        android.R.drawable.ic_media_next,
+        "Next",
+        nextPendingIntent,
+      )
+      .addAction(
+        android.R.drawable.ic_menu_close_clear_cancel,
+        "Stop",
+        stopPendingIntent,
+      )
+      .build()
   }
 
       private fun requestTrackAdvance(command: String) {
@@ -837,10 +848,77 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
             putString(MediaMetadataCompat.METADATA_KEY_ARTIST, track.artist)
             putString(MediaMetadataCompat.METADATA_KEY_ALBUM, track.album)
             putLong(MediaMetadataCompat.METADATA_KEY_DURATION, lastKnownDurationMs.toLong())
+            artworkBitmap?.let { bitmap ->
+              putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
+              putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap)
+              putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, bitmap)
+            }
           }
         }.build()
 
     mediaSession.setMetadata(metadata)
+  }
+
+  private fun refreshArtwork(track: PlaybackTrack) {
+    val nextArtworkUrl = track.artworkUrl?.trim()?.takeIf { it.isNotEmpty() }
+    if (artworkUrl == nextArtworkUrl && artworkBitmap != null) {
+      return
+    }
+
+    artworkUrl = nextArtworkUrl
+    artworkBitmap = null
+    updateMetadata()
+    updateNotification()
+
+    if (nextArtworkUrl == null) {
+      return
+    }
+
+    artworkExecutor.execute {
+      val bitmap = loadArtworkBitmap(track, nextArtworkUrl) ?: return@execute
+
+      handler.post {
+        if (currentTrack?.artworkUrl != nextArtworkUrl || currentTrack?.key != track.key) {
+          return@post
+        }
+
+        artworkBitmap = bitmap
+        artworkUrl = nextArtworkUrl
+        updateMetadata()
+        updateNotification()
+      }
+    }
+  }
+
+  private fun loadArtworkBitmap(track: PlaybackTrack, artworkUrl: String): Bitmap? {
+    val parsedUri = Uri.parse(artworkUrl)
+    return when (parsedUri.scheme?.lowercase()) {
+      "content", "file", "android.resource" -> {
+        contentResolver.openInputStream(parsedUri)?.use(BitmapFactory::decodeStream)
+      }
+      else -> loadNetworkArtworkBitmap(track, artworkUrl)
+    }
+  }
+
+  private fun loadNetworkArtworkBitmap(track: PlaybackTrack, artworkUrl: String): Bitmap? {
+    val connection = (URL(artworkUrl).openConnection() as? HttpURLConnection) ?: return null
+    return try {
+      connection.instanceFollowRedirects = true
+      connection.connectTimeout = 10000
+      connection.readTimeout = 10000
+      if (
+          !track.sessionToken.isNullOrBlank() &&
+              !track.backendUrl.isNullOrBlank() &&
+              artworkUrl.startsWith(track.backendUrl)
+      ) {
+        connection.setRequestProperty("Authorization", "Bearer ${track.sessionToken}")
+      }
+      connection.inputStream.use(BitmapFactory::decodeStream)
+    } catch (_: Exception) {
+      null
+    } finally {
+      connection.disconnect()
+    }
   }
 
   private fun updatePlaybackState() {
