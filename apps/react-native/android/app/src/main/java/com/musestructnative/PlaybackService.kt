@@ -335,6 +335,10 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
       playPlayback()
     }
     player.setOnCompletionListener {
+      if (advanceQueue(COMMAND_NEXT)) {
+        return@setOnCompletionListener
+      }
+
       isPlaying = false
       isBuffering = false
       stopProgressUpdates()
@@ -448,6 +452,10 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
               application = application,
               track = requestedTrack,
               onCompletion = {
+                if (advanceQueue(COMMAND_NEXT)) {
+                  return@TidalPlaybackSession
+                }
+
                 isPlaying = false
                 isBuffering = false
                 errorMessage = null
