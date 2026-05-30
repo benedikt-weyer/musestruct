@@ -844,7 +844,9 @@ pub async fn search_music(
             .then_with(|| a.name.cmp(&b.name))
     });
 
-    if !use_global_pagination {
+    if !use_global_pagination
+        && !(services_to_search.len() == 1 && services_to_search[0] == "server")
+    {
         total_results = match search_type {
             Some("album") => all_albums.len() as u32,
             Some("playlist") => all_playlists.len() as u32,
