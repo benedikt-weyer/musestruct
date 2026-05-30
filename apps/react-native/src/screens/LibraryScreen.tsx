@@ -63,6 +63,8 @@ const LIBRARY_SECTIONS: LibrarySectionOption[] = [
   },
 ];
 
+const LIBRARY_TRACKS_PAGE_SIZE = 50;
+
 function formatDuration(duration?: number | null) {
   if (!duration || duration <= 0) {
     return '--:--';
@@ -724,6 +726,8 @@ export function LibraryScreen() {
   const [favourites, setFavourites] = useState<FavouriteTrack[]>([]);
   const [localFiles, setLocalFiles] = useState<MusicFile[]>([]);
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
+  const [tracksPage, setTracksPage] = useState(1);
+  const [tracksTotalCount, setTracksTotalCount] = useState(0);
   const [playlists, setPlaylists] = useState<LibraryPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLocalLoading, setIsLocalLoading] = useState(false);
@@ -738,6 +742,7 @@ export function LibraryScreen() {
     if (!authSession) {
       setFavourites([]);
       setTracks([]);
+      setTracksTotalCount(0);
       setPlaylists([]);
       setErrorMessage(null);
       return;
@@ -748,24 +753,29 @@ export function LibraryScreen() {
 
     try {
       const [savedTracksResponse, favouriteTracksResponse, playlistsResponse] = await Promise.all([
-        fetchSavedTracks(backendUrl, authSession),
+        fetchSavedTracks(backendUrl, authSession, tracksPage, LIBRARY_TRACKS_PAGE_SIZE),
         fetchFavouriteTracks(backendUrl, authSession),
         fetchLibraryPlaylists(backendUrl, authSession),
       ]);
 
       setFavourites(favouriteTracksResponse.tracks);
       setTracks(savedTracksResponse.tracks);
+      setTracksTotalCount(savedTracksResponse.total_count);
       setPlaylists(playlistsResponse.playlists);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load your library.');
     } finally {
       setIsLoading(false);
     }
-  }, [authSession, backendUrl]);
+  }, [authSession, backendUrl, tracksPage]);
 
   useEffect(() => {
     void loadLibrary();
-  }, [authSession, backendUrl]);
+  }, [loadLibrary]);
+
+  useEffect(() => {
+    setTracksPage(1);
+  }, [authSession?.sessionToken, backendUrl]);
 
   const loadLocalTracks = useCallback(async () => {
     if (!selectedFolder) {
@@ -802,10 +812,13 @@ export function LibraryScreen() {
     favourites: favourites.length,
     local: localFiles.length,
     playlists: playlists.length,
-    tracks: tracks.length,
+    tracks: tracksTotalCount,
   };
   const activeSectionMeta =
     LIBRARY_SECTIONS.find((section) => section.key === activeSection) ?? LIBRARY_SECTIONS[0];
+  const tracksTotalPages = Math.max(1, Math.ceil(tracksTotalCount / LIBRARY_TRACKS_PAGE_SIZE));
+  const hasPreviousTracksPage = tracksPage > 1;
+  const hasNextTracksPage = tracksPage < tracksTotalPages;
 
   async function handlePlayTrack(track: SavedTrack) {
     const playerKey = `${track.source}:${track.track_id}`;
@@ -987,10 +1000,15 @@ export function LibraryScreen() {
 
     try {
       await deleteSavedTrack(backendUrl, authSession, track.id);
-      setFavourites((currentFavourites) =>
-        currentFavourites.filter((item) => item.user_track_id !== track.id),
-      );
-      setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id));
+      const nextTotalCount = Math.max(tracksTotalCount - 1, 0);
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotalCount / LIBRARY_TRACKS_PAGE_SIZE));
+
+      if (tracksPage > nextTotalPages) {
+        setTracksPage(nextTotalPages);
+      } else {
+        void loadLibrary();
+      }
+
       setErrorMessage(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to remove track.');
@@ -1216,6 +1234,43 @@ export function LibraryScreen() {
               tracks={tracks}
             />
           )}
+
+          {activeSection === 'tracks' && authSession && tracksTotalCount > 0 ? (
+            <View className="mt-4 rounded-[24px] bg-white px-4 py-4 shadow-sm shadow-slate-200 dark:bg-slate-900 dark:shadow-none">
+              <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Page {tracksPage} / {tracksTotalPages}
+              </Text>
+              <Text className="mt-1 text-center text-xs uppercase tracking-[1px] text-slate-400 dark:text-slate-500">
+                {tracksTotalCount} saved tracks total
+              </Text>
+
+              <View className="mt-4 flex-row gap-3">
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-1 rounded-full border border-slate-200 bg-white px-4 py-3 active:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:active:bg-slate-800"
+                  disabled={isLoading || !hasPreviousTracksPage}
+                  onPress={() => {
+                    setTracksPage((currentPage) => Math.max(1, currentPage - 1));
+                  }}
+                >
+                  <Text className="text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Previous page
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-1 rounded-full border border-slate-900 bg-slate-900 px-4 py-3 active:bg-slate-700 disabled:opacity-50 dark:border-teal-700 dark:bg-teal-700 dark:active:bg-teal-600"
+                  disabled={isLoading || !hasNextTracksPage}
+                  onPress={() => {
+                    setTracksPage((currentPage) => Math.min(tracksTotalPages, currentPage + 1));
+                  }}
+                >
+                  <Text className="text-center text-sm font-semibold text-white">Next page</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
