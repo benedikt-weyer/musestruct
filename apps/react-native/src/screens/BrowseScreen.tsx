@@ -640,6 +640,7 @@ export function BrowseScreen() {
       allowEmptyQuery?: boolean;
       forceScope?: BrowseSearchScope;
       includeAllTypes?: boolean;
+      ignoreQuery?: boolean;
     },
   ) {
     if (!authSession) {
@@ -654,7 +655,7 @@ export function BrowseScreen() {
         : {
             allowEmptyQuery: options?.allowEmptyQuery ?? false,
             includeAllTypes: options?.includeAllTypes ?? false,
-            query,
+            query: options?.ignoreQuery ? '' : query,
             scope: options?.forceScope ?? searchScope,
             searchType,
             services: selectedServices,
@@ -942,6 +943,7 @@ export function BrowseScreen() {
                 void handleSearch(0, {
                   allowEmptyQuery: true,
                   forceScope: isServerOnlySelected ? 'all' : 'library',
+                  ignoreQuery: true,
                 });
               }}
             >
