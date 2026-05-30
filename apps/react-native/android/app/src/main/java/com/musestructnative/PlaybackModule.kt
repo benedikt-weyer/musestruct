@@ -24,6 +24,13 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
           emitStatus(PlaybackStatusSnapshot.fromBundle(intent?.extras))
         }
       }
+  private val commandReceiver =
+      object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+          val command = intent?.getStringExtra(PlaybackService.EXTRA_COMMAND) ?: return
+          emitCommand(command)
+        }
+      }
 
   init {
     registerStatusReceiver()
@@ -108,6 +115,12 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
         .emit(EVENT_STATUS_CHANGED, snapshotToMap(snapshot))
   }
 
+  private fun emitCommand(command: String) {
+    reactContext
+        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+        .emit(EVENT_COMMAND_CHANGED, command)
+  }
+
   private fun optionalString(map: ReadableMap, key: String): String? {
     return if (!map.hasKey(key) || map.isNull(key)) {
       null
@@ -121,12 +134,15 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
       return
     }
 
-    val filter = IntentFilter(PlaybackService.ACTION_STATUS_CHANGED)
+    val statusFilter = IntentFilter(PlaybackService.ACTION_STATUS_CHANGED)
+    val commandFilter = IntentFilter(PlaybackService.ACTION_COMMAND_CHANGED)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      reactContext.registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      reactContext.registerReceiver(statusReceiver, statusFilter, Context.RECEIVER_NOT_EXPORTED)
+      reactContext.registerReceiver(commandReceiver, commandFilter, Context.RECEIVER_NOT_EXPORTED)
     } else {
       @Suppress("DEPRECATION")
-      reactContext.registerReceiver(statusReceiver, filter)
+      reactContext.registerReceiver(statusReceiver, statusFilter)
+      reactContext.registerReceiver(commandReceiver, commandFilter)
     }
     receiverRegistered = true
   }
@@ -180,10 +196,12 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
     }
 
     reactContext.unregisterReceiver(statusReceiver)
+    reactContext.unregisterReceiver(commandReceiver)
     receiverRegistered = false
   }
 
   companion object {
+    const val EVENT_COMMAND_CHANGED = "PlaybackCommand"
     const val EVENT_STATUS_CHANGED = "PlaybackStatus"
   }
 }

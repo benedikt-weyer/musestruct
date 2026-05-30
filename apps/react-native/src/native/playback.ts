@@ -12,6 +12,8 @@ export type PlaybackStatus = {
   track: PlayerTrack | null;
 };
 
+export type PlaybackCommand = 'next' | 'previous';
+
 type PlaybackModuleType = {
   addListener: (eventName: string) => void;
   getStatus: () => Promise<PlaybackStatus>;
@@ -29,6 +31,7 @@ const nativePlaybackModule =
     : undefined;
 
 export const playbackEventName = 'PlaybackStatus';
+export const playbackCommandEventName = 'PlaybackCommand';
 export const playbackEventEmitter = nativePlaybackModule
   ? new NativeEventEmitter(nativePlaybackModule)
   : null;

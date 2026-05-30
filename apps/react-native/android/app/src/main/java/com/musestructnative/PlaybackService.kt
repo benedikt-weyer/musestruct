@@ -180,6 +180,14 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
               seekToPlayback(pos / 1000.0)
             }
 
+            override fun onSkipToNext() {
+              requestTrackAdvance(COMMAND_NEXT)
+            }
+
+            override fun onSkipToPrevious() {
+              requestTrackAdvance(COMMAND_PREVIOUS)
+            }
+
             override fun onStop() {
               stopPlayback()
             }
@@ -204,8 +212,10 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_LOAD -> handleLoad(intent)
+      ACTION_NEXT -> requestTrackAdvance(COMMAND_NEXT)
       ACTION_PAUSE -> pausePlayback()
       ACTION_PLAY -> playPlayback()
+      ACTION_PREVIOUS -> requestTrackAdvance(COMMAND_PREVIOUS)
       ACTION_SEEK -> seekToPlayback(intent.getDoubleExtra(EXTRA_POSITION, 0.0))
       ACTION_STOP -> stopPlayback()
       else -> publishStatus()
@@ -646,6 +656,28 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
             playPauseIntent,
             pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
         )
+    val previousIntent =
+      Intent(this, PlaybackService::class.java).apply {
+        action = ACTION_PREVIOUS
+      }
+    val previousPendingIntent =
+      PendingIntent.getService(
+        this,
+        REQUEST_PREVIOUS,
+        previousIntent,
+        pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
+      )
+    val nextIntent =
+      Intent(this, PlaybackService::class.java).apply {
+        action = ACTION_NEXT
+      }
+    val nextPendingIntent =
+      PendingIntent.getService(
+        this,
+        REQUEST_NEXT,
+        nextIntent,
+        pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
+      )
     val stopIntent =
         Intent(this, PlaybackService::class.java).apply {
           action = ACTION_STOP
@@ -670,13 +702,23 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
         .setStyle(
             androidx.media.app.NotificationCompat.MediaStyle()
                 .setMediaSession(mediaSession.sessionToken)
-                .setShowActionsInCompactView(0, 1)
+            .setShowActionsInCompactView(0, 1, 2)
         )
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .addAction(
+          android.R.drawable.ic_media_previous,
+          "Previous",
+          previousPendingIntent,
+        )
         .addAction(
             if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
             if (isPlaying) "Pause" else "Play",
             playPausePendingIntent,
+        )
+        .addAction(
+          android.R.drawable.ic_media_next,
+          "Next",
+          nextPendingIntent,
         )
         .addAction(
             android.R.drawable.ic_menu_close_clear_cancel,
@@ -685,6 +727,15 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
         )
         .build()
   }
+
+      private fun requestTrackAdvance(command: String) {
+      sendBroadcast(
+        Intent(ACTION_COMMAND_CHANGED).apply {
+          `package` = packageName
+          putExtra(EXTRA_COMMAND, command)
+        }
+      )
+      }
 
   private fun updateMetadata() {
     val metadata =
@@ -718,6 +769,8 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
                 PlaybackStateCompat.ACTION_PAUSE or
                     PlaybackStateCompat.ACTION_PLAY or
                     PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                     PlaybackStateCompat.ACTION_SEEK_TO or
                     PlaybackStateCompat.ACTION_STOP
             )
@@ -809,13 +862,17 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
   companion object {
+    const val ACTION_COMMAND_CHANGED = "com.musestructnative.playback.COMMAND"
     const val ACTION_LOAD = "com.musestructnative.playback.LOAD"
+    const val ACTION_NEXT = "com.musestructnative.playback.NEXT"
     const val ACTION_PAUSE = "com.musestructnative.playback.PAUSE"
     const val ACTION_PLAY = "com.musestructnative.playback.PLAY"
+    const val ACTION_PREVIOUS = "com.musestructnative.playback.PREVIOUS"
     const val ACTION_SEEK = "com.musestructnative.playback.SEEK"
     const val ACTION_STATUS_CHANGED = "com.musestructnative.playback.STATUS"
     const val ACTION_STOP = "com.musestructnative.playback.STOP"
 
+    const val EXTRA_COMMAND = "command"
     const val EXTRA_POSITION = "position"
     const val EXTRA_TRACK_BACKEND_URL = "trackBackendUrl"
     const val EXTRA_TRACK_ALBUM = "trackAlbum"
@@ -836,6 +893,11 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
     private const val REQUEST_OPEN_APP = 4103
     private const val REQUEST_PLAY_PAUSE = 4104
     private const val REQUEST_STOP = 4105
+    private const val REQUEST_PREVIOUS = 4106
+    private const val REQUEST_NEXT = 4107
+
+    internal const val COMMAND_NEXT = "next"
+    internal const val COMMAND_PREVIOUS = "previous"
 
     @Volatile private var latestStatusSnapshot = PlaybackStatusSnapshot()
 

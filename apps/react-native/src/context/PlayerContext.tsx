@@ -2,10 +2,12 @@ import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, 
 import type { PropsWithChildren } from 'react';
 
 import {
+  type PlaybackCommand,
   getPlaybackStatus,
   isNativePlaybackAvailable,
   loadPlaybackTrack,
   pausePlayback,
+  playbackCommandEventName,
   playbackEventEmitter,
   playbackEventName,
   playPlayback,
@@ -314,6 +316,17 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     updatePlaybackState(status);
   });
 
+  const applyCommand = useEffectEvent((command: PlaybackCommand) => {
+    if (command === 'next') {
+      playNextTrack();
+      return;
+    }
+
+    if (command === 'previous') {
+      playPreviousTrack();
+    }
+  });
+
   const syncStatus = useEffectEvent(async () => {
     if (!isNativePlaybackAvailable()) {
       return;
@@ -336,11 +349,15 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     const subscription = playbackEventEmitter.addListener(playbackEventName, (status) => {
       applyStatus(status as PlaybackStatus);
     });
+    const commandSubscription = playbackEventEmitter.addListener(playbackCommandEventName, (command) => {
+      applyCommand(command as PlaybackCommand);
+    });
 
     void syncStatus();
 
     return () => {
       subscription.remove();
+      commandSubscription.remove();
     };
   }, []);
 
