@@ -47,6 +47,8 @@ internal data class PlaybackTrack(
         putString("album", album)
         putString("artworkUrl", artworkUrl)
         putString("description", description)
+        putString("backendUrl", backendUrl)
+        putString("sessionToken", sessionToken)
         putString("source", source)
         putString("url", url)
       }
@@ -73,7 +75,7 @@ internal data class PlaybackTrack(
       }
 
       return PlaybackTrack(
-          backendUrl = null,
+          backendUrl = bundle.getString("backendUrl"),
           id = bundle.getString("id"),
           key = bundle.getString("key"),
           title = bundle.getString("title"),
@@ -81,7 +83,7 @@ internal data class PlaybackTrack(
           album = bundle.getString("album"),
           artworkUrl = bundle.getString("artworkUrl"),
           description = bundle.getString("description"),
-          sessionToken = null,
+          sessionToken = bundle.getString("sessionToken"),
           source = bundle.getString("source"),
           url = bundle.getString("url"),
       )
@@ -152,6 +154,8 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   private var isPlaying = false
   private var lastKnownDurationMs = 0
   private var mediaPlayer: MediaPlayer? = null
+  private var queueIndex = -1
+  private var queueTracks: List<PlaybackTrack> = emptyList()
   private var tidalPlaybackSession: TidalPlaybackSession? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -212,6 +216,7 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_LOAD -> handleLoad(intent)
+      ACTION_LOAD_QUEUE -> handleLoadQueue(intent)
       ACTION_NEXT -> requestTrackAdvance(COMMAND_NEXT)
       ACTION_PAUSE -> pausePlayback()
       ACTION_PLAY -> playPlayback()
@@ -234,6 +239,43 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
 
   private fun handleLoad(intent: Intent) {
     val requestedTrack = PlaybackTrack.fromIntent(intent)
+    loadTrack(requestedTrack, intent.getBooleanExtra(EXTRA_PRESERVE_QUEUE, false))
+  }
+
+  private fun handleLoadQueue(intent: Intent) {
+    val trackBundles =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          intent.getParcelableArrayListExtra(EXTRA_QUEUE_TRACKS, Bundle::class.java)
+        } else {
+          @Suppress("DEPRECATION")
+          intent.getParcelableArrayListExtra(EXTRA_QUEUE_TRACKS)
+        } ?: arrayListOf()
+    val parsedQueue = trackBundles.mapNotNull(PlaybackTrack::fromBundle)
+    if (parsedQueue.isEmpty()) {
+      clearQueue()
+      errorMessage = "This queue could not be played."
+      publishStatus()
+      return
+    }
+
+    queueTracks = parsedQueue
+    queueIndex = intent.getIntExtra(EXTRA_QUEUE_INDEX, 0).coerceIn(0, parsedQueue.lastIndex)
+    loadTrack(parsedQueue[queueIndex], preserveQueue = true)
+  }
+
+  private fun loadTrack(requestedTrack: PlaybackTrack, preserveQueue: Boolean) {
+    if (!preserveQueue) {
+      clearQueue()
+    } else {
+      val matchingQueueIndex =
+          queueTracks.indexOfFirst { queuedTrack ->
+            queuedTrack.key != null && queuedTrack.key == requestedTrack.key
+          }
+      if (matchingQueueIndex >= 0) {
+        queueIndex = matchingQueueIndex
+      }
+    }
+
     if (requestedTrack.source == "tidal") {
       if (requestedTrack.id.isNullOrBlank() ||
           requestedTrack.backendUrl.isNullOrBlank() ||
@@ -350,6 +392,43 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
       updateNotification()
       publishStatus()
     }
+  }
+
+  private fun clearQueue() {
+    queueTracks = emptyList()
+    queueIndex = -1
+  }
+
+  private fun canAdvanceQueue(direction: String): Boolean {
+    if (queueTracks.isEmpty() || queueIndex !in queueTracks.indices) {
+      return false
+    }
+
+    return when (direction) {
+      COMMAND_PREVIOUS -> queueIndex > 0 || currentPositionMs() > 3000
+      else -> queueIndex + 1 < queueTracks.size
+    }
+  }
+
+  private fun advanceQueue(direction: String): Boolean {
+    if (!canAdvanceQueue(direction)) {
+      return false
+    }
+
+    if (direction == COMMAND_PREVIOUS && currentPositionMs() > 3000) {
+      seekToPlayback(0.0)
+      return true
+    }
+
+    val nextIndex =
+        when (direction) {
+          COMMAND_PREVIOUS -> (queueIndex - 1).coerceAtLeast(0)
+          else -> (queueIndex + 1).coerceAtMost(queueTracks.lastIndex)
+        }
+
+    queueIndex = nextIndex
+    loadTrack(queueTracks[nextIndex], preserveQueue = true)
+    return true
   }
 
   private fun loadTidalTrack(requestedTrack: PlaybackTrack) {
@@ -729,6 +808,10 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   }
 
       private fun requestTrackAdvance(command: String) {
+        if (advanceQueue(command)) {
+          return
+        }
+
       sendBroadcast(
         Intent(ACTION_COMMAND_CHANGED).apply {
           `package` = packageName
@@ -864,6 +947,7 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
   companion object {
     const val ACTION_COMMAND_CHANGED = "com.musestructnative.playback.COMMAND"
     const val ACTION_LOAD = "com.musestructnative.playback.LOAD"
+    const val ACTION_LOAD_QUEUE = "com.musestructnative.playback.LOAD_QUEUE"
     const val ACTION_NEXT = "com.musestructnative.playback.NEXT"
     const val ACTION_PAUSE = "com.musestructnative.playback.PAUSE"
     const val ACTION_PLAY = "com.musestructnative.playback.PLAY"
@@ -874,6 +958,9 @@ class PlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
 
     const val EXTRA_COMMAND = "command"
     const val EXTRA_POSITION = "position"
+    const val EXTRA_PRESERVE_QUEUE = "preserveQueue"
+    const val EXTRA_QUEUE_INDEX = "queueIndex"
+    const val EXTRA_QUEUE_TRACKS = "queueTracks"
     const val EXTRA_TRACK_BACKEND_URL = "trackBackendUrl"
     const val EXTRA_TRACK_ALBUM = "trackAlbum"
     const val EXTRA_TRACK_ARTIST = "trackArtist"

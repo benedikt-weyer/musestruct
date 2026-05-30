@@ -5,6 +5,7 @@ import {
   type PlaybackCommand,
   getPlaybackStatus,
   isNativePlaybackAvailable,
+  loadPlaybackQueue,
   loadPlaybackTrack,
   pausePlayback,
   playbackCommandEventName,
@@ -180,6 +181,26 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
 
   function updatePlaybackState(status: PlaybackStatus) {
     maybeAdvanceFinishedPlaylist(status);
+    if (status.track) {
+      setPlaylistSession((currentSession) => {
+        if (!currentSession) {
+          return currentSession;
+        }
+
+        const nextTrackIndex = currentSession.trackOrder.findIndex(
+          (track) => track.key === status.track?.key,
+        );
+
+        if (nextTrackIndex < 0 || nextTrackIndex === currentSession.currentTrackIndex) {
+          return currentSession;
+        }
+
+        return {
+          ...currentSession,
+          currentTrackIndex: nextTrackIndex,
+        };
+      });
+    }
     setIsBuffering(status.isBuffering);
     setIsPaused(!status.isPlaying);
     setPosition(status.position);
@@ -230,7 +251,7 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     setIsPaused(false);
     setIsExpanded(false);
 
-    void loadPlaybackTrack(track)
+    void loadPlaybackTrack(track, preservePlaylist)
       .then((status) => {
         updatePlaybackState(status);
       })
@@ -404,6 +425,26 @@ export function PlayerProvider({ children }: Readonly<PropsWithChildren>) {
     playlistResolverRef.current = options.resolveTrack;
     setPlaylistSession(session);
     setErrorMessage(null);
+
+    if (isNativePlaybackAvailable()) {
+      const resolvedTrackOrder = await Promise.all(
+        trackOrder.map(async (queuedTrack) => {
+          const resolvedTrack = await options.resolveTrack(queuedTrack);
+          return {
+            ...resolvedTrack,
+            description:
+              resolvedTrack.description ??
+              queuedTrack.description ??
+              options.description ??
+              options.playlistName,
+          };
+        }),
+      );
+
+      await loadPlaybackQueue(resolvedTrackOrder, 0);
+      return;
+    }
+
     await playPlaylistSessionTrack(session);
   }
 

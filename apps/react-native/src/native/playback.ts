@@ -18,6 +18,8 @@ type PlaybackModuleType = {
   addListener: (eventName: string) => void;
   getStatus: () => Promise<PlaybackStatus>;
   load: (track: PlayerTrack) => Promise<PlaybackStatus>;
+  loadFromQueue: (track: PlayerTrack) => Promise<PlaybackStatus>;
+  loadQueue: (tracks: PlayerTrack[], startIndex: number) => Promise<PlaybackStatus>;
   pause: () => Promise<void>;
   play: () => Promise<void>;
   removeListeners: (count: number) => void;
@@ -48,12 +50,20 @@ export async function getPlaybackStatus() {
   return nativePlaybackModule.getStatus();
 }
 
-export async function loadPlaybackTrack(track: PlayerTrack) {
+export async function loadPlaybackTrack(track: PlayerTrack, preserveQueue = false) {
   if (!nativePlaybackModule) {
     throw new Error('Playback is only available on Android right now.');
   }
 
-  return nativePlaybackModule.load(track);
+  return preserveQueue ? nativePlaybackModule.loadFromQueue(track) : nativePlaybackModule.load(track);
+}
+
+export async function loadPlaybackQueue(tracks: PlayerTrack[], startIndex = 0) {
+  if (!nativePlaybackModule) {
+    throw new Error('Playback is only available on Android right now.');
+  }
+
+  return nativePlaybackModule.loadQueue(tracks, startIndex);
 }
 
 export async function pausePlayback() {

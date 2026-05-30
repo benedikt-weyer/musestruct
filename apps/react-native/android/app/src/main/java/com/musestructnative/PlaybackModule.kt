@@ -11,6 +11,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
@@ -56,9 +57,7 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun load(track: ReadableMap, promise: Promise) {
-    val trackUrl = optionalString(track, "url")
-    val trackSource = optionalString(track, "source")
-    if (trackSource != "tidal" && trackUrl.isNullOrBlank()) {
+    if (!isTrackPlayable(track)) {
       promise.reject("E_INVALID_TRACK", "The track is missing a playable URL.")
       return
     }
@@ -66,17 +65,54 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
     val intent =
         Intent(reactApplicationContext, PlaybackService::class.java).apply {
           action = PlaybackService.ACTION_LOAD
-          putExtra(PlaybackService.EXTRA_TRACK_ID, optionalString(track, "id"))
-          putExtra(PlaybackService.EXTRA_TRACK_KEY, optionalString(track, "key"))
-          putExtra(PlaybackService.EXTRA_TRACK_TITLE, optionalString(track, "title"))
-          putExtra(PlaybackService.EXTRA_TRACK_ARTIST, optionalString(track, "artist"))
-          putExtra(PlaybackService.EXTRA_TRACK_ALBUM, optionalString(track, "album"))
-          putExtra(PlaybackService.EXTRA_TRACK_ARTWORK_URL, optionalString(track, "artworkUrl"))
-          putExtra(PlaybackService.EXTRA_TRACK_DESCRIPTION, optionalString(track, "description"))
-          putExtra(PlaybackService.EXTRA_TRACK_SOURCE, optionalString(track, "source"))
-          putExtra(PlaybackService.EXTRA_TRACK_URL, trackUrl)
-          putExtra(PlaybackService.EXTRA_TRACK_BACKEND_URL, optionalString(track, "backendUrl"))
-          putExtra(PlaybackService.EXTRA_TRACK_SESSION_TOKEN, optionalString(track, "sessionToken"))
+          putTrackExtras(track)
+        }
+
+    ContextCompat.startForegroundService(reactApplicationContext, intent)
+    promise.resolve(snapshotToMap(PlaybackService.latestStatus()))
+  }
+
+  @ReactMethod
+  fun loadFromQueue(track: ReadableMap, promise: Promise) {
+    if (!isTrackPlayable(track)) {
+      promise.reject("E_INVALID_TRACK", "The track is missing a playable URL.")
+      return
+    }
+
+    val intent =
+        Intent(reactApplicationContext, PlaybackService::class.java).apply {
+          action = PlaybackService.ACTION_LOAD
+          putExtra(PlaybackService.EXTRA_PRESERVE_QUEUE, true)
+          putTrackExtras(track)
+        }
+
+    ContextCompat.startForegroundService(reactApplicationContext, intent)
+    promise.resolve(snapshotToMap(PlaybackService.latestStatus()))
+  }
+
+  @ReactMethod
+  fun loadQueue(tracks: ReadableArray, startIndex: Int, promise: Promise) {
+    val queueBundles = arrayListOf<android.os.Bundle>()
+    for (index in 0 until tracks.size()) {
+      val track = tracks.getMap(index) ?: continue
+      if (!isTrackPlayable(track)) {
+        promise.reject("E_INVALID_TRACK", "The queue contains a track without a playable URL.")
+        return
+      }
+      queueBundles.add(trackToBundle(track))
+    }
+
+    if (queueBundles.isEmpty()) {
+      promise.reject("E_INVALID_QUEUE", "The queue does not contain any playable tracks.")
+      return
+    }
+
+    val clampedIndex = startIndex.coerceIn(0, queueBundles.lastIndex)
+    val intent =
+        Intent(reactApplicationContext, PlaybackService::class.java).apply {
+          action = PlaybackService.ACTION_LOAD_QUEUE
+          putParcelableArrayListExtra(PlaybackService.EXTRA_QUEUE_TRACKS, queueBundles)
+          putExtra(PlaybackService.EXTRA_QUEUE_INDEX, clampedIndex)
         }
 
     ContextCompat.startForegroundService(reactApplicationContext, intent)
@@ -128,6 +164,41 @@ class PlaybackModule(private val reactContext: ReactApplicationContext) :
       map.getString(key)
     }
   }
+
+  private fun isTrackPlayable(track: ReadableMap): Boolean {
+    val trackUrl = optionalString(track, "url")
+    val trackSource = optionalString(track, "source")
+    return trackSource == "tidal" || !trackUrl.isNullOrBlank()
+  }
+
+  private fun Intent.putTrackExtras(track: ReadableMap) {
+    putExtra(PlaybackService.EXTRA_TRACK_ID, optionalString(track, "id"))
+    putExtra(PlaybackService.EXTRA_TRACK_KEY, optionalString(track, "key"))
+    putExtra(PlaybackService.EXTRA_TRACK_TITLE, optionalString(track, "title"))
+    putExtra(PlaybackService.EXTRA_TRACK_ARTIST, optionalString(track, "artist"))
+    putExtra(PlaybackService.EXTRA_TRACK_ALBUM, optionalString(track, "album"))
+    putExtra(PlaybackService.EXTRA_TRACK_ARTWORK_URL, optionalString(track, "artworkUrl"))
+    putExtra(PlaybackService.EXTRA_TRACK_DESCRIPTION, optionalString(track, "description"))
+    putExtra(PlaybackService.EXTRA_TRACK_SOURCE, optionalString(track, "source"))
+    putExtra(PlaybackService.EXTRA_TRACK_URL, optionalString(track, "url"))
+    putExtra(PlaybackService.EXTRA_TRACK_BACKEND_URL, optionalString(track, "backendUrl"))
+    putExtra(PlaybackService.EXTRA_TRACK_SESSION_TOKEN, optionalString(track, "sessionToken"))
+  }
+
+  private fun trackToBundle(track: ReadableMap) =
+      android.os.Bundle().apply {
+        putString("id", optionalString(track, "id"))
+        putString("key", optionalString(track, "key"))
+        putString("title", optionalString(track, "title"))
+        putString("artist", optionalString(track, "artist"))
+        putString("album", optionalString(track, "album"))
+        putString("artworkUrl", optionalString(track, "artworkUrl"))
+        putString("description", optionalString(track, "description"))
+        putString("backendUrl", optionalString(track, "backendUrl"))
+        putString("sessionToken", optionalString(track, "sessionToken"))
+        putString("source", optionalString(track, "source"))
+        putString("url", optionalString(track, "url"))
+      }
 
   private fun registerStatusReceiver() {
     if (receiverRegistered) {
