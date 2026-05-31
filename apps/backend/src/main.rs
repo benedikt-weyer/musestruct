@@ -60,7 +60,7 @@ fn load_database_url() -> Result<String> {
     let postgres_user = env::var("POSTGRES_USER")
         .context("DATABASE_URL is not set and POSTGRES_USER is missing")?;
     let postgres_password = env::var("POSTGRES_PASSWORD")
-        .context("DATABASE_URL is not set and POSTGRES_PASSWORD is missing")?;
+        .context("DATABASE_URL is not set and POSTGRES_PASSWORD is missing!")?;
 
     Ok(format!(
         "postgresql://{}:{}@{}:{}/{}",
